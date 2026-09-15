@@ -132,7 +132,7 @@ func createTestTeamWithAgent(t *testing.T, app *handlers.App, orgID, userID uuid
 func TestApp_GetDashboardStats_Success(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-stats")), testutil.WithPassword("password"))
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-stats")), testutil.WithPassword("password"), testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
 
 	// Create test data within the current month
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
@@ -167,7 +167,7 @@ func TestApp_GetDashboardStats_Success(t *testing.T) {
 func TestApp_GetDashboardStats_WithDateFilters(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-date")), testutil.WithPassword("password"))
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-date")), testutil.WithPassword("password"), testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
 
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
@@ -205,7 +205,7 @@ func TestApp_GetDashboardStats_WithDateFilters(t *testing.T) {
 func TestApp_GetDashboardStats_InvalidFromDate(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-from")), testutil.WithPassword("password"))
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-from")), testutil.WithPassword("password"), testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -220,7 +220,7 @@ func TestApp_GetDashboardStats_InvalidFromDate(t *testing.T) {
 func TestApp_GetDashboardStats_InvalidToDate(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-to")), testutil.WithPassword("password"))
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-bad-to")), testutil.WithPassword("password"), testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -246,7 +246,7 @@ func TestApp_GetDashboardStats_Unauthorized(t *testing.T) {
 func TestApp_GetDashboardStats_EmptyData(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-empty")), testutil.WithPassword("password"))
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("dash-empty")), testutil.WithPassword("password"), testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
 
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)

@@ -190,7 +190,7 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 // GetUser returns a single user
 func (a *App) GetUser(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, currentUserID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -198,6 +198,13 @@ func (a *App) GetUser(r *fastglue.Request) error {
 	id, err := parsePathUUID(r, "id", "user")
 	if err != nil {
 		return nil
+	}
+
+	// Anyone may read their own record; other users need users:read.
+	if id != currentUserID {
+		if err := a.requirePermission(r, currentUserID, models.ResourceUsers, models.ActionRead); err != nil {
+			return nil
+		}
 	}
 
 	// Query via user_organizations to find both native and cross-org members.

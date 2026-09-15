@@ -175,9 +175,9 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 // GetICEServers handles GET /api/calls/ice-servers
 // Returns the configured ICE (STUN/TURN) servers for the frontend to use in WebRTC peer connections.
 func (a *App) GetICEServers(r *fastglue.Request) error {
-	_, _, err := a.getOrgAndUserID(r)
+	_, _, err := a.requireAnyPermission(r, perm(models.ResourceOutgoingCalls, models.ActionWrite), perm(models.ResourceCallTransfers, models.ActionWrite), perm(models.ResourceOutgoingCalls, models.ActionRead), perm(models.ResourceCallTransfers, models.ActionRead))
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	type iceServer struct {

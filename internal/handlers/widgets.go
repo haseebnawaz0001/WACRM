@@ -517,9 +517,9 @@ func (a *App) DeleteWidget(r *fastglue.Request) error {
 
 // SaveWidgetLayout bulk saves grid positions for all widgets
 func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req struct {
@@ -539,11 +539,18 @@ func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Layout is required", nil, "")
 	}
 
+	// Shared widgets are laid out for the whole organization, so moving them
+	// needs analytics:write; everyone else may only arrange their own widgets.
+	editableCondition := "user_id = ?"
+	if a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite, orgID) {
+		editableCondition = "(user_id = ? OR is_shared = true)"
+	}
+
 	// Update all widgets in a transaction
 	err = a.DB.Transaction(func(tx *gorm.DB) error {
 		for i, item := range req.Layout {
 			result := tx.Model(&models.Widget{}).
-				Where("id = ? AND organization_id = ? AND (user_id = ? OR is_shared = true)", item.ID, orgID, userID).
+				Where("id = ? AND organization_id = ? AND "+editableCondition, item.ID, orgID, userID).
 				Updates(map[string]any{
 					"grid_x":        item.GridX,
 					"grid_y":        item.GridY,
@@ -568,6 +575,9 @@ func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
 
 // GetWidgetDataSources returns available data sources and their filterable fields
 func (a *App) GetWidgetDataSources(r *fastglue.Request) error {
+	if _, _, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead); err != nil {
+		return nil
+	}
 	sources := make([]map[string]any, 0)
 	for source, fields := range widgetDataSources {
 		sources = append(sources, map[string]any{
@@ -669,9 +679,9 @@ func formatLabel(s string) string {
 
 // GetWidgetData executes the widget query and returns the data
 func (a *App) GetWidgetData(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "widget")
@@ -705,9 +715,9 @@ func (a *App) GetWidgetData(r *fastglue.Request) error {
 
 // GetAllWidgetsData returns data for all user's widgets in a single request
 func (a *App) GetAllWidgetsData(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	// Parse date range from query params

@@ -78,10 +78,11 @@ type redirectToken struct {
 
 // ListCustomActions returns all custom actions for the organization
 func (a *App) ListCustomActions(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.requireAnyPermission(r, perm(models.ResourceCustomActions, models.ActionRead), perm(models.ResourceChat, models.ActionRead))
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
+	canSeeConfig := a.HasPermission(userID, models.ResourceCustomActions, models.ActionRead, orgID)
 
 	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
@@ -107,6 +108,9 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 	result := make([]CustomActionResponse, len(actions))
 	for i, action := range actions {
 		result[i] = customActionToResponse(action)
+		if !canSeeConfig {
+			result[i].Config = redactedActionConfig()
+		}
 	}
 
 	return r.SendEnvelope(listEnvelope("custom_actions", result, total, pg))
@@ -114,9 +118,9 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 
 // GetCustomAction returns a single custom action by ID
 func (a *App) GetCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.requireAnyPermission(r, perm(models.ResourceCustomActions, models.ActionRead), perm(models.ResourceChat, models.ActionRead))
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -129,14 +133,25 @@ func (a *App) GetCustomAction(r *fastglue.Request) error {
 		return nil
 	}
 
-	return r.SendEnvelope(customActionToResponse(*action))
+	resp := customActionToResponse(*action)
+	if !a.HasPermission(userID, models.ResourceCustomActions, models.ActionRead, orgID) {
+		resp.Config = redactedActionConfig()
+	}
+	return r.SendEnvelope(resp)
+}
+
+// redactedActionConfig replaces an action's config for users who can run
+// actions from chat but cannot manage them: configs hold webhook URLs, headers
+// (often API keys) and script code.
+func redactedActionConfig() map[string]any {
+	return map[string]any{}
 }
 
 // CreateCustomAction creates a new custom action
 func (a *App) CreateCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	var req CustomActionRequest
@@ -181,9 +196,9 @@ func (a *App) CreateCustomAction(r *fastglue.Request) error {
 
 // UpdateCustomAction updates an existing custom action
 func (a *App) UpdateCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -243,9 +258,9 @@ func (a *App) UpdateCustomAction(r *fastglue.Request) error {
 
 // DeleteCustomAction deletes a custom action
 func (a *App) DeleteCustomAction(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCustomActions, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -268,9 +283,9 @@ func (a *App) DeleteCustomAction(r *fastglue.Request) error {
 
 // ExecuteCustomAction executes a custom action with the given context
 func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return nil
 	}
 
 	actionID, err := parsePathUUID(r, "id", "action")
@@ -299,9 +314,12 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
-	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
-	if err != nil {
-		return nil
+	// Only contacts the user can see: agents without contacts:read are limited
+	// to their assigned contacts, the same rule as the chat endpoints.
+	var contact models.Contact
+	contactQuery := a.scopeAssignedContact(a.DB.Where("id = ? AND organization_id = ?", contactID, orgID), userID, orgID)
+	if err := contactQuery.First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
 	// Get user details
@@ -313,7 +331,7 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	a.DB.First(&org, orgID)
 
 	// Build context for variable replacement
-	context := buildActionContext(*contact, user, org)
+	context := buildActionContext(contact, user, org)
 
 	// Execute based on action type
 	var result *ActionResult

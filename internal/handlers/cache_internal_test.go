@@ -350,3 +350,42 @@ func TestInvalidateChatbotSettingsCache_DeletesAllAccountVariants(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), exists, "other org's cache must not be invalidated")
 }
+
+// --- getWebhooksCached ---
+
+// TestGetWebhooksCached_SecretSurvivesCacheHit guards against unsigned webhook
+// deliveries: models.Webhook hides Secret from JSON, so the cache must carry it
+// explicitly, and must not store it in plaintext when an encryption key is set.
+func TestGetWebhooksCached_SecretSurvivesCacheHit(t *testing.T) {
+	app := cacheTestApp(t)
+	app.Config.App.EncryptionKey = "test-encryption-key-0123456789abcdef"
+	ctx := context.Background()
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	const secret = "whsec_regression_secret_value"
+	wh := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "signed hook",
+		URL:            "https://example.com/hook",
+		Events:         models.StringArray{"message.incoming"},
+		Secret:         secret,
+		IsActive:       true,
+	}
+	require.NoError(t, app.DB.Create(wh).Error)
+	app.InvalidateWebhooksCache(org.ID)
+
+	miss, err := app.getWebhooksCached(org.ID)
+	require.NoError(t, err)
+	require.Len(t, miss, 1)
+	assert.Equal(t, secret, miss[0].Secret, "cache miss must return the secret")
+
+	raw, err := app.Redis.Get(ctx, webhooksCachePrefix+org.ID.String()).Result()
+	require.NoError(t, err, "result should be cached")
+	assert.NotContains(t, raw, secret, "secret must be encrypted in Redis")
+
+	hit, err := app.getWebhooksCached(org.ID)
+	require.NoError(t, err)
+	require.Len(t, hit, 1)
+	assert.Equal(t, secret, hit[0].Secret, "cache hit must return the secret so deliveries stay signed")
+}

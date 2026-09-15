@@ -24,6 +24,15 @@ const (
 	ContextKeyIsSuperAdmin   = "is_super_admin"
 	ContextKeyUser           = "user"
 	ContextKeyOrganization   = "organization"
+	// ContextKeyAuthMethod records how the request authenticated: AuthMethodJWT
+	// (browser session or bearer token) or AuthMethodAPIKey.
+	ContextKeyAuthMethod = "auth_method"
+)
+
+// Values stored under ContextKeyAuthMethod.
+const (
+	AuthMethodJWT    = "jwt"
+	AuthMethodAPIKey = "api_key"
 )
 
 // JWTClaims represents JWT claims
@@ -187,6 +196,7 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 			r.RequestCtx.SetUserValue(ContextKeyRoleID, *claims.RoleID)
 		}
 		r.RequestCtx.SetUserValue(ContextKeyIsSuperAdmin, claims.IsSuperAdmin)
+		r.RequestCtx.SetUserValue(ContextKeyAuthMethod, AuthMethodJWT)
 
 		return r
 	}
@@ -226,8 +236,10 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 				db.WithContext(ctx).Model(&models.APIKey{}).Where("id = ?", id).Update("last_used_at", now)
 			}(apiKey.ID)
 
-			// Set context values from the user who created the key
-			if apiKey.User != nil {
+			// Set context values from the user who created the key. Keys of
+			// deactivated users stop working; removed org members are rejected by
+			// the per-handler permission checks (permissions come from membership).
+			if apiKey.User != nil && apiKey.User.IsActive {
 				r.RequestCtx.SetUserValue(ContextKeyUserID, apiKey.UserID)
 				r.RequestCtx.SetUserValue(ContextKeyOrganizationID, apiKey.OrganizationID)
 				r.RequestCtx.SetUserValue(ContextKeyEmail, apiKey.User.Email)
@@ -235,6 +247,7 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 					r.RequestCtx.SetUserValue(ContextKeyRoleID, *apiKey.User.RoleID)
 				}
 				r.RequestCtx.SetUserValue(ContextKeyIsSuperAdmin, apiKey.User.IsSuperAdmin)
+				r.RequestCtx.SetUserValue(ContextKeyAuthMethod, AuthMethodAPIKey)
 				return true
 			}
 		}

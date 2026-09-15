@@ -159,7 +159,7 @@ func TestApp_GetUser(t *testing.T) {
 		org := testutil.CreateTestOrganization(t, app.DB)
 
 		req := testutil.NewGETRequest(t)
-		testutil.SetAuthContext(req, org.ID, uuid.New())
+		testutil.SetAuthContext(req, org.ID, createAdminUser(t, app, org.ID).ID)
 		testutil.SetPathParam(req, "id", uuid.New().String())
 
 		err := app.GetUser(req)
@@ -1135,6 +1135,7 @@ func TestApp_CrossOrgIsolation(t *testing.T) {
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		user1 := testutil.CreateTestUser(t, app.DB, org1.ID,
 			testutil.WithEmail(testutil.UniqueEmail("iso-get-org1")),
+			testutil.WithAdminRole(t, app.DB, org1.ID),
 		)
 
 		org2 := testutil.CreateTestOrganization(t, app.DB)

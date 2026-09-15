@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"gorm.io/gorm"
@@ -264,16 +265,36 @@ func (a *App) InvalidateWhatsAppAccountCache(phoneID string) {
 	a.Redis.Del(ctx, cacheKey)
 }
 
+// cachedWebhook is the Redis representation of a webhook. models.Webhook hides
+// Secret from JSON (json:"-"), so caching the model directly dropped the secret
+// and every delivery served from cache went out unsigned. The secret is kept
+// here, encrypted with the app encryption key while it sits in Redis.
+type cachedWebhook struct {
+	models.Webhook
+	Secret string `json:"secret"`
+}
+
 // getWebhooksCached retrieves active webhooks for an organization from cache or database
 func (a *App) getWebhooksCached(orgID uuid.UUID) ([]models.Webhook, error) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("%s%s", webhooksCachePrefix, orgID.String())
+	var key string // empty key: crypto leaves values as-is
+	if a.Config != nil {
+		key = a.Config.App.EncryptionKey
+	}
 
 	// Try cache first
 	cached, err := a.Redis.Get(ctx, cacheKey).Result()
 	if err == nil && cached != "" {
-		var webhooks []models.Webhook
-		if err := json.Unmarshal([]byte(cached), &webhooks); err == nil {
+		var entries []cachedWebhook
+		if err := json.Unmarshal([]byte(cached), &entries); err == nil {
+			webhooks := make([]models.Webhook, len(entries))
+			for i, e := range entries {
+				webhooks[i] = e.Webhook
+				secret := e.Secret
+				crypto.DecryptFields(key, &secret)
+				webhooks[i].Secret = secret
+			}
 			return webhooks, nil
 		}
 	}
@@ -284,9 +305,23 @@ func (a *App) getWebhooksCached(orgID uuid.UUID) ([]models.Webhook, error) {
 		return nil, err
 	}
 
-	// Cache the result
-	if data, err := json.Marshal(webhooks); err == nil {
-		a.Redis.Set(ctx, cacheKey, data, webhooksCacheTTL)
+	// Cache the result, secrets included (encrypted). If encryption fails the
+	// list is not cached, so deliveries never lose their signature.
+	entries := make([]cachedWebhook, len(webhooks))
+	cacheable := true
+	for i, wh := range webhooks {
+		secret, encErr := crypto.Encrypt(wh.Secret, key)
+		if encErr != nil {
+			a.Log.Error("Failed to encrypt webhook secret for cache", "error", encErr, "webhook_id", wh.ID)
+			cacheable = false
+			break
+		}
+		entries[i] = cachedWebhook{Webhook: wh, Secret: secret}
+	}
+	if cacheable {
+		if data, err := json.Marshal(entries); err == nil {
+			a.Redis.Set(ctx, cacheKey, data, webhooksCacheTTL)
+		}
 	}
 
 	return webhooks, nil

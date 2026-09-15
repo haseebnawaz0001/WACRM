@@ -60,6 +60,15 @@ func WithRoleID(roleID *uuid.UUID) UserOption {
 	}
 }
 
+// WithAdminRole creates an admin role (all permissions) in orgID and assigns it
+// to the user. Use it for tests that exercise permission-checked handlers but
+// are not about permissions themselves.
+func WithAdminRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) UserOption {
+	t.Helper()
+	role := CreateAdminRole(t, db, orgID)
+	return WithRoleID(&role.ID)
+}
+
 // WithInactive marks the test user as inactive.
 func WithInactive() UserOption {
 	return func(u *models.User) {

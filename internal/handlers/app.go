@@ -272,6 +272,36 @@ func (a *App) requireAuth(r *fastglue.Request, resource, action string) (orgID, 
 	return orgID, userID, nil
 }
 
+// permissionRef names one resource/action pair for requireAnyPermission.
+type permissionRef struct {
+	resource string
+	action   string
+}
+
+// perm builds a permissionRef, e.g. perm(models.ResourceTemplates, models.ActionRead).
+func perm(resource, action string) permissionRef {
+	return permissionRef{resource: resource, action: action}
+}
+
+// requireAnyPermission is requireAuth for endpoints that several screens rely
+// on: it passes when the user holds at least one of the listed permissions.
+// For example, agents list templates from the chat template picker without
+// being allowed to manage templates. Failure handling matches requireAuth.
+func (a *App) requireAnyPermission(r *fastglue.Request, perms ...permissionRef) (orgID, userID uuid.UUID, err error) {
+	orgID, userID, err = a.getOrgAndUserID(r)
+	if err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return uuid.Nil, uuid.Nil, errEnvelopeSent
+	}
+	for _, p := range perms {
+		if a.HasPermission(userID, p.resource, p.action, orgID) {
+			return orgID, userID, nil
+		}
+	}
+	_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	return uuid.Nil, uuid.Nil, errEnvelopeSent
+}
+
 // decodeRequest decodes a JSON request body into the provided struct.
 // Returns nil on success, otherwise sends a 400 error envelope and returns errEnvelopeSent.
 func (a *App) decodeRequest(r *fastglue.Request, v any) error {
