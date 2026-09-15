@@ -120,7 +120,7 @@ const formattedEntries = computed(() => {
     <div
       v-for="entry in formattedEntries"
       :key="entry.id"
-      class="flex items-start gap-2 py-1 px-2 rounded transition-colors"
+      class="flex items-start gap-2 py-1 px-2 rounded-md transition-colors"
       :class="{ 'bg-blue-50 dark:bg-blue-900/20': entry.isCurrent }"
     >
       <component

@@ -109,7 +109,7 @@ type ServerConfig struct {
 	Port           int    `koanf:"port"`
 	ReadTimeout    int    `koanf:"read_timeout"`
 	WriteTimeout   int    `koanf:"write_timeout"`
-	BasePath       string `koanf:"base_path"`       // Base path for frontend (e.g., "/whatomate" for proxy pass)
+	BasePath       string `koanf:"base_path"`       // Base path for frontend (e.g., "/wacrm" for proxy pass)
 	AllowedOrigins string `koanf:"allowed_origins"` // Comma-separated list of allowed CORS origins
 }
 
@@ -198,17 +198,17 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
-	// Load from environment variables (WHATOMATE_ prefix). A DOUBLE underscore
+	// Load from environment variables (WACRM_ prefix). A DOUBLE underscore
 	// separates config levels; single underscores are preserved as part of the
 	// key. This is required because both section and field names contain
 	// underscores (e.g. default_admin, rate_limit, whatsapp.app_id) — collapsing
 	// every "_" to "." would mangle them (whatsapp.app_id -> whatsapp.app.id), so
 	// those keys could never be set via env.
-	// e.g. WHATOMATE_DATABASE__HOST -> database.host
-	//      WHATOMATE_WHATSAPP__APP_ID -> whatsapp.app_id
-	//      WHATOMATE_DEFAULT_ADMIN__EMAIL -> default_admin.email
-	if err := k.Load(env.Provider("WHATOMATE_", ".", func(s string) string {
-		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "WHATOMATE_")), "__", ".")
+	// e.g. WACRM_DATABASE__HOST -> database.host
+	//      WACRM_WHATSAPP__APP_ID -> whatsapp.app_id
+	//      WACRM_DEFAULT_ADMIN__EMAIL -> default_admin.email
+	if err := k.Load(env.Provider("WACRM_", ".", func(s string) string {
+		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "WACRM_")), "__", ".")
 	}), nil); err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func Load(configPath string) (*Config, error) {
 
 func setDefaults(cfg *Config) {
 	if cfg.App.Name == "" {
-		cfg.App.Name = "Whatomate"
+		cfg.App.Name = "WA CRM"
 	}
 	if cfg.App.Environment == "" {
 		cfg.App.Environment = "development"

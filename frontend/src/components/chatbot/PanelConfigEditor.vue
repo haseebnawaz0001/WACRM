@@ -137,11 +137,11 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
         <code
           v-for="(v, i) in availableVariables"
           :key="v.key + i"
-          class="bg-muted px-1.5 py-0.5 rounded"
+          class="bg-muted px-1.5 py-0.5 rounded-md"
         >{{ v.key }}</code>
       </div>
     </div>
-    <div v-else class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30">
+    <div v-else class="text-[10px] text-muted-foreground p-2 border rounded-md bg-muted/30">
       No variables captured yet. Add a Prompt node with a "Store response as" value, or an API node with response mapping.
     </div>
 
@@ -155,7 +155,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
 
       <div
         v-if="panelConfig.sections.length === 0"
-        class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30 text-center"
+        class="text-[10px] text-muted-foreground p-2 border rounded-md bg-muted/30 text-center"
       >
         No sections configured.
       </div>
@@ -244,7 +244,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
           <div
             v-for="(field, fieldIdx) in section.fields"
             :key="field.key"
-            class="bg-background rounded p-2 space-y-2"
+            class="bg-background rounded-md p-2 space-y-2"
           >
             <div class="flex items-center gap-1">
               <Badge variant="secondary" class="text-[10px] font-mono">{{ field.key }}</Badge>

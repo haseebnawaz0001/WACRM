@@ -344,11 +344,11 @@ async function confirmDelete() {
                   </RouterLink>
                 </template>
                 <template #cell-app_id="{ item: account }">
-                  <code v-if="account.app_id" class="text-xs bg-muted px-1.5 py-0.5 rounded">{{ account.app_id }}</code>
+                  <code v-if="account.app_id" class="text-xs bg-muted px-1.5 py-0.5 rounded-md">{{ account.app_id }}</code>
                   <span v-else class="text-muted-foreground">—</span>
                 </template>
                 <template #cell-phone_id="{ item: account }">
-                  <code class="text-xs bg-muted px-1.5 py-0.5 rounded">{{ account.phone_id }}</code>
+                  <code class="text-xs bg-muted px-1.5 py-0.5 rounded-md">{{ account.phone_id }}</code>
                 </template>
                 <template #cell-api_version="{ item: account }">
                   <span class="text-sm">{{ account.api_version }}</span>
@@ -408,7 +408,7 @@ async function confirmDelete() {
 
     <!-- Onboarding Method Selection Dialog -->
     <Dialog v-model:open="showOnboardingDialog">
-      <DialogContent class="sm:max-w-2xl bg-[#0e0e11] border-[#222227] text-white light:bg-white light:border-gray-200 light:text-gray-900 p-6 shadow-2xl rounded-xl">
+      <DialogContent class="sm:max-w-2xl bg-[#0e0e11] border-[#222227] text-white light:bg-white light:border-gray-200 light:text-gray-900 p-6 shadow-2xl rounded-lg">
         <DialogHeader class="mb-4">
           <DialogTitle class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 light:from-emerald-600 light:to-green-600 bg-clip-text text-transparent flex items-center gap-2">
             {{ $t('accounts.connectTitle') }}
@@ -422,7 +422,7 @@ async function confirmDelete() {
           <!-- Coexistence Option Card -->
           <div
             @click="launchWhatsAppSignup(true)"
-            class="relative group cursor-pointer flex flex-col p-5 rounded-xl border border-emerald-500/20 bg-[#141419] hover:bg-[#181822] hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] light:bg-gray-50/50 light:border-emerald-200 light:hover:bg-gray-100/70 light:hover:border-emerald-400 light:hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] transition-all duration-300 overflow-hidden"
+            class="relative group cursor-pointer flex flex-col p-5 rounded-lg border border-emerald-500/20 bg-[#141419] hover:bg-[#181822] hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] light:bg-gray-50/50 light:border-emerald-200 light:hover:bg-gray-100/70 light:hover:border-emerald-400 light:hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] transition-all duration-300 overflow-hidden"
           >
             <!-- Badge -->
             <div class="absolute top-3 right-3">
@@ -451,7 +451,7 @@ async function confirmDelete() {
           <!-- Classic Option Card -->
           <div
             @click="launchWhatsAppSignup(false)"
-            class="relative group cursor-pointer flex flex-col p-5 rounded-xl border border-[#222227] bg-[#141419] hover:bg-[#181822] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] light:bg-gray-50/50 light:border-gray-200 light:hover:bg-gray-100/70 light:hover:border-blue-400 light:hover:shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all duration-300 overflow-hidden"
+            class="relative group cursor-pointer flex flex-col p-5 rounded-lg border border-[#222227] bg-[#141419] hover:bg-[#181822] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] light:bg-gray-50/50 light:border-gray-200 light:hover:bg-gray-100/70 light:hover:border-blue-400 light:hover:shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all duration-300 overflow-hidden"
           >
             <!-- Badge -->
             <div class="absolute top-3 right-3">

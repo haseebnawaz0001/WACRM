@@ -8,7 +8,7 @@ import ivrFlowExample from '../../../assets/ivr-flow-example.png';
 
 ## Overview
 
-Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Incoming calls are handled by an Interactive Voice Response (IVR) system built using a visual drag-and-drop flow editor. The IVR plays greetings, collects DTMF input, makes HTTP callbacks, and routes callers to agent teams. Agents answer calls from the browser — no phone hardware required.
+WA CRM supports WhatsApp voice calling with WebRTC-based audio bridging. Incoming calls are handled by an Interactive Voice Response (IVR) system built using a visual drag-and-drop flow editor. The IVR plays greetings, collects DTMF input, makes HTTP callbacks, and routes callers to agent teams. Agents answer calls from the browser — no phone hardware required.
 
 <CardGrid>
   <Card title="Visual Flow Editor" icon="pencil">
@@ -33,7 +33,7 @@ Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Inco
 <Steps>
 1. A WhatsApp user calls your business number
 2. WhatsApp sends a webhook with the SDP offer
-3. Whatomate establishes a WebRTC peer connection and runs the IVR flow
+3. WA CRM establishes a WebRTC peer connection and runs the IVR flow
 4. The caller hears greetings, presses digits (DTMF) to navigate menus, and provides input
 5. Based on the flow logic, the call is transferred to an agent team, routed to another flow, or hung up
 6. An available agent accepts the transfer in the browser and speaks with the caller
@@ -334,7 +334,7 @@ Queries the current permission status directly from the WhatsApp API. Response:
 ```
 
 <Aside type="note">
-  Permission grants can also arrive **out of band** — for example when Meta shows the consumer a call prompt on its own, or when a request was sent outside your configured calling hours. When the consumer replies to accept or decline and no prior request record exists, Whatomate creates the permission record from the reply so the grant is captured rather than dropped.
+  Permission grants can also arrive **out of band** — for example when Meta shows the consumer a call prompt on its own, or when a request was sent outside your configured calling hours. When the consumer replies to accept or decline and no prior request record exists, WA CRM creates the permission record from the reply so the grant is captured rather than dropped.
 </Aside>
 
 ### Placing the Call
@@ -395,7 +395,7 @@ credential = "pass"
 
 #### TURN with HMAC shared-secret credentials
 
-Instead of a static `username`/`credential`, you can point Whatomate at a coturn server running in `use-auth-secret` mode (the TURN REST API). Whatomate then generates a fresh, short-lived credential for every client — no long-lived password is ever handed out.
+Instead of a static `username`/`credential`, you can point WA CRM at a coturn server running in `use-auth-secret` mode (the TURN REST API). WA CRM then generates a fresh, short-lived credential for every client — no long-lived password is ever handed out.
 
 ```toml
 [[calling.ice_servers]]
@@ -404,7 +404,7 @@ secret = "your-coturn-static-auth-secret"   # matches coturn's `static-auth-secr
 credential_ttl = 86400                        # credential lifetime in seconds (default: 86400 = 24h)
 ```
 
-When `secret` is set, Whatomate derives credentials on each request following the coturn REST convention: the username is the credential's Unix expiry timestamp (`<expiry>`, or `<expiry>:<username>` if you also set `username`), and the credential is the base64-encoded HMAC-SHA1 of that username keyed by `secret`. The generated pair is returned by `GET /api/calls/ice-servers` for browser peer connections and is also used server-side when the IVR bridge builds its own peer connection.
+When `secret` is set, WA CRM derives credentials on each request following the coturn REST convention: the username is the credential's Unix expiry timestamp (`<expiry>`, or `<expiry>:<username>` if you also set `username`), and the credential is the base64-encoded HMAC-SHA1 of that username keyed by `secret`. The generated pair is returned by `GET /api/calls/ice-servers` for browser peer connections and is also used server-side when the IVR bridge builds its own peer connection.
 
 On the coturn side, enable:
 
@@ -431,7 +431,7 @@ Calling is enabled per-organization in the database. Set `calling_enabled = true
 
 ## Text-to-Speech (IVR Greetings)
 
-Whatomate uses [Piper](https://github.com/OHF-Voice/piper1-gpl) for offline text-to-speech generation. When admins type greeting text in the IVR flow editor, the server generates OGG/Opus audio files using Piper + `opusenc`. This is optional — you can also upload pre-recorded audio files directly.
+WA CRM uses [Piper](https://github.com/OHF-Voice/piper1-gpl) for offline text-to-speech generation. When admins type greeting text in the IVR flow editor, the server generates OGG/Opus audio files using Piper + `opusenc`. This is optional — you can also upload pre-recorded audio files directly.
 
 ### Install Dependencies
 

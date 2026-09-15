@@ -46,7 +46,7 @@ func main() {
 	case "worker":
 		runWorker(os.Args[2:])
 	case "version":
-		fmt.Printf("Whatomate %s (built %s)\n", Version, BuildTime)
+		fmt.Printf("WA CRM %s (built %s)\n", Version, BuildTime)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -57,10 +57,10 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`Whatomate - WhatsApp Business API Platform
+	fmt.Println(`WA CRM - WhatsApp Business API Platform
 
 Usage:
-  whatomate <command> [options]
+  wacrm <command> [options]
 
 Commands:
   server    Start the API server (with optional embedded workers)
@@ -78,16 +78,16 @@ Worker Options:
   -workers int      Number of workers to run (default 1)
 
 Examples:
-  whatomate server                     # API + 1 embedded worker
-  whatomate server -workers 0          # API only (no workers)
-  whatomate server -workers 4          # API + 4 embedded workers
-  whatomate server -migrate            # Run migrations and start server
-  whatomate worker -workers 4          # 4 workers only (no API)
+  wacrm server                     # API + 1 embedded worker
+  wacrm server -workers 0          # API only (no workers)
+  wacrm server -workers 4          # API + 4 embedded workers
+  wacrm server -migrate            # Run migrations and start server
+  wacrm worker -workers 4          # 4 workers only (no API)
 
 Deployment Scenarios:
-  All-in-one:    whatomate server
-  Separate:      whatomate server -workers 0  (on API server)
-                 whatomate worker -workers 4  (on worker server)`)
+  All-in-one:    wacrm server
+  Separate:      wacrm server -workers 0  (on API server)
+                 wacrm worker -workers 4  (on worker server)`)
 }
 
 // ============================================================================
@@ -107,10 +107,10 @@ func runServer(args []string) {
 		Level:           logf.DebugLevel,
 		EnableCaller:    true,
 		TimestampFormat: "2006-01-02 15:04:05",
-		DefaultFields:   []any{"app", "whatomate"},
+		DefaultFields:   []any{"app", "wacrm"},
 	})
 
-	lo.Info("Starting Whatomate server...", "version", Version)
+	lo.Info("Starting WA CRM server...", "version", Version)
 
 	// Load configuration
 	cfg, err := config.Load(*configPath)
@@ -141,7 +141,7 @@ func runServer(args []string) {
 		lo = logf.New(logf.Opts{
 			Level:           logf.InfoLevel,
 			TimestampFormat: "2006-01-02 15:04:05",
-			DefaultFields:   []any{"app", "whatomate"},
+			DefaultFields:   []any{"app", "wacrm"},
 		})
 	}
 
@@ -264,7 +264,7 @@ func runServer(args []string) {
 		ReadTimeout:        time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout:       time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		MaxRequestBodySize: 15 * 1024 * 1024,
-		Name:               "Whatomate",
+		Name:               "WACRM",
 	}
 
 	// Start server in goroutine
@@ -361,10 +361,10 @@ func runWorker(args []string) {
 		Level:           logf.DebugLevel,
 		EnableCaller:    true,
 		TimestampFormat: "2006-01-02 15:04:05",
-		DefaultFields:   []any{"app", "whatomate-worker"},
+		DefaultFields:   []any{"app", "wacrm-worker"},
 	})
 
-	lo.Info("Starting Whatomate worker...", "version", Version)
+	lo.Info("Starting WA CRM worker...", "version", Version)
 
 	// Load configuration
 	cfg, err := config.Load(*configPath)
@@ -377,7 +377,7 @@ func runWorker(args []string) {
 		lo = logf.New(logf.Opts{
 			Level:           logf.InfoLevel,
 			TimestampFormat: "2006-01-02 15:04:05",
-			DefaultFields:   []any{"app", "whatomate-worker"},
+			DefaultFields:   []any{"app", "wacrm-worker"},
 		})
 	}
 

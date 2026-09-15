@@ -69,7 +69,7 @@ const handleRegister = async () => {
     <Card class="w-full max-w-md">
       <CardHeader class="space-y-1 text-center">
         <div class="flex justify-center mb-4">
-          <div class="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
+          <div class="h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
             <MessageSquare class="h-7 w-7 text-primary-foreground" />
           </div>
         </div>

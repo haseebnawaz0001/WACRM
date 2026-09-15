@@ -84,7 +84,7 @@ const TreeNodes = defineComponent({
             if (step.digit) {
               flowParts.push(
                 h('div', {
-                  class: 'flex items-center justify-center h-6 w-6 rounded border bg-muted text-xs font-mono font-bold shrink-0'
+                  class: 'flex items-center justify-center h-6 w-6 rounded-md border bg-muted text-xs font-mono font-bold shrink-0'
                 }, step.digit)
               )
               flowParts.push(
@@ -109,7 +109,7 @@ const TreeNodes = defineComponent({
               : step.label || '-'
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
               h('div', {
-                class: 'flex items-center justify-center h-6 w-6 rounded border bg-muted text-xs font-mono font-bold shrink-0'
+                class: 'flex items-center justify-center h-6 w-6 rounded-md border bg-muted text-xs font-mono font-bold shrink-0'
               }, step.digit),
               h('span', { class: 'text-sm font-medium' }, displayLabel),
             ])
@@ -117,7 +117,7 @@ const TreeNodes = defineComponent({
             // Menu without digit (timeout/max_retries)
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
               h('div', {
-                class: 'flex items-center justify-center h-6 px-1.5 rounded bg-muted text-xs font-medium shrink-0'
+                class: 'flex items-center justify-center h-6 px-1.5 rounded-md bg-muted text-xs font-medium shrink-0'
               }, 'menu'),
               h('span', { class: 'text-sm' }, step.label || '-'),
               step.outcome ? h('span', { class: 'text-xs text-muted-foreground' }, `(${step.outcome})`) : null,
@@ -140,7 +140,7 @@ const TreeNodes = defineComponent({
             // greeting, timing, http_callback, gather, etc.
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
               h('div', {
-                class: 'flex items-center justify-center h-6 px-1.5 rounded bg-muted text-xs font-medium shrink-0 capitalize'
+                class: 'flex items-center justify-center h-6 px-1.5 rounded-md bg-muted text-xs font-medium shrink-0 capitalize'
               }, step.type.replace('_', ' ')),
               h('span', { class: 'text-sm' }, step.label || '-'),
             ])
@@ -148,7 +148,7 @@ const TreeNodes = defineComponent({
             // Fallback
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
               h('div', {
-                class: 'flex items-center justify-center h-6 w-6 rounded border bg-muted text-xs font-mono font-bold shrink-0'
+                class: 'flex items-center justify-center h-6 w-6 rounded-md border bg-muted text-xs font-mono font-bold shrink-0'
               }, step.digit || '?'),
               h('span', { class: 'text-sm' }, step.label || '-'),
             ])

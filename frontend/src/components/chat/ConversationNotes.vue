@@ -200,7 +200,7 @@ function formatNoteTime(dateStr: string) {
           <div
             v-for="note in notesStore.notes"
             :key="note.id"
-            class="group relative rounded-xl p-3 backdrop-blur-sm border border-white/[0.06] light:border-gray-200 bg-gradient-to-br from-white/[0.04] to-white/[0.02] light:from-gray-50 light:to-white hover:from-white/[0.06] hover:to-white/[0.03] light:hover:from-gray-100 light:hover:to-gray-50 transition-all duration-200"
+            class="group relative rounded-lg p-3 backdrop-blur-sm border border-white/[0.06] light:border-gray-200 bg-gradient-to-br from-white/[0.04] to-white/[0.02] light:from-gray-50 light:to-white hover:from-white/[0.06] hover:to-white/[0.03] light:hover:from-gray-100 light:hover:to-gray-50 transition-all duration-200"
           >
             <!-- Gradient accent line -->
             <div class="absolute top-0 left-3 right-3 h-[2px] rounded-full bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-transparent" />
@@ -273,7 +273,7 @@ function formatNoteTime(dateStr: string) {
 
         <!-- Empty state -->
         <div v-else class="flex flex-col items-center justify-center py-12 text-center">
-          <div class="h-12 w-12 rounded-xl bg-amber-500/10 light:bg-amber-50 flex items-center justify-center mb-3">
+          <div class="h-12 w-12 rounded-lg bg-amber-500/10 light:bg-amber-50 flex items-center justify-center mb-3">
             <StickyNote class="h-6 w-6 text-amber-400/50 light:text-amber-400" />
           </div>
           <p class="text-sm font-medium text-white/40 light:text-gray-500 mb-1">{{ t('chat.noNotes') }}</p>
@@ -287,7 +287,7 @@ function formatNoteTime(dateStr: string) {
 
     <!-- Add note input -->
     <div class="p-4 border-t border-white/[0.08] light:border-gray-200">
-      <div class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
+      <div class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
         <textarea
           v-model="newNoteContent"
           :placeholder="t('chat.writeNote') + '...'"

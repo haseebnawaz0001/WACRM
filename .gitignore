@@ -1,6 +1,6 @@
 # Binaries
 /server
-/whatomate
+/wacrm
 bin/
 *.exe
 *.exe~
@@ -60,3 +60,7 @@ test-results/
 
 # Docker 
 docker/.env
+
+# AI tool skill binaries (downloaded/rebuilt on first run)
+.claude/skills/*/scripts/bin/
+.github/skills/*/scripts/bin/

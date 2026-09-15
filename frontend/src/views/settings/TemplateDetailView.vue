@@ -859,7 +859,7 @@ onMounted(async () => {
               type="checkbox"
               v-model="form.add_security_recommendation"
               :disabled="!canWrite || !isEditable"
-              class="h-4 w-4 rounded border-gray-300"
+              class="h-4 w-4 rounded-md border-gray-300"
             />
             <Label for="security-rec" class="text-xs cursor-pointer">{{ $t('templates.addSecurityRecommendation', 'Add security recommendation') }}</Label>
           </div>
@@ -871,7 +871,7 @@ onMounted(async () => {
                 :checked="form.code_expiration_minutes > 0"
                 @change="form.code_expiration_minutes = ($event.target as HTMLInputElement).checked ? 10 : 0"
                 :disabled="!canWrite || !isEditable"
-                class="h-4 w-4 rounded border-gray-300"
+                class="h-4 w-4 rounded-md border-gray-300"
               />
               <Label for="code-expiration" class="text-xs cursor-pointer">{{ $t('templates.addCodeExpiration', 'Add expiration time for the code') }}</Label>
             </div>
@@ -899,7 +899,7 @@ onMounted(async () => {
                 type="checkbox"
                 v-model="zeroTapAccepted"
                 :disabled="!canWrite || !isEditable"
-                class="h-4 w-4 mt-0.5 rounded border-gray-300"
+                class="h-4 w-4 mt-0.5 rounded-md border-gray-300"
               />
               <Label for="zero-tap-tos" class="text-xs cursor-pointer leading-relaxed">
                 By selecting zero-tap, I understand that my business's use of zero-tap authentication is subject to the
@@ -1217,7 +1217,7 @@ onMounted(async () => {
           <div class="bg-gray-700 light:bg-white rounded-lg shadow max-w-[280px] overflow-hidden">
             <div v-if="template.header_type && template.header_type !== 'NONE'" class="p-3 border-b">
               <div v-if="template.header_type === 'TEXT'" class="font-semibold">{{ previewHeader }}</div>
-              <div v-else class="h-32 bg-gray-600 light:bg-gray-200 rounded flex items-center justify-center">
+              <div v-else class="h-32 bg-gray-600 light:bg-gray-200 rounded-md flex items-center justify-center">
                 <span class="text-sm text-gray-400">{{ template.header_type }}</span>
               </div>
             </div>

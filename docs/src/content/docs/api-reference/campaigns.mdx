@@ -410,7 +410,7 @@ GET /api/campaigns/{id}/progress
 
 Sends are dispatched through a Redis Streams job queue and consumed by worker processes. Throughput
 is governed by how many workers you run (`-workers=N` on `server` or `worker`), not by a built-in
-per-second throttle — Whatomate does **not** shape traffic to your Meta messaging tier. If you
+per-second throttle — WA CRM does **not** shape traffic to your Meta messaging tier. If you
 exceed your tier, Meta rejects the sends and the affected recipients are marked `failed`; use
 [Retry Failed](#retry-failed) once your limits allow.
 

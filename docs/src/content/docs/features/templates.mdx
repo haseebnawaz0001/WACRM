@@ -9,7 +9,7 @@ import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
 
 ## Overview
 
-WhatsApp Message Templates are pre-approved message formats that allow businesses to send notifications and updates to customers. Whatomate makes it easy to manage, sync, and use templates across your organization.
+WhatsApp Message Templates are pre-approved message formats that allow businesses to send notifications and updates to customers. WA CRM makes it easy to manage, sync, and use templates across your organization.
 
 ## Template Management
 
@@ -37,7 +37,7 @@ View and manage template details:
 
 ## Media Headers (Image, Video, Document)
 
-Templates with an `IMAGE`, `VIDEO`, or `DOCUMENT` header require a **sample media file** that Meta will review along with the template text. Without this sample, Meta will reject the template — and Whatomate enforces the same check before submission, so a template with a media header can't be saved or published until you've uploaded one.
+Templates with an `IMAGE`, `VIDEO`, or `DOCUMENT` header require a **sample media file** that Meta will review along with the template text. Without this sample, Meta will reject the template — and WA CRM enforces the same check before submission, so a template with a media header can't be saved or published until you've uploaded one.
 
 ### Uploading a sample
 
@@ -69,7 +69,7 @@ Templates with an `IMAGE`, `VIDEO`, or `DOCUMENT` header require a **sample medi
 The lifecycle of a template is **Draft → Pending → Approved (or Rejected)**:
 
 1. **Create** — fill in the editor and click **Save**. The template lands in your local DB as `DRAFT`. It is not visible to Meta yet, and cannot be used to send messages.
-2. **Publish** — click **Publish**. Whatomate submits the template (including any media handle) to Meta and the status becomes `PENDING`.
+2. **Publish** — click **Publish**. WA CRM submits the template (including any media handle) to Meta and the status becomes `PENDING`.
 3. **Meta reviews** — typically minutes to 24 hours. The status updates to `APPROVED` or `REJECTED` on the next sync.
 4. **Republish** — only `DRAFT` and `REJECTED` templates can be edited and republished. Approved templates are locked except for the body of `MARKETING` and `UTILITY` categories (Meta limits which fields are editable post-approval).
 
@@ -103,7 +103,7 @@ Named parameters make templates easier to understand and less error-prone when d
 
 - Use descriptive names like `{{customer_name}}`, `{{order_id}}`, `{{delivery_date}}`
 - Parameter names can contain letters, numbers, and underscores
-- Whatomate automatically detects whether your template uses positional or named parameters
+- WA CRM automatically detects whether your template uses positional or named parameters
 
 <Aside type="tip">
   Named parameters are recommended for templates with 3 or more variables, as they make the template easier to understand and maintain.
@@ -112,7 +112,7 @@ Named parameters make templates easier to understand and less error-prone when d
 ### Header Variables
 
 A TEXT header can contain **at most one** variable — this is a Meta restriction
-that Whatomate enforces at template creation time. Both positional (`{{1}}`)
+that WA CRM enforces at template creation time. Both positional (`{{1}}`)
 and named (`{{season}}`) work; mixing positional and named within the same
 template (header + body) is still not allowed.
 
@@ -158,7 +158,7 @@ When sending:
 
 Approved templates carry a **quality rating** reflecting how recipients have
 engaged with them — Meta lowers it as customers block or report the template.
-Whatomate stores this on each template and refreshes it on every **Sync from
+WA CRM stores this on each template and refreshes it on every **Sync from
 Meta**. New templates start at `UNKNOWN` until Meta reports a score.
 
 | Rating | Meaning |

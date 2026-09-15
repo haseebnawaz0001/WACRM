@@ -1,14 +1,14 @@
 ---
 title: Outbound Webhooks
-description: Subscribe external systems to Whatomate events with signed, retried HTTP callbacks
+description: Subscribe external systems to WA CRM events with signed, retried HTTP callbacks
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Outbound Webhooks push Whatomate events to your own HTTP endpoints in real time. When a subscribed event fires — a message arrives, a contact is created, a chat is transferred to a human — Whatomate `POST`s a signed JSON payload to every webhook that subscribed to it.
+Outbound Webhooks push WA CRM events to your own HTTP endpoints in real time. When a subscribed event fires — a message arrives, a contact is created, a chat is transferred to a human — WA CRM `POST`s a signed JSON payload to every webhook that subscribed to it.
 
 <Aside type="note">
-  **Outbound vs. inbound.** This page is about *outbound* webhooks: **Whatomate → your server**. It is separate from the *inbound* Meta webhook at `/api/webhook` (**Meta → Whatomate**), which receives WhatsApp message and status callbacks and is verified against Meta's signature. Configuring outbound webhooks here has no effect on the Meta integration.
+  **Outbound vs. inbound.** This page is about *outbound* webhooks: **WA CRM → your server**. It is separate from the *inbound* Meta webhook at `/api/webhook` (**Meta → WA CRM**), which receives WhatsApp message and status callbacks and is verified against Meta's signature. Configuring outbound webhooks here has no effect on the Meta integration.
 </Aside>
 
 ## Subscribing to events
@@ -23,7 +23,7 @@ Manage webhooks under **Settings → Webhooks**, or via the API:
 A webhook has a `name`, a target `url`, a list of `events`, optional custom `headers`, a signing `secret`, and an `is_active` flag. At least one event must be selected. The secret is never returned in API responses — the payload exposes only a `has_secret` boolean.
 
 <Aside type="tip">
-  If you create a webhook without a `secret`, Whatomate auto-generates a 32-byte hex secret for you. Retrieve it once at creation, or set your own so both sides share it.
+  If you create a webhook without a `secret`, WA CRM auto-generates a 32-byte hex secret for you. Retrieve it once at creation, or set your own so both sides share it.
 </Aside>
 
 ## Event catalog
@@ -42,7 +42,7 @@ Seven event types can be subscribed to:
 
 ## Payload
 
-Every delivery is a `POST` with `Content-Type: application/json` and a `User-Agent: Whatomate-Webhook/1.0` header. The body is:
+Every delivery is a `POST` with `Content-Type: application/json` and a `User-Agent: WACRM-Webhook/1.0` header. The body is:
 
 ```json
 {
@@ -56,7 +56,7 @@ The `data` object depends on the event — message events carry `message_id`, `c
 
 ## Verifying the signature
 
-When a webhook has a secret, Whatomate signs each delivery and sends the signature in the **`X-Webhook-Signature`** header:
+When a webhook has a secret, WA CRM signs each delivery and sends the signature in the **`X-Webhook-Signature`** header:
 
 ```
 X-Webhook-Signature: sha256=<hex>
@@ -81,7 +81,7 @@ function verify(rawBody, header, secret) {
 
 ## Delivery, retries & concurrency
 
-Delivery is **asynchronous** — the API call that triggered the event returns immediately; webhook dispatch runs in the background on a detached context. For a given event, Whatomate:
+Delivery is **asynchronous** — the API call that triggered the event returns immediately; webhook dispatch runs in the background on a detached context. For a given event, WA CRM:
 
 - Sends only to **active** webhooks that subscribe to that event.
 - Delivers to up to **10 webhooks concurrently** per dispatch.
@@ -92,7 +92,7 @@ Use `POST /api/webhooks/{id}/test` to send a one-off `{"event":"test", ...}` pay
 
 ## SSRF protection
 
-Because webhook URLs are user-supplied, Whatomate guards against server-side request forgery on two levels:
+Because webhook URLs are user-supplied, WA CRM guards against server-side request forgery on two levels:
 
 1. **At save time** (`validateWebhookURL`): the URL scheme must be `http` or `https`, and obvious internal targets are rejected — `localhost`, `0.0.0.0`, `*.local`, `*.internal`, and IP literals in loopback, private, link-local, or unspecified ranges.
 2. **At delivery time** (`SSRFSafeDialer`): after DNS resolution, connections to loopback/private/link-local IPs are blocked — defending against DNS-rebinding attacks where a public hostname resolves to an internal address.

@@ -64,7 +64,7 @@ test.describe('SSO Settings', () => {
     // when the provider is unconfigured, "Configure" once it has a row.
     const ghCard = page
       .getByRole('heading', { name: 'GitHub', exact: true })
-      .locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
+      .locator('xpath=ancestor::*[contains(@class, "rounded-lg")][1]')
     await ghCard.getByRole('button', { name: /Set Up|Configure/i }).click()
 
     // Edit dialog opens.
@@ -103,7 +103,7 @@ test.describe('SSO Settings', () => {
 
     const card = page
       .getByRole('heading', { name: 'Microsoft', exact: true })
-      .locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
+      .locator('xpath=ancestor::*[contains(@class, "rounded-lg")][1]')
     await card.getByRole('button', { name: /Set Up|Configure/i }).click()
 
     const dialog = page.getByRole('dialog')
@@ -141,7 +141,7 @@ test.describe('SSO Settings', () => {
 
     const customCard = page
       .getByRole('heading', { name: /Custom OIDC/i })
-      .locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
+      .locator('xpath=ancestor::*[contains(@class, "rounded-lg")][1]')
     await customCard.getByRole('button', { name: /Set Up|Configure/i }).click()
 
     const dialog = page.getByRole('dialog')

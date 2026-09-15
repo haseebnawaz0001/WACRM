@@ -12,7 +12,7 @@ export default defineConfig({
   markdown: { gfm: true },
   integrations: [
     starlight({
-      title: 'Whatomate',
+      title: 'WA CRM',
       description: 'A modern WhatsApp Business Platform',
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/shridarpatil/whatomate' },

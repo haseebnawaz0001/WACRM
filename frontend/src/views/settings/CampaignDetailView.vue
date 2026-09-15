@@ -1361,7 +1361,7 @@ onUnmounted(() => {
         <TabsContent value="manual" class="space-y-3 mt-3">
           <div class="space-y-1.5">
             <Label class="text-xs text-muted-foreground">
-              {{ $t('campaigns.formatHint', 'Format') }}: <code class="text-[10px] bg-muted px-1 rounded">{{ manualEntryFormat }}</code>
+              {{ $t('campaigns.formatHint', 'Format') }}: <code class="text-[10px] bg-muted px-1 rounded-md">{{ manualEntryFormat }}</code>
             </Label>
             <p class="text-[10px] text-muted-foreground mb-1">
               {{ $t('campaigns.recipientFormatNote', 'One recipient per line. Name is optional. Template parameters must match the selected template.') }}
@@ -1410,7 +1410,7 @@ onUnmounted(() => {
               {{ $t('campaigns.csvFormatHint', 'CSV must include a phone_number (or phone, mobile, number) column. Optionally include a name column. For templates with a TEXT header variable, add a "header" column. Then one column per body parameter.') }}
             </Label>
             <div class="flex items-center justify-between text-xs">
-              <code class="bg-muted px-1.5 py-0.5 rounded">{{ csvHeaderRow }}</code>
+              <code class="bg-muted px-1.5 py-0.5 rounded-md">{{ csvHeaderRow }}</code>
               <button
                 type="button"
                 class="text-primary hover:underline inline-flex items-center gap-1"

@@ -7,7 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Overview
 
-Whatomate provides WebRTC-based voice calling over WhatsApp. This page documents the **HTTP/REST** control-plane endpoints: browsing call logs and recordings, managing agent transfers, placing outgoing calls, and requesting call permission.
+WA CRM provides WebRTC-based voice calling over WhatsApp. This page documents the **HTTP/REST** control-plane endpoints: browsing call logs and recordings, managing agent transfers, placing outgoing calls, and requesting call permission.
 
 <Aside type="note">
   The real-time media negotiation (WebRTC SDP/ICE signalling, call ringing, and DTMF) happens over the WebSocket channel at `/ws`, not over REST. The endpoints below either return the SDP answer synchronously (outgoing calls and transfer connect) or read/mutate call state. See [Calling](/whatomate/features/calling) for the end-to-end architecture.

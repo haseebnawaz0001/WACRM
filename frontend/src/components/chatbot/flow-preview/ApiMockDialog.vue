@@ -148,7 +148,7 @@ function handleSubmit() {
             <span
               v-for="mapping in responseMappingInfo"
               :key="mapping.varName"
-              class="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded font-mono"
+              class="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-md font-mono"
             >
               {{ mapping.varName }} ← {{ mapping.path }}
             </span>

@@ -5,10 +5,10 @@ description: Proxied WhatsApp Business analytics from the Meta Graph API, cached
 
 import { Aside } from '@astrojs/starlight/components';
 
-Meta Insights surfaces the analytics that Meta computes for your WhatsApp Business account — messaging volume, conversation pricing, template performance, and calling stats. Whatomate proxies these live from the Meta Graph API and caches the results in Redis so repeated dashboard loads don't re-hit Meta on every view.
+Meta Insights surfaces the analytics that Meta computes for your WhatsApp Business account — messaging volume, conversation pricing, template performance, and calling stats. WA CRM proxies these live from the Meta Graph API and caches the results in Redis so repeated dashboard loads don't re-hit Meta on every view.
 
 <Aside type="note">
-  These are Meta's own aggregate analytics, distinct from Whatomate's internal dashboards (message counts, agent performance, chatbot sessions). See [API Reference → Analytics](/whatomate/api-reference/analytics) for the internal analytics endpoints.
+  These are Meta's own aggregate analytics, distinct from WA CRM's internal dashboards (message counts, agent performance, chatbot sessions). See [API Reference → Analytics](/whatomate/api-reference/analytics) for the internal analytics endpoints.
 </Aside>
 
 ## Analytics types
@@ -23,7 +23,7 @@ Meta Insights surfaces the analytics that Meta computes for your WhatsApp Busine
 | `call_analytics` | **Call analytics** — WhatsApp Business Calling volume and outcomes. |
 
 <Aside type="caution">
-  **Template analytics have a 90-day lookback limit.** A `start` date older than 90 days is rejected with `400`. For template analytics you can optionally pass `template_ids` (a JSON array); if omitted, Whatomate auto-selects the account's synced templates. The response includes a `template_names` map so raw Meta template IDs render as human-readable names.
+  **Template analytics have a 90-day lookback limit.** A `start` date older than 90 days is rejected with `400`. For template analytics you can optionally pass `template_ids` (a JSON array); if omitted, WA CRM auto-selects the account's synced templates. The response includes a `template_names` map so raw Meta template IDs render as human-readable names.
 </Aside>
 
 ## Query parameters
@@ -40,7 +40,7 @@ Use `GET /api/analytics/meta/accounts` to list the accounts available for analyt
 
 ## Auto-adjusted granularity
 
-Whatomate normalizes granularity to what the Graph API will actually accept for the given range, avoiding Meta-side errors:
+WA CRM normalizes granularity to what the Graph API will actually accept for the given range, avoiding Meta-side errors:
 
 - **`MONTH`** requires at least 30 days — a shorter range is downgraded to `DAY`.
 - **`HALF_HOUR`** only makes sense for short ranges — anything over 7 days is downgraded to `DAY`.
@@ -91,5 +91,5 @@ When an account has no data (e.g. no templates for template analytics, or a Grap
 ## What these insights do NOT include
 
 <Aside type="caution">
-  **Per-phone quality rating and messaging-limit tier are not part of Meta Insights.** They are not returned by these analytics endpoints. Those values live on the **account detail** — Whatomate reads a phone number's `quality_rating` (and verification status) when validating account credentials against Meta, and surfaces them under **Settings → Accounts → [account]**. Look there, not here, for a number's current quality rating or tier.
+  **Per-phone quality rating and messaging-limit tier are not part of Meta Insights.** They are not returned by these analytics endpoints. Those values live on the **account detail** — WA CRM reads a phone number's `quality_rating` (and verification status) when validating account credentials against Meta, and surfaces them under **Settings → Accounts → [account]**. Look there, not here, for a number's current quality rating or tier.
 </Aside>

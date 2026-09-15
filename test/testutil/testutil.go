@@ -1,4 +1,4 @@
-// Package testutil provides shared test utilities for the whatomate project.
+// Package testutil provides shared test utilities for the WA CRM project.
 package testutil
 
 import (

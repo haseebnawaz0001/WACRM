@@ -1,6 +1,6 @@
 <a href="https://zerodha.tech"><img src="https://zerodha.tech/static/images/github-badge.svg" align="right" alt="Zerodha Tech Badge" /></a>
 
-# Whatomate
+# WA CRM
 
 Modern, open-source WhatsApp Business Platform. Single binary app.
 
@@ -88,7 +88,7 @@ Download the [latest release](https://github.com/shridarpatil/whatomate/releases
 cp config.example.toml config.toml
 
 # Run with migrations
-./whatomate server -migrate
+./wacrm server -migrate
 ```
 
 Go to `http://localhost:8080` and login with `admin@admin.com` / `admin`
@@ -103,7 +103,7 @@ cd whatomate
 
 # Production build (single binary with embedded frontend)
 make build-prod
-./whatomate server -migrate
+./wacrm server -migrate
 ```
 
 See [configuration docs](https://shridarpatil.github.io/whatomate/getting-started/configuration/) for detailed setup options.
@@ -111,10 +111,10 @@ See [configuration docs](https://shridarpatil.github.io/whatomate/getting-starte
 ## CLI Usage
 
 ```bash
-./whatomate server              # API + 1 worker (default)
-./whatomate server -workers=0   # API only
-./whatomate worker -workers=4   # Workers only (for scaling)
-./whatomate version             # Show version
+./wacrm server              # API + 1 worker (default)
+./wacrm server -workers=0   # API only
+./wacrm worker -workers=4   # Workers only (for scaling)
+./wacrm version             # Show version
 ```
 
 ## Developers

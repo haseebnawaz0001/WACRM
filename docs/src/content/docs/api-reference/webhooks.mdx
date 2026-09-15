@@ -7,21 +7,21 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Overview
 
-There are two distinct webhook systems in Whatomate:
+There are two distinct webhook systems in WA CRM:
 
 1. **Outbound webhook subscriptions** (`/api/webhooks`) — endpoints **you** own
-   that Whatomate calls when events happen (new message, contact created,
+   that WA CRM calls when events happen (new message, contact created,
    transfer requested, etc.). Managed via the REST API below.
 2. **Inbound Meta webhook** (`/api/webhook`, singular) — the endpoint you
    configure in your Meta App so WhatsApp delivers incoming messages and status
-   updates to Whatomate.
+   updates to WA CRM.
 
 See the [Webhooks feature guide](/whatomate/features/webhooks) for a walkthrough.
 
 ## Outbound Webhook Subscriptions
 
-Register your own HTTPS endpoints to receive event notifications from Whatomate.
-Whatomate signs each delivery, retries failures, and enforces SSRF protection on
+Register your own HTTPS endpoints to receive event notifications from WA CRM.
+WA CRM signs each delivery, retries failures, and enforces SSRF protection on
 the target URL.
 
 ### List Webhooks
@@ -48,7 +48,7 @@ GET /api/webhooks
       {
         "id": "uuid",
         "name": "Order events",
-        "url": "https://example.com/hooks/whatomate",
+        "url": "https://example.com/hooks/wacrm",
         "events": ["message.incoming", "transfer.created"],
         "headers": { "X-Team": "support" },
         "is_active": true,
@@ -90,7 +90,7 @@ POST /api/webhooks
 ```json
 {
   "name": "Order events",
-  "url": "https://example.com/hooks/whatomate",
+  "url": "https://example.com/hooks/wacrm",
   "events": ["message.incoming", "transfer.created"],
   "headers": { "X-Team": "support" },
   "secret": "my-signing-secret"
@@ -176,7 +176,7 @@ The `data` object varies by event (message, contact, or transfer details).
 
 ### Signing
 
-When a secret is configured, Whatomate signs the raw request body and sends the
+When a secret is configured, WA CRM signs the raw request body and sends the
 signature in the `X-Webhook-Signature` header:
 
 ```
@@ -195,7 +195,7 @@ after the third failure the delivery is dropped and logged.
 Each dispatch sends to at most **10 webhooks concurrently**. Retries mean your endpoint can receive
 the same event more than once — make it idempotent.
 
-Every request carries `Content-Type: application/json` and `User-Agent: Whatomate-Webhook/1.0`,
+Every request carries `Content-Type: application/json` and `User-Agent: WACRM-Webhook/1.0`,
 plus any custom `headers` you configured.
 
 ### SSRF Protection
@@ -214,7 +214,7 @@ Webhook URLs are validated on save and again at delivery time:
 
 ## Meta Webhook Configuration
 
-Whatomate exposes webhook endpoints that you configure in your Meta App settings:
+WA CRM exposes webhook endpoints that you configure in your Meta App settings:
 
 ### Verification Endpoint
 
@@ -386,7 +386,7 @@ Always verify webhook requests are from Meta:
 2. Compute HMAC-SHA256 of the request body using your app secret
 3. Compare with the signature in the header
 
-Whatomate does this automatically — but **only when both** the `X-Hub-Signature-256` header is
+WA CRM does this automatically — but **only when both** the `X-Hub-Signature-256` header is
 present **and** the WhatsApp account matching the payload's `phone_number_id` has an App Secret
 stored (Settings → Accounts). If either is missing, the payload is accepted without verification.
 Set the App Secret on every account you expose to Meta.

@@ -264,7 +264,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
 
           <!-- General Settings Tab -->
           <TabsContent value="general">
-            <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.generalSettings') }}</h3>
                 <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.generalSettingsDesc') }}</p>
@@ -337,7 +337,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             </div>
 
             <!-- Meta App Credentials Card (Gated on canWriteAccounts) -->
-            <div v-if="canWriteAccounts" class="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div v-if="canWriteAccounts" class="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.metaAppCredentials') }}</h3>
                 <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.metaAppCredentialsDesc') }}</p>
@@ -385,7 +385,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
 
           <!-- Notification Settings Tab -->
           <TabsContent value="notifications">
-            <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.notifications') }}</h3>
                 <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.notificationsDesc') }}</p>
@@ -438,7 +438,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
 
           <!-- Calling Settings Tab -->
           <TabsContent value="calling">
-            <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.callingSettings') }}</h3>
                 <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callingSettingsDesc') }}</p>

@@ -25,7 +25,7 @@ defineEmits<{
       <p v-if="mediaLabel" class="text-xs text-muted-foreground mt-0.5">{{ mediaLabel }}</p>
     </div>
     <div v-else class="flex items-center gap-2 p-2 bg-muted rounded-lg">
-      <img v-if="previewUrl" :src="previewUrl" class="h-12 w-12 object-cover rounded" />
+      <img v-if="previewUrl" :src="previewUrl" class="h-12 w-12 object-cover rounded-md" />
       <FileText v-else class="h-8 w-8 text-muted-foreground shrink-0" />
       <span class="text-sm truncate flex-1">{{ file.name }}</span>
       <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0" @click="$emit('clear')">

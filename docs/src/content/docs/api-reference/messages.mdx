@@ -280,7 +280,7 @@ POST /api/messages/media
 
 <Aside type="caution">
   This endpoint takes **`multipart/form-data` with a file upload**, not JSON. There is no
-  `media_url` field — the file is uploaded to Whatomate, which then sends it to Meta.
+  `media_url` field — the file is uploaded to WA CRM, which then sends it to Meta.
 </Aside>
 
 ### Form Fields
@@ -302,7 +302,7 @@ curl -X POST "http://your-server:8080/api/messages/media" \
   -F "file=@./product.jpg"
 ```
 
-Meta's own size limits apply (roughly 5 MB images, 16 MB audio/video, 100 MB documents); Whatomate
+Meta's own size limits apply (roughly 5 MB images, 16 MB audio/video, 100 MB documents); WA CRM
 does not enforce its own cap.
 
 ### Response

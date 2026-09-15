@@ -525,7 +525,7 @@ defineExpose({
                       :key="opt.id"
                       class="flex items-center gap-2"
                     >
-                      <div class="h-4 w-4 rounded border" />
+                      <div class="h-4 w-4 rounded-md border" />
                       <span class="text-sm">{{ opt.title }}</span>
                     </div>
                   </div>

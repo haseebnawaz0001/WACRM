@@ -18,7 +18,7 @@ const (
 func (a *App) setAuthCookies(r *fastglue.Request, accessToken, refreshToken string) {
 	secure := a.Config.Cookie.Secure
 	domain := a.Config.Cookie.Domain
-	bp := a.Config.Server.BasePath // e.g. "/whatomate" or ""
+	bp := a.Config.Server.BasePath // e.g. "/wacrm" or ""
 
 	// Access token cookie — httpOnly, scoped to basePath/api
 	ac := fasthttp.AcquireCookie()

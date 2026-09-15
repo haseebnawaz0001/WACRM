@@ -47,13 +47,13 @@ onMounted(async () => {
     <Card class="w-full max-w-md">
       <CardHeader class="text-center">
         <div class="flex justify-center mb-4">
-          <div v-if="status === 'loading'" class="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div v-if="status === 'loading'" class="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
             <Loader2 class="h-7 w-7 text-primary animate-spin" />
           </div>
-          <div v-else-if="status === 'success'" class="h-12 w-12 rounded-xl bg-green-900/30 light:bg-green-100 flex items-center justify-center">
+          <div v-else-if="status === 'success'" class="h-12 w-12 rounded-lg bg-green-900/30 light:bg-green-100 flex items-center justify-center">
             <CheckCircle class="h-7 w-7 text-green-400 light:text-green-600" />
           </div>
-          <div v-else class="h-12 w-12 rounded-xl bg-red-900/30 light:bg-red-100 flex items-center justify-center">
+          <div v-else class="h-12 w-12 rounded-lg bg-red-900/30 light:bg-red-100 flex items-center justify-center">
             <AlertCircle class="h-7 w-7 text-red-400 light:text-red-600" />
           </div>
         </div>

@@ -90,7 +90,7 @@ defineEmits<{
 
 .selected-node {
   outline: none;
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   box-shadow:
     0 0 0 2px hsl(var(--background)),
     0 0 0 4px hsl(var(--primary)),

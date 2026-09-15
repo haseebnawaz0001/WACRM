@@ -350,8 +350,8 @@ function formatTimeRemaining(deadline: string | undefined): string {
       <div class="p-6 space-y-6">
         <!-- Loading skeleton -->
         <div v-if="isLoading" class="space-y-4">
-          <Skeleton class="h-12 w-full bg-white/[0.08] light:bg-gray-200 rounded-xl" />
-          <Skeleton class="h-64 w-full bg-white/[0.08] light:bg-gray-200 rounded-xl" />
+          <Skeleton class="h-12 w-full bg-white/[0.08] light:bg-gray-200 rounded-lg" />
+          <Skeleton class="h-64 w-full bg-white/[0.08] light:bg-gray-200 rounded-lg" />
         </div>
 
         <!-- Error state -->
@@ -365,14 +365,14 @@ function formatTimeRemaining(deadline: string | undefined): string {
 
         <!-- Agent View (no tabs, just their transfers) -->
         <div v-else-if="!isAdminOrManager">
-          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+          <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
             <div class="p-6">
               <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('agentTransfers.myTransfers') }}</h3>
               <p class="text-sm text-white/50 light:text-gray-500">{{ $t('agentTransfers.contactsTransferred') }}</p>
             </div>
             <div class="px-6 pb-6">
               <div v-if="myTransfers.length === 0" class="text-center py-8 text-white/50 light:text-gray-500">
-                <div class="h-16 w-16 rounded-xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+                <div class="h-16 w-16 rounded-lg bg-red-500/20 flex items-center justify-center mx-auto mb-4">
                   <UserX class="h-8 w-8 text-red-400" />
                 </div>
                 <p>{{ $t('agentTransfers.noActiveTransfers') }}</p>

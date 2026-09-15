@@ -145,10 +145,10 @@ function handleGoToStep(stepName: string) {
         <!-- Device bezel -->
         <div
           id="preview-phone-frame"
-          class="w-full max-w-[400px] h-full max-h-[760px] bg-black rounded-[40px] p-[10px] shadow-2xl flex flex-col"
+          class="w-full max-w-[400px] h-full max-h-[760px] bg-black rounded-lg p-[10px] shadow-2xl flex flex-col"
         >
           <!-- Screen -->
-          <div class="flex-1 rounded-[32px] overflow-hidden flex flex-col bg-[#efeae2] dark:bg-[#0b141a]">
+          <div class="flex-1 rounded-lg overflow-hidden flex flex-col bg-[#efeae2] dark:bg-[#0b141a]">
             <!-- iOS-ish status bar -->
             <div class="bg-[#008069] dark:bg-[#202c33] text-white px-5 py-1 flex items-center justify-between text-[11px] font-medium flex-shrink-0">
               <span>9:41</span>

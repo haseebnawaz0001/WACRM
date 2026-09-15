@@ -169,7 +169,7 @@ function handlePlayPause() {
       <div class="p-2 space-y-2">
         <!-- Variables Section -->
         <Collapsible v-model:open="variablesExpanded">
-          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
+          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300">
             <ChevronDown v-if="variablesExpanded" class="h-4 w-4" />
             <ChevronRight v-else class="h-4 w-4" />
             <Braces class="h-4 w-4" />
@@ -177,7 +177,7 @@ function handlePlayPause() {
             <span class="ml-auto text-xs text-gray-400">{{ variableEntries.length }}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700">
+            <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded-md border border-gray-200 dark:border-gray-700">
               <div v-if="variableEntries.length === 0" class="text-xs text-gray-400 py-2 text-center">
                 No variables set
               </div>
@@ -199,7 +199,7 @@ function handlePlayPause() {
 
         <!-- Steps Section -->
         <Collapsible v-model:open="stepsExpanded">
-          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
+          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300">
             <ChevronDown v-if="stepsExpanded" class="h-4 w-4" />
             <ChevronRight v-else class="h-4 w-4" />
             <ListTree class="h-4 w-4" />
@@ -207,11 +207,11 @@ function handlePlayPause() {
             <span class="ml-auto text-xs text-gray-400">{{ steps.length }}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto">
+            <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded-md border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto">
               <div
                 v-for="(step, idx) in steps"
                 :key="step.step_name"
-                class="flex items-center gap-2 text-xs py-1.5 px-1 rounded cursor-pointer transition-colors"
+                class="flex items-center gap-2 text-xs py-1.5 px-1 rounded-md cursor-pointer transition-colors"
                 :class="{
                   'bg-blue-50 dark:bg-blue-900/30': state.currentStepName === step.step_name,
                   'hover:bg-gray-50 dark:hover:bg-gray-800': state.currentStepName !== step.step_name
@@ -234,14 +234,14 @@ function handlePlayPause() {
 
         <!-- Timeline Section -->
         <Collapsible v-model:open="timelineExpanded">
-          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-sm font-medium text-gray-700 dark:text-gray-300">
+          <CollapsibleTrigger class="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300">
             <ChevronDown v-if="timelineExpanded" class="h-4 w-4" />
             <ChevronRight v-else class="h-4 w-4" />
             Timeline
             <span class="ml-auto text-xs text-gray-400">{{ state.executionLog.length }}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div class="mt-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto">
+            <div class="mt-1 bg-white dark:bg-[#202c33] rounded-md border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto">
               <ExecutionTimeline
                 :entries="state.executionLog"
                 :current-step-name="state.currentStepName"

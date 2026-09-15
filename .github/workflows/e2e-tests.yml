@@ -59,7 +59,7 @@ jobs:
         run: |
           cat > config.toml << 'EOF'
           [app]
-          name = "Whatomate"
+          name = "WA CRM"
           environment = "test"
           debug = true
 
@@ -112,16 +112,16 @@ jobs:
           cp -r frontend/dist/* internal/frontend/dist/
 
       - name: Build backend
-        run: go build -o whatomate ./cmd/whatomate
+        run: go build -o wacrm ./cmd/wacrm
 
       - name: Start backend with migrations
         run: |
-          ./whatomate server -migrate &
+          ./wacrm server -migrate &
           sleep 10
           # Verify server is running
           curl -f http://localhost:8080/health || exit 1
         env:
-          WHATOMATE_CONFIG: config.toml
+          WACRM_CONFIG: config.toml
 
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install chromium --with-deps

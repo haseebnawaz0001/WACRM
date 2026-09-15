@@ -207,7 +207,7 @@ onMounted(async () => {
             </div>
             <div class="min-w-0">
               <p class="font-medium truncate">{{ apiKey?.name }}</p>
-              <code class="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">whm_{{ apiKey?.key_prefix }}...</code>
+              <code class="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded-md">whm_{{ apiKey?.key_prefix }}...</code>
             </div>
           </div>
 

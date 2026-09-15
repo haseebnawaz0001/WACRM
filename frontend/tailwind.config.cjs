@@ -15,6 +15,17 @@ module.exports = {
     "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
   theme: {
+  	// Replaces (not extends) Tailwind's radius scale so every rounded-* class
+  	// comes from the --radius variables in src/assets/index.css. Tailwind's
+  	// fixed sizes (rounded-xl, rounded-2xl, rounded-3xl) are intentionally absent.
+  	borderRadius: {
+  		none: '0px',
+  		sm: 'var(--radius-sm)',
+  		DEFAULT: 'var(--radius-md)',
+  		md: 'var(--radius-md)',
+  		lg: 'var(--radius)',
+  		full: '9999px'
+  	},
   	container: {
   		center: true,
   		padding: '2rem',
@@ -92,11 +103,6 @@ module.exports = {
   				'bg-hover': 'var(--glass-bg-hover)',
   				border: 'var(--glass-border)'
   			}
-  		},
-  		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
   		},
   		keyframes: {
   			'accordion-down': {

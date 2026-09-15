@@ -479,7 +479,7 @@ const greetingTab = computed(() =>
         </button>
         <div v-if="config._vars_expanded" class="px-3 pb-2 border-t">
           <div class="flex flex-wrap gap-1 pt-2">
-            <code v-for="v in ['caller_phone', 'contact_id', 'call_log_id', 'transfer_id', 'team_id', 'whatsapp_account', 'status', 'transferred_at', 'ivr_path', 'agent_id *', 'agent_email *', 'agent_name *', 'hold_duration **', 'talk_duration **']" :key="v" class="bg-muted px-1.5 py-0.5 rounded text-[10px] cursor-pointer hover:bg-muted/80" :title="v.includes('*') ? 'Available on connect/complete only' : ''">{{ v.replace(' *', '').replace(' **', '') }}</code>
+            <code v-for="v in ['caller_phone', 'contact_id', 'call_log_id', 'transfer_id', 'team_id', 'whatsapp_account', 'status', 'transferred_at', 'ivr_path', 'agent_id *', 'agent_email *', 'agent_name *', 'hold_duration **', 'talk_duration **']" :key="v" class="bg-muted px-1.5 py-0.5 rounded-md text-[10px] cursor-pointer hover:bg-muted/80" :title="v.includes('*') ? 'Available on connect/complete only' : ''">{{ v.replace(' *', '').replace(' **', '') }}</code>
           </div>
           <p class="text-[9px] text-muted-foreground mt-1.5">* on_connect/on_complete only &nbsp; ** on_complete only</p>
         </div>

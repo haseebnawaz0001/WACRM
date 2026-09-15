@@ -26,7 +26,7 @@ func TestLoad_AppliesDefaultsForMissingFields(t *testing.T) {
 	cfg, err := config.Load(writeConfig(t, ""))
 	require.NoError(t, err)
 
-	assert.Equal(t, "Whatomate", cfg.App.Name)
+	assert.Equal(t, "WA CRM", cfg.App.Name)
 	assert.Equal(t, "development", cfg.App.Environment)
 	assert.Equal(t, "0.0.0.0", cfg.Server.Host)
 	assert.Equal(t, 8080, cfg.Server.Port)
@@ -102,8 +102,8 @@ secure = false
 }
 
 func TestLoad_EnvVarsOverrideFile(t *testing.T) {
-	t.Setenv("WHATOMATE_DATABASE__HOST", "from-env")
-	t.Setenv("WHATOMATE_SERVER__PORT", "1234")
+	t.Setenv("WACRM_DATABASE__HOST", "from-env")
+	t.Setenv("WACRM_SERVER__PORT", "1234")
 
 	cfg, err := config.Load(writeConfig(t, `
 [database]
@@ -113,14 +113,14 @@ host = "from-file"
 port = 8080
 `))
 	require.NoError(t, err)
-	assert.Equal(t, "from-env", cfg.Database.Host, "WHATOMATE_DATABASE__HOST must override file")
-	assert.Equal(t, 1234, cfg.Server.Port, "WHATOMATE_SERVER__PORT must override file")
+	assert.Equal(t, "from-env", cfg.Database.Host, "WACRM_DATABASE__HOST must override file")
+	assert.Equal(t, 1234, cfg.Server.Port, "WACRM_SERVER__PORT must override file")
 }
 
 func TestLoad_EmptyConfigPathStillLoadsDefaults(t *testing.T) {
 	cfg, err := config.Load("")
 	require.NoError(t, err)
-	assert.Equal(t, "Whatomate", cfg.App.Name)
+	assert.Equal(t, "WA CRM", cfg.App.Name)
 	assert.Equal(t, 8080, cfg.Server.Port)
 }
 
@@ -184,11 +184,11 @@ func TestResolveCredentials_DefaultsTTLWhenUnset(t *testing.T) {
 // underscores stay part of the key. This exercises config.Load()'s env path,
 // which the handler-level tests bypass by setting the struct directly.
 func TestLoad_EnvMapsMultiWordKeys(t *testing.T) {
-	t.Setenv("WHATOMATE_WHATSAPP__APP_ID", "env-app-id")
-	t.Setenv("WHATOMATE_WHATSAPP__CONFIG_ID", "env-config-id")
-	t.Setenv("WHATOMATE_WHATSAPP__API_VERSION", "v21.0")
-	t.Setenv("WHATOMATE_DEFAULT_ADMIN__EMAIL", "admin@example.com")
-	t.Setenv("WHATOMATE_DATABASE__HOST", "db.internal")
+	t.Setenv("WACRM_WHATSAPP__APP_ID", "env-app-id")
+	t.Setenv("WACRM_WHATSAPP__CONFIG_ID", "env-config-id")
+	t.Setenv("WACRM_WHATSAPP__API_VERSION", "v21.0")
+	t.Setenv("WACRM_DEFAULT_ADMIN__EMAIL", "admin@example.com")
+	t.Setenv("WACRM_DATABASE__HOST", "db.internal")
 
 	cfg, err := config.Load("") // no file; env-only
 	require.NoError(t, err)

@@ -248,7 +248,7 @@ onMounted(async () => {
           />
           <p class="text-xs text-muted-foreground">
             {{ $t('aiContexts.contentHint', 'Supports variable placeholders') }}:
-            <code class="bg-muted px-1 rounded">{{ variableExample('variable') }}</code>
+            <code class="bg-muted px-1 rounded-md">{{ variableExample('variable') }}</code>
           </p>
         </div>
 
@@ -294,7 +294,7 @@ onMounted(async () => {
           </div>
         </div>
         <p class="text-xs text-muted-foreground">
-          {{ $t('aiContexts.variables', 'Variables') }}: <code class="bg-muted px-1 rounded">{{ variableExample('phone_number') }}</code>, <code class="bg-muted px-1 rounded">{{ variableExample('user_message') }}</code>
+          {{ $t('aiContexts.variables', 'Variables') }}: <code class="bg-muted px-1 rounded-md">{{ variableExample('phone_number') }}</code>, <code class="bg-muted px-1 rounded-md">{{ variableExample('user_message') }}</code>
         </p>
 
         <div class="space-y-1.5">

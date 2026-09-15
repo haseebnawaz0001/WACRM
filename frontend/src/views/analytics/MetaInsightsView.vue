@@ -758,7 +758,7 @@ const chartOptions = {
           <TabsContent value="analytics" class="space-y-6">
             <template v-if="isLoading">
               <div class="grid gap-4 md:grid-cols-3">
-                <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+                <div v-for="i in 3" :key="i" class="rounded-lg border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
                   <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
                   <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
                 </div>
@@ -767,7 +767,7 @@ const chartOptions = {
             <template v-else-if="aggregatedData && activeTab === 'analytics'">
               <!-- Stats Cards -->
               <div class="grid gap-4 md:grid-cols-3">
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesSent') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -781,7 +781,7 @@ const chartOptions = {
                   </div>
                 </div>
 
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesDelivered') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -795,7 +795,7 @@ const chartOptions = {
                   </div>
                 </div>
 
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.deliveryRate') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
@@ -847,7 +847,7 @@ const chartOptions = {
                 </div>
                 <!-- Stats Cards -->
                 <div class="grid gap-4 md:grid-cols-2">
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalMessages') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -861,7 +861,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -910,7 +910,7 @@ const chartOptions = {
                           <span class="text-sm text-white/70 light:text-gray-600">{{ $t('metaInsights.freeEntryPoint') }}</span>
                           <span class="font-semibold text-white light:text-gray-900">{{ group.agg.freeMessages.entryPoint.toLocaleString() }}</span>
                         </div>
-                        <div class="flex items-center justify-between py-2 bg-green-500/10 rounded px-2 -mx-2">
+                        <div class="flex items-center justify-between py-2 bg-green-500/10 rounded-md px-2 -mx-2">
                           <span class="text-sm font-medium text-green-400 light:text-green-600">{{ $t('metaInsights.totalFree') }}</span>
                           <span class="font-bold text-green-400 light:text-green-600">{{ group.agg.freeMessages.total.toLocaleString() }}</span>
                         </div>
@@ -933,7 +933,7 @@ const chartOptions = {
                         <div v-if="Object.keys(group.agg.paidMessages.byCategory).length === 0" class="text-center text-white/40 light:text-gray-400 py-4">
                           {{ $t('metaInsights.noPaidMessages') }}
                         </div>
-                        <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded px-2 -mx-2">
+                        <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded-md px-2 -mx-2">
                           <span class="text-sm font-medium text-amber-400 light:text-amber-600">{{ $t('metaInsights.totalPaid') }}</span>
                           <span class="font-bold text-amber-400 light:text-amber-600">{{ group.agg.paidMessages.total.toLocaleString() }}</span>
                         </div>
@@ -953,7 +953,7 @@ const chartOptions = {
                           <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
                           <span class="font-semibold text-white light:text-gray-900">{{ formatCurrency(cost as number, group.currency) }}</span>
                         </div>
-                        <div class="flex items-center justify-between py-2 bg-emerald-500/10 rounded px-2 -mx-2">
+                        <div class="flex items-center justify-between py-2 bg-emerald-500/10 rounded-md px-2 -mx-2">
                           <span class="text-sm font-medium text-emerald-400 light:text-emerald-600">{{ $t('metaInsights.totalCost') }}</span>
                           <span class="font-bold text-emerald-400 light:text-emerald-600">{{ formatCurrency(group.agg.totals.cost, group.currency) }}</span>
                         </div>
@@ -993,7 +993,7 @@ const chartOptions = {
           <TabsContent value="template_analytics" class="space-y-6">
             <template v-if="isLoading">
               <div class="grid gap-4 md:grid-cols-3">
-                <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+                <div v-for="i in 3" :key="i" class="rounded-lg border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
                   <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
                   <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
                 </div>
@@ -1007,7 +1007,7 @@ const chartOptions = {
                 </div>
                 <!-- Stats Cards -->
                 <div class="grid gap-4 md:grid-cols-6">
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.sent') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -1021,7 +1021,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.delivered') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -1035,7 +1035,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.read') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
@@ -1049,7 +1049,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.replied') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
@@ -1063,7 +1063,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.clicked') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
@@ -1077,7 +1077,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-rose-500/20 flex items-center justify-center">
@@ -1165,7 +1165,7 @@ const chartOptions = {
           <TabsContent value="call_analytics" class="space-y-6">
             <template v-if="isLoading">
               <div class="grid gap-4 md:grid-cols-2">
-                <div v-for="i in 2" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+                <div v-for="i in 2" :key="i" class="rounded-lg border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
                   <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
                   <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
                 </div>
@@ -1179,7 +1179,7 @@ const chartOptions = {
                 </div>
                 <!-- Stats Cards -->
                 <div class="grid gap-4 md:grid-cols-5">
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCalls') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -1193,7 +1193,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.incoming') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -1207,7 +1207,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.outgoing') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
@@ -1221,7 +1221,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.avgDuration') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -1235,7 +1235,7 @@ const chartOptions = {
                     </div>
                   </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                     <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                       <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
                       <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">

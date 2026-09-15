@@ -139,7 +139,7 @@ func (r *CallRecorder) writeHeaders() error {
 	}
 
 	// OpusTags: https://www.rfc-editor.org/rfc/rfc7845#section-5.2
-	vendor := "whatomate"
+	vendor := "wacrm"
 	opusTags := make([]byte, 8+4+len(vendor)+4)
 	copy(opusTags[0:8], "OpusTags")
 	binary.LittleEndian.PutUint32(opusTags[8:12], uint32(len(vendor)))

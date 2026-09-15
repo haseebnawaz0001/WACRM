@@ -134,7 +134,7 @@ const localListPickerOpen = computed({
             v-if="selectedStep && controlNodeInfo"
             class="flex-1 flex items-center justify-center p-6 bg-[#efeae2] dark:bg-[#0b141a]"
           >
-            <div class="max-w-sm w-full bg-white dark:bg-[#202c33] rounded-xl shadow-md p-6 text-center">
+            <div class="max-w-sm w-full bg-white dark:bg-[#202c33] rounded-lg shadow-md p-6 text-center">
               <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-3">
                 <component :is="controlNodeInfo.icon" class="h-6 w-6 text-gray-600 dark:text-gray-300" />
               </div>
@@ -144,7 +144,7 @@ const localListPickerOpen = computed({
               <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 {{ controlNodeInfo.description }}
               </p>
-              <p v-if="selectedStep.message" class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/30 rounded px-3 py-2 text-left">
+              <p v-if="selectedStep.message" class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/30 rounded-md px-3 py-2 text-left">
                 {{ selectedStep.message }}
               </p>
               <p v-else class="text-xs text-gray-400 italic">
@@ -157,7 +157,7 @@ const localListPickerOpen = computed({
           <div v-else class="flex-1 flex items-center justify-center p-4 bg-[#efeae2] dark:bg-[#0b141a] overflow-auto">
             <div v-if="selectedStep" class="w-full max-w-sm">
               <!-- Phone Frame -->
-              <div class="bg-[#efeae2] dark:bg-[#0b141a] rounded-2xl overflow-hidden shadow-xl flex flex-col h-[600px] relative">
+              <div class="bg-[#efeae2] dark:bg-[#0b141a] rounded-lg overflow-hidden shadow-xl flex flex-col h-[600px] relative">
                 <!-- Chat Header -->
                 <div class="bg-[#075e54] dark:bg-[#202c33] text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
                   <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
@@ -286,9 +286,9 @@ const localListPickerOpen = computed({
                   class="absolute inset-0 z-10 flex flex-col"
                 >
                   <div class="flex-1 bg-black/50" @click="localListPickerOpen = false"></div>
-                  <div class="bg-white dark:bg-[#1f2c34] rounded-t-2xl overflow-hidden">
+                  <div class="bg-white dark:bg-[#1f2c34] rounded-t-lg overflow-hidden">
                     <div class="bg-[#075e54] dark:bg-[#00a884] text-white px-4 py-3 flex items-center justify-between">
-                      <button class="p-1 hover:bg-white/10 rounded" @click="localListPickerOpen = false">
+                      <button class="p-1 hover:bg-white/10 rounded-md" @click="localListPickerOpen = false">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -320,7 +320,7 @@ const localListPickerOpen = computed({
 
             <div v-else class="w-full max-w-sm flex flex-col items-center justify-center">
               <!-- Empty State Phone Frame -->
-              <div class="bg-[#efeae2] dark:bg-[#0b141a] rounded-2xl overflow-hidden shadow-xl flex flex-col h-[600px] w-full">
+              <div class="bg-[#efeae2] dark:bg-[#0b141a] rounded-lg overflow-hidden shadow-xl flex flex-col h-[600px] w-full">
                 <div class="bg-[#075e54] dark:bg-[#202c33] text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
                   <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                     <MessageSquare class="h-5 w-5" />

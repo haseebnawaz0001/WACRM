@@ -139,7 +139,7 @@ onMounted(() => fetchItems())
                 <template #cell-name="{ item: key }">
                   <RouterLink :to="`/settings/api-keys/${key.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ key.name }}</RouterLink>
                 </template>
-                <template #cell-key="{ item: key }"><code class="bg-muted px-2 py-1 rounded text-sm">whm_{{ key.key_prefix }}...</code></template>
+                <template #cell-key="{ item: key }"><code class="bg-muted px-2 py-1 rounded-md text-sm">whm_{{ key.key_prefix }}...</code></template>
                 <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>
                 <template #cell-expires="{ item: key }">{{ formatDateTime(key.expires_at) }}</template>
                 <template #cell-status="{ item: key }">

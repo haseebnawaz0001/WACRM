@@ -464,14 +464,14 @@ onMounted(async () => {
         <div>
           <Label class="text-xs text-muted-foreground">{{ $t('accounts.webhookUrl', 'Webhook URL') }}</Label>
           <div class="flex items-center gap-2 mt-1">
-            <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ webhookUrl }}</code>
+            <code class="px-2 py-1 bg-muted rounded-md text-xs font-mono flex-1 truncate">{{ webhookUrl }}</code>
             <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(webhookUrl)" />
           </div>
         </div>
         <div>
           <Label class="text-xs text-muted-foreground">{{ $t('accounts.verifyToken', 'Verify Token') }}</Label>
           <div class="flex items-center gap-2 mt-1">
-            <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ account?.webhook_verify_token }}</code>
+            <code class="px-2 py-1 bg-muted rounded-md text-xs font-mono flex-1 truncate">{{ account?.webhook_verify_token }}</code>
             <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(account?.webhook_verify_token || '')" />
           </div>
         </div>

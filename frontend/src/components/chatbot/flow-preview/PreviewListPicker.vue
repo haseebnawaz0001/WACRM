@@ -49,11 +49,11 @@ function handleSelect(button: ButtonConfig) {
         />
 
         <!-- Panel -->
-        <div class="bg-white dark:bg-[#1f2c34] rounded-t-2xl overflow-hidden animate-slide-up">
+        <div class="bg-white dark:bg-[#1f2c34] rounded-t-lg overflow-hidden animate-slide-up">
           <!-- Header -->
           <div class="bg-[#075e54] dark:bg-[#00a884] text-white px-4 py-3 flex items-center justify-between">
             <button
-              class="p-1 hover:bg-white/10 rounded transition-colors"
+              class="p-1 hover:bg-white/10 rounded-md transition-colors"
               @click="isOpen = false"
             >
               <X class="h-5 w-5" />

@@ -52,7 +52,7 @@ A conversation's unread count is the number of incoming messages whose status is
 
 ## The 24-hour service window
 
-WhatsApp enforces a **24-hour customer service window**. It opens each time the customer sends you a message and lasts 24 hours from that last inbound message. Whatomate tracks this per contact as `service_window_open` (true when the last inbound message was less than 24 hours ago).
+WhatsApp enforces a **24-hour customer service window**. It opens each time the customer sends you a message and lasts 24 hours from that last inbound message. WA CRM tracks this per contact as `service_window_open` (true when the last inbound message was less than 24 hours ago).
 
 What the window controls:
 
@@ -62,7 +62,7 @@ What the window controls:
 | **Closed** (no inbound in 24h) | **Only pre-approved [message templates](/whatomate/features/templates).** Free-form messages will be rejected by Meta. |
 
 <Aside type="note">
-  This is a WhatsApp Platform rule, not a Whatomate limitation. To re-open a conversation after the window closes, send an approved template; once the customer replies, the free-form window opens again.
+  This is a WhatsApp Platform rule, not a WA CRM limitation. To re-open a conversation after the window closes, send an approved template; once the customer replies, the free-form window opens again.
 </Aside>
 
 ## Permission-scoped visibility
@@ -139,7 +139,7 @@ Opening a conversation should mark its incoming messages read to clear the unrea
 POST /api/contacts/{id}/mark-read
 ```
 
-This flips the contact's incoming messages to `read`. If the sending account has **auto read receipts** enabled, Whatomate also sends read receipts (the blue ticks) back to the customer over the WhatsApp API.
+This flips the contact's incoming messages to `read`. If the sending account has **auto read receipts** enabled, WA CRM also sends read receipts (the blue ticks) back to the customer over the WhatsApp API.
 
 <Aside type="tip">
   Canned responses speed up repetitive replies — type `/shortcut` in the chat input to insert a pre-written message. See [Canned Responses](/whatomate/features/canned-responses).

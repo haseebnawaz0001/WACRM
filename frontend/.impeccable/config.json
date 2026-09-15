@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/layout/OrganizationSwitcher.vue"
+        ],
+        "createdAt": "2026-09-15T19:03:22.012Z",
+        "reason": "Claude triage: match is the text '<img src>' inside a code comment in handleOrgChange (line 86); the file renders no <img> element"
+      }
+    ]
+  }
+}

@@ -5,7 +5,7 @@ description: Org-scoped agent teams that drive chat, chatbot, and call routing
 
 import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
-Teams group agents together so that Whatomate can route conversations and calls to the right people automatically. A team carries an **assignment strategy** that decides *which* member gets the next chat transfer, chatbot handoff, or incoming call. Every team is scoped to a single organization.
+Teams group agents together so that WA CRM can route conversations and calls to the right people automatically. A team carries an **assignment strategy** that decides *which* member gets the next chat transfer, chatbot handoff, or incoming call. Every team is scoped to a single organization.
 
 ## Overview
 
@@ -50,7 +50,7 @@ Members are users added to the team with a role of **`manager`** or **`agent`** 
 
 ## Assignment strategies
 
-When a conversation or call is routed to a team, Whatomate's assigner first filters the roster down to members who are **both `is_active` and `is_available`**, then applies the team's strategy:
+When a conversation or call is routed to a team, WA CRM's assigner first filters the roster down to members who are **both `is_active` and `is_available`**, then applies the team's strategy:
 
 | Strategy | Behaviour |
 |---|---|
