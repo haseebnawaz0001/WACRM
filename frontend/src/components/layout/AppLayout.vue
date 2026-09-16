@@ -14,9 +14,10 @@ import {
   X
 } from 'lucide-vue-next'
 import { wsService } from '@/services/websocket'
-import { authService } from '@/services/api'
+import { authService, organizationsService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
+import NotificationBell from './NotificationBell.vue'
 import SidebarNavItem from './SidebarNavItem.vue'
 import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
 import { ScrollToTop } from '@/components/shared'
@@ -66,6 +67,13 @@ onMounted(() => {
     // Fetch fresh permissions in background (non-destructive — interceptor handles 401)
     authStore.refreshUserData()
 
+    // Which optional modules this org uses, so the menu matches what the API
+    // will actually serve (plan 07). A failure leaves every module enabled,
+    // which is the behaviour of an org that has never changed the setting.
+    organizationsService.current()
+      .then(({ data }) => authStore.setModules((data as any)?.data?.modules ?? (data as any)?.modules))
+      .catch(() => {})
+
     wsService.connect(async () => {
       try {
         const resp = await authService.getWSToken()
@@ -80,6 +88,11 @@ onMounted(() => {
 function filterItems(items: NavSection['items']) {
   return items
     .filter(item => {
+      // A module the organization has switched off has no endpoints behind it,
+      // so showing the item would only lead to a 404.
+      if (item.module && !authStore.moduleEnabled(item.module)) {
+        return false
+      }
       if (item.childPermissions) {
         return item.childPermissions.some(p => authStore.hasPermission(p, 'read'))
       }
@@ -278,6 +291,10 @@ const handleLogout = async () => {
           </template>
         </div>
       </nav>
+
+      <div :class="['border-t border-white/[0.08] light:border-gray-200 px-2 py-1.5', isCollapsed && 'flex justify-center']">
+        <NotificationBell :collapsed="isCollapsed" />
+      </div>
 
       <UserMenu :collapsed="isCollapsed" @logout="handleLogout" />
     </aside>

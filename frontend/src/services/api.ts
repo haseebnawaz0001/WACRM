@@ -164,7 +164,7 @@ export const usersService = {
     api.put(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
   me: () => api.get('/me'),
-  updateSettings: (data: { email_notifications: boolean; new_message_alerts: boolean; campaign_updates: boolean }) =>
+  updateSettings: (data: { email_notifications: boolean; new_message_alerts: boolean; campaign_updates: boolean; timezone?: string }) =>
     api.put('/me/settings', data),
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.put('/me/password', data),
@@ -1355,6 +1355,9 @@ export interface Organization {
 
 export const organizationsService = {
   list: () => api.get<{ organizations: Organization[] }>('/organizations'),
+  // The current org, including which optional modules it uses (plan 07).
+  current: () =>
+    api.get<Organization & { modules?: Record<string, boolean> }>('/organizations/current'),
   create: (data: { name: string }) => api.post('/organizations', data),
   // Members
   addMember: (data: { user_id?: string; email?: string; role_id?: string }) =>
@@ -1459,6 +1462,17 @@ export interface AuditLogEntry {
   created_at: string
 }
 
+export interface AuditResourceType {
+  value: string
+  label: string
+  group: string
+}
+
+export interface AuditActionOption {
+  value: string
+  label: string
+}
+
 export const auditLogsService = {
   get: (id: string) =>
     api.get<AuditLogEntry>(`/audit-logs/${id}`),
@@ -1473,6 +1487,13 @@ export const auditLogsService = {
     limit?: number
   }) =>
     api.get<{ audit_logs: AuditLogEntry[]; total: number }>('/audit-logs', { params }),
+  // The filter options come from the server (plan 10, S9). The picker used to
+  // be a hardcoded list here and silently offered a third of what the audit
+  // log actually records.
+  catalog: () =>
+    api.get<{ resource_types: AuditResourceType[]; actions: AuditActionOption[] }>(
+      '/audit-logs/catalog',
+    ),
 }
 
 export const webhooksService = {
@@ -1715,6 +1736,10 @@ export type ChatNodeType =
   | 'webhook'
   | 'goto_flow'
   | 'whatsapp_flow'
+  // CRM nodes (plan 10, S7): run actions from the shared library, and branch
+  // on what is true of the contact rather than on what they just typed.
+  | 'crm_action'
+  | 'crm_condition'
 
 export interface ChatNode {
   id: string
@@ -1863,3 +1888,30 @@ export const ivrFlowsService = {
 }
 
 export default api
+
+// Notifications (plan 00, F5)
+//
+// Stored per-user notifications, as opposed to the transient toasts the product
+// used to fire from WebSocket handlers: anything that arrived while an agent was
+// away or on another screen was simply lost. These rows survive, so the bell can
+// show what was missed.
+export interface AppNotification {
+  id: string
+  type: string
+  title: string
+  body: string
+  link: string
+  entity_type?: string
+  entity_id?: string
+  data: Record<string, any>
+  read_at?: string | null
+  created_at: string
+}
+
+export const notificationsService = {
+  list: (params?: { limit?: number; cursor?: string; unread?: boolean }) =>
+    api.get<{ notifications: AppNotification[]; next_cursor?: string }>('/notifications', { params }),
+  unreadCount: () => api.get<{ count: number }>('/notifications/unread-count'),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/read-all')
+}

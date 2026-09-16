@@ -102,3 +102,12 @@ type StatusUpdatePayload struct {
 	MessageID string `json:"message_id"`
 	Status    string `json:"status"`
 }
+
+// TypeResyncRequired tells a client its stream has a hole in it (plan 10, S10).
+//
+// A client whose send buffer is full had its messages dropped and was told
+// nothing, so its view silently stopped matching the server: a conversation
+// that had been resolved still looked open, and the only cure was a page
+// reload the agent had no reason to perform. Saying "you missed something"
+// costs one message and lets the client refetch.
+const TypeResyncRequired = "resync_required"

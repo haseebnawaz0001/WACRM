@@ -31,6 +31,8 @@ import {
   Clock,
   ExternalLink,
   StopCircle,
+  Zap,
+  Filter,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -56,6 +58,8 @@ import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNod
 import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
 import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
+import ChatbotCrmActionNode from '@/components/chatbot/nodes/ChatbotCrmActionNode.vue'
+import ChatbotCrmConditionNode from '@/components/chatbot/nodes/ChatbotCrmConditionNode.vue'
 import ChatbotStartNode from '@/components/chatbot/nodes/ChatbotStartNode.vue'
 
 import InteractivePreview from '@/components/chatbot/flow-preview/InteractivePreview.vue'
@@ -120,6 +124,8 @@ const nodeTypes: any = {
   goto_flow: markRaw(ChatbotGotoFlowNode),
   end: markRaw(ChatbotEndNode),
   webhook: markRaw(ChatbotApiNode),
+  crm_action: markRaw(ChatbotCrmActionNode),
+  crm_condition: markRaw(ChatbotCrmConditionNode),
 }
 
 // Palette: 'prompt' and 'webhook' are internal-only — a Text node
@@ -133,6 +139,8 @@ const palette: { type: ChatNodeType; label: string; icon: any; color: string }[]
   { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
   { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
   { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
+  { type: 'crm_action', label: 'CRM action', icon: Zap, color: 'bg-emerald-600' },
+  { type: 'crm_condition', label: 'CRM condition', icon: Filter, color: 'bg-emerald-700' },
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 

@@ -62,6 +62,16 @@ type PanelFieldConfig struct {
 	Order       int    `json:"order"`                  // Field order within section
 	DisplayType string `json:"display_type,omitempty"` // text (default), badge, tag
 	Color       string `json:"color,omitempty"`        // default, success, warning, error, info
+
+	// SaveToField copies the value onto a contact custom field as well as
+	// showing it (plan 10, S7).
+	//
+	// A panel field is session data: it describes one conversation and is gone
+	// when the session ends. Sometimes the same value is a fact about the
+	// customer — their company, their account number — and belongs on the
+	// record. This is how an author says which, without having to add a
+	// separate CRM-action node just to copy a variable across.
+	SaveToField string `json:"save_to_field,omitempty"`
 }
 
 // PanelSection defines a section in the contact info panel
@@ -131,8 +141,19 @@ type KeywordRule struct {
 	ResponseType    ResponseType `gorm:"size:20;not null" json:"response_type"` // text, template, media, flow, script
 	ResponseContent JSONB        `gorm:"type:jsonb;not null" json:"response_content"`
 	Conditions      string       `gorm:"type:text" json:"conditions"`
-	ActiveFrom      *time.Time   `json:"active_from,omitempty"`
-	ActiveUntil     *time.Time   `json:"active_until,omitempty"`
+
+	// Actions is an optional list from the shared CRM action library, run
+	// after the reply is sent (plan 10, S7). A keyword rule is the cheapest
+	// automation in the product — "when someone says REFUND" — and without
+	// this it could only ever answer, never tag the contact or raise a task.
+	//
+	// Stored under a "list" key for the same reason automation_rules.actions
+	// is: the column is a JSON object, and one bespoke array type for one
+	// column would be worse than one wrapper key.
+	Actions JSONB `gorm:"type:jsonb;not null;default:'{}'" json:"actions"`
+
+	ActiveFrom  *time.Time `json:"active_from,omitempty"`
+	ActiveUntil *time.Time `json:"active_until,omitempty"`
 	CreatedByID     *uuid.UUID   `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID     *uuid.UUID   `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 

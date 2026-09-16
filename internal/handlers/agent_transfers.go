@@ -10,6 +10,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/phoneutil"
 	"github.com/shridarpatil/whatomate/internal/transfers"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/internal/websocket"
@@ -1084,7 +1085,38 @@ func (a *App) willChatbotHandle(account *models.WhatsAppAccount, contact *models
 	if err != nil || !settings.IsEnabled {
 		return false
 	}
+	// The exclusion list existed as a settings field and an input in the UI but
+	// was never read, so numbers an operator had explicitly excluded still got
+	// bot replies — the one case where the setting exists precisely because a
+	// human must handle that contact (plan 10, X14).
+	if isExcludedNumber(settings.ExcludedNumbers, contact.PhoneNumber) {
+		return false
+	}
 	return true
+}
+
+// isExcludedNumber reports whether a phone number is on the chatbot's exclusion
+// list. Numbers are compared with punctuation and a leading + removed, because
+// the list is typed by hand and "+1 415 555 0123" is the same number as
+// "14155550123".
+func isExcludedNumber(list models.JSONBArray, phone string) bool {
+	if len(list) == 0 || phone == "" {
+		return false
+	}
+	want := phoneutil.Normalize(phone)
+	if want == "" {
+		return false
+	}
+	for _, entry := range list {
+		s, ok := entry.(string)
+		if !ok || s == "" {
+			continue
+		}
+		if phoneutil.Normalize(s) == want {
+			return true
+		}
+	}
+	return false
 }
 
 // WebSocket broadcast helpers

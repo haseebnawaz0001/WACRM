@@ -46,7 +46,9 @@ type DealResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func toDealResponse(d models.Deal) DealResponse {
+// toDealResponse needs the org so it can apply phone masking: the deals list
+// showed full phone numbers to organizations that had masking on (plan 10, S9).
+func (a *App) toDealResponse(orgID uuid.UUID, d models.Deal) DealResponse {
 	out := DealResponse{
 		ID:                d.ID.String(),
 		PipelineID:        d.PipelineID.String(),
@@ -71,7 +73,7 @@ func toDealResponse(d models.Deal) DealResponse {
 	}
 	if d.Contact != nil {
 		out.ContactName = d.Contact.ProfileName
-		out.ContactPhone = d.Contact.PhoneNumber
+		out.ContactPhone = a.maskPhone(orgID, d.Contact.PhoneNumber)
 	}
 	if d.Stage != nil {
 		out.StageName = d.Stage.Name
@@ -134,7 +136,7 @@ func (a *App) ListDeals(r *fastglue.Request) error {
 
 	items := make([]DealResponse, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toDealResponse(row))
+		items = append(items, a.toDealResponse(orgID, row))
 	}
 	return r.SendEnvelope(map[string]any{"deals": items, "total": len(items)})
 }
@@ -199,7 +201,7 @@ func (a *App) CreateDeal(r *fastglue.Request) error {
 		map[string]any{"title": deal.Title, "value": deal.Value, "stage_id": deal.StageID})
 
 	a.broadcastDeal(orgID, deal)
-	return r.SendEnvelope(map[string]any{"deal": toDealResponse(*deal)})
+	return r.SendEnvelope(map[string]any{"deal": a.toDealResponse(orgID, *deal)})
 }
 
 // GetDeal returns one deal.
@@ -217,7 +219,7 @@ func (a *App) GetDeal(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Deal not found", nil, "")
 	}
-	return r.SendEnvelope(map[string]any{"deal": toDealResponse(*deal)})
+	return r.SendEnvelope(map[string]any{"deal": a.toDealResponse(orgID, *deal)})
 }
 
 type updateDealRequest struct {
@@ -285,7 +287,7 @@ func (a *App) UpdateDeal(r *fastglue.Request) error {
 		map[string]any{"title": deal.Title, "value": deal.Value})
 
 	a.broadcastDeal(orgID, deal)
-	return r.SendEnvelope(map[string]any{"deal": toDealResponse(*deal)})
+	return r.SendEnvelope(map[string]any{"deal": a.toDealResponse(orgID, *deal)})
 }
 
 // DeleteDeal removes a deal.
@@ -358,7 +360,7 @@ func (a *App) MoveDeal(r *fastglue.Request) error {
 		map[string]any{"stage_id": deal.StageID, "status": deal.Status})
 
 	a.broadcastDeal(orgID, deal)
-	return r.SendEnvelope(map[string]any{"deal": toDealResponse(*deal)})
+	return r.SendEnvelope(map[string]any{"deal": a.toDealResponse(orgID, *deal)})
 }
 
 // DealHistory returns every stage move for a deal.
@@ -408,7 +410,7 @@ func (a *App) ContactDeals(r *fastglue.Request) error {
 
 	items := make([]DealResponse, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, toDealResponse(row))
+		items = append(items, a.toDealResponse(orgID, row))
 	}
 	return r.SendEnvelope(map[string]any{"deals": items})
 }

@@ -138,6 +138,42 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  // UUID_RE guards the one place a WebSocket payload reaches a request URL.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+  // refreshContactRow reloads one row instead of the whole list (plan 10, S10).
+  //
+  // Every inbound message used to call fetchContacts(), which refetches page 1
+  // and replaces the array. An agent who had scrolled the inbox was thrown back
+  // to the top each time a message arrived anywhere in the org, and a busy
+  // account refetched the entire list per message.
+  async function refreshContactRow(id: string) {
+    if (!UUID_RE.test(id)) return
+    try {
+      const response = await contactsService.get(id)
+      const data = response.data.data || response.data
+      if (!data?.id) return
+
+      const index = contacts.value.findIndex(c => c.id === data.id)
+      if (index >= 0) {
+        contacts.value.splice(index, 1)
+      } else {
+        // A row that is not in the list yet may simply not belong in the
+        // current view. Inserting it anyway would show a contact the filter
+        // excludes, so only an unfiltered list takes new arrivals.
+        const filtered = selectedTags.value.length > 0 || normalizeContactSearch(searchQuery.value) !== ''
+        if (filtered) return
+        contactsTotal.value += 1
+      }
+
+      // The inbox is ordered by most recent activity, and a new message is the
+      // most recent activity there is.
+      contacts.value = [data, ...contacts.value]
+    } catch {
+      // Non-critical: the next full refresh reconciles.
+    }
+  }
+
   async function loadMoreContacts() {
     if (isLoadingMoreContacts.value || !hasMoreContacts.value) return
 
@@ -394,6 +430,7 @@ export const useContactsStore = defineStore('contacts', () => {
     hasMoreContacts,
     isLoadingMoreContacts,
     fetchContacts,
+    refreshContactRow,
     loadMoreContacts,
     // Other
     fetchContact,

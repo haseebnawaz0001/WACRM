@@ -28,7 +28,7 @@ type ConversationNoteResponse struct {
 
 // ListConversationNotes returns paginated notes for a contact (latest at bottom).
 func (a *App) ListConversationNotes(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -36,6 +36,14 @@ func (a *App) ListConversationNotes(r *fastglue.Request) error {
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
+	}
+
+	// Notes are internal and often blunt. This endpoint was gated on chat:read
+	// alone, so any agent could read the notes on any contact in the org by
+	// putting its id in the URL — including contacts the contact list itself
+	// will not show them (plan 10, S9).
+	if !a.canSeeContact(orgID, userID, contactID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
 	pg := parsePaginationWithDefaults(r, 30, 100)
@@ -53,7 +61,8 @@ func (a *App) ListConversationNotes(r *fastglue.Request) error {
 		beforeID, err := uuid.Parse(beforeIDStr)
 		if err == nil {
 			var beforeNote models.ConversationNote
-			if err := a.DB.Where("id = ?", beforeID).First(&beforeNote).Error; err == nil {
+			if err := a.DB.Where("id = ? AND organization_id = ? AND contact_id = ?",
+				beforeID, orgID, contactID).First(&beforeNote).Error; err == nil {
 				query = query.Where("created_at < ?", beforeNote.CreatedAt)
 			}
 		}
@@ -97,6 +106,10 @@ func (a *App) CreateConversationNote(r *fastglue.Request) error {
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
+	}
+
+	if !a.canSeeContact(orgID, userID, contactID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
 	var req ConversationNoteRequest

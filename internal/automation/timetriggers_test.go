@@ -152,6 +152,13 @@ func TestRunTimeTriggers_NoAgentReplySkipsBotHandledConversations(t *testing.T) 
 }
 
 // A renewal date seven days out is the canonical reason to want this.
+// utcDay is the calendar day `days` from t, at UTC midnight — the shape a
+// date column actually stores.
+func utcDay(t time.Time, days int) time.Time {
+	u := t.UTC()
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, days)
+}
+
 func TestRunTimeTriggers_DateFieldFiresAtTheOffset(t *testing.T) {
 	db, svc, engine, org, contact, _ := setup(t)
 
@@ -165,7 +172,11 @@ func TestRunTimeTriggers_DateFieldFiresAtTheOffset(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&field).Error)
 
-	due := time.Now().AddDate(0, 0, 7)
+	// The engine compares calendar days in the organization's zone (UTC here),
+	// so the fixture has to store a calendar day, not a wall-clock instant.
+	// Storing time.Now() directly made this test fail for the five hours a day
+	// when the server's local date is ahead of UTC's.
+	due := utcDay(time.Now(), 7)
 	require.NoError(t, db.Create(&models.CustomFieldValue{
 		ID:             uuid.New(),
 		OrganizationID: org.ID,

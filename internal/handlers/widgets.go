@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/reports"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
@@ -124,13 +127,31 @@ var widgetDataSources = map[string][]string{
 	"campaigns": {"status", "message_status"},
 	"transfers": {"status", "source"},
 	"sessions":  {"status"},
+	// CRM sources (plan 09). Without these the dashboard could only report on
+	// what the product did before the CRM existed: a manager could pin
+	// "messages this week" but not "tasks overdue" or "deals won".
+	"tasks":         {"status", "priority", "source"},
+	"deals":         {"status", "currency"},
+	"conversations": {"status", "whatsapp_account", "resolution_reason"},
+}
+
+// crmWidgetTables maps a CRM data source to the table and timestamp a count
+// is taken over.
+var crmWidgetTables = map[string]struct{ Table, TimeColumn string }{
+	"tasks":         {"tasks", "created_at"},
+	"deals":         {"deals", "created_at"},
+	"conversations": {"conversations", "opened_at"},
 }
 
 // Available metrics
 var widgetMetrics = []string{"count", "sum", "avg"}
 
 // Available display types
-var widgetDisplayTypes = []string{"number", "percentage", "chart", "table", "shortcuts"}
+// Display types. funnel and leaderboard back the report cards plan 09 lets a
+// manager pin to the dashboard: a funnel is a sequence of narrowing steps with
+// conversion between them, and a leaderboard is a ranked list of people — both
+// are shapes a bar chart renders badly.
+var widgetDisplayTypes = []string{"number", "percentage", "chart", "table", "shortcuts", "funnel", "leaderboard"}
 
 // Static display types that don't need a data source
 var staticDisplayTypes = map[string]bool{
@@ -759,7 +780,7 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 
 	if fromStr != "" && toStr != "" {
 		var errMsg string
-		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr)
+		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr, a.OrgLocation(orgID))
 		if errMsg != "" {
 			// Fall back to current month on parse error
 			periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -793,6 +814,18 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 				Value:    widgetGetString(filterMap, "value"),
 			})
 		}
+	}
+
+	// Funnel and leaderboard are shapes rather than aggregates over one table,
+	// so they are served from the report queries that already compute them
+	// (plan 09) instead of being rebuilt here.
+	switch widget.DisplayType {
+	case "funnel":
+		response.DataPoints = a.widgetFunnelData(orgID, widget, periodStart, periodEnd)
+		return response, nil
+	case "leaderboard":
+		response.DataPoints = a.widgetLeaderboardData(orgID, widget, periodStart, periodEnd)
+		return response, nil
 	}
 
 	// Handle table display type
@@ -830,6 +863,10 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 	case "sessions":
 		currentValue = a.querySessions(orgID, widget.Metric, filters, periodStart, periodEnd)
 		previousValue = a.querySessions(orgID, widget.Metric, filters, previousPeriodStart, previousPeriodEnd)
+
+	case "tasks", "deals", "conversations":
+		currentValue = a.queryCRMSource(orgID, widget, filters, periodStart, periodEnd)
+		previousValue = a.queryCRMSource(orgID, widget, filters, previousPeriodStart, previousPeriodEnd)
 	}
 
 	response.Value = currentValue
@@ -1012,6 +1049,9 @@ var allowedFilterFields = map[string]map[string]bool{
 		"status":           true,
 		"assigned_user_id": true,
 		"whatsapp_account": true,
+		// Offered in the picker; without this a filter an operator builds is
+		// silently dropped at query time.
+		"is_read": true,
 	},
 	"campaigns": {
 		"status":           true,
@@ -1025,11 +1065,55 @@ var allowedFilterFields = map[string]map[string]bool{
 		"agent_id":  true,
 		"from_team": true,
 		"to_team":   true,
+		"source":    true,
 	},
 	"sessions": {
 		"status":  true,
 		"flow_id": true,
 	},
+	// CRM sources (plan 09). Column names flow into raw SQL, so a source that
+	// is offered in the picker but missing here would have its filters
+	// silently dropped rather than rejected.
+	"tasks": {
+		"status":     true,
+		"priority":   true,
+		"source":     true,
+		"owner_id":   true,
+		"type_id":    true,
+		"contact_id": true,
+	},
+	"deals": {
+		"status":      true,
+		"currency":    true,
+		"stage_id":    true,
+		"pipeline_id": true,
+		"owner_id":    true,
+		"contact_id":  true,
+	},
+	"conversations": {
+		"status":            true,
+		"whatsapp_account":  true,
+		"resolution_reason": true,
+		"assignee_id":       true,
+		"team_id":           true,
+	},
+}
+
+// allowedGroupByFields enumerates the columns a widget may group by. The name
+// is interpolated into raw SQL, so the same threat model as
+// allowedFilterFields applies.
+//
+// Grouping and filtering are different permissions on a column: campaigns can
+// be grouped by message_status (served from pre-aggregated counters) but there
+// is no such column to filter on.
+var allowedGroupByFields = map[string]bool{
+	"status": true, "message_status": true, "direction": true,
+	"message_type": true, "assigned_user_id": true, "channel": true,
+	"is_active": true, "priority": true, "category": true,
+	"type": true, "action_type": true, "provider": true,
+	// CRM group-bys (plan 09).
+	"source": true, "resolution_reason": true, "currency": true,
+	"stage_id": true, "whatsapp_account": true,
 }
 
 // allowedAggregateFields enumerates the columns each data source is
@@ -1040,6 +1124,9 @@ var allowedAggregateFields = map[string]map[string]bool{
 	// Messages have no obvious numeric column to aggregate on today;
 	// leaving empty until a use case appears.
 	"messages": {},
+	// A deal's value is the one CRM number worth summing: "pipeline value this
+	// quarter" is the question the board is for.
+	"deals": {"value": true},
 }
 
 func resolveDataSourceTable(dataSource string) (tableName, dateField string, ok bool) {
@@ -1054,6 +1141,13 @@ func resolveDataSourceTable(dataSource string) (tableName, dateField string, ok 
 		return "agent_transfers", "transferred_at", true
 	case "sessions":
 		return "chatbot_sessions", "created_at", true
+	// CRM sources (plan 09). Charting and grouping use this resolver, so a
+	// source missing here would count correctly but draw an empty chart.
+	case "tasks", "deals", "conversations":
+		if spec, ok := crmWidgetTables[dataSource]; ok {
+			return spec.Table, spec.TimeColumn, true
+		}
+		return "", "", false
 	default:
 		return "", "", false
 	}
@@ -1089,12 +1183,6 @@ func (a *App) getGroupedData(orgID uuid.UUID, widget models.Widget, filters []Fi
 	}
 
 	// Validate GroupByField against whitelist to prevent SQL injection
-	allowedGroupByFields := map[string]bool{
-		"status": true, "message_status": true, "direction": true,
-		"message_type": true, "assigned_user_id": true, "channel": true,
-		"is_active": true, "priority": true, "category": true,
-		"type": true, "action_type": true, "provider": true,
-	}
 	if !allowedGroupByFields[widget.GroupByField] {
 		a.Log.Error("Invalid GroupByField", "field", widget.GroupByField)
 		return dataPoints
@@ -1420,16 +1508,163 @@ func (a *App) getTableRows(orgID uuid.UUID, widget models.Widget, filters []Filt
 	var results []row
 	a.DB.Raw(query, args...).Scan(&results)
 
+	// Phone masking applies here too (plan 10, X8). Every contact-derived
+	// source labels its rows COALESCE(profile_name, phone_number), so a contact
+	// who never set a WhatsApp profile name is labelled with their raw number —
+	// the dashboard would show what the inbox is configured to hide.
+	maskPhones := a.ShouldMaskPhoneNumbers(orgID)
+	// Only the contacts source puts a phone number in the second column; the
+	// others carry message previews, statuses and transfer sources.
+	subLabelIsPhone := widget.DataSource == "contacts"
+
 	tableRows := make([]TableRow, len(results))
 	for i, r := range results {
+		label, subLabel := r.Label, r.SubLabel
+		if maskPhones {
+			if subLabelIsPhone {
+				label, subLabel = a.MaskContactFields(orgID, label, subLabel)
+			} else {
+				label, _ = a.MaskContactFields(orgID, label, "")
+			}
+		}
 		tableRows[i] = TableRow{
 			ID:        r.ID,
-			Label:     r.Label,
-			SubLabel:  r.SubLabel,
+			Label:     label,
+			SubLabel:  subLabel,
 			Status:    r.Status,
 			Direction: r.Direction,
 			CreatedAt: r.CreatedAt.Format(time.RFC3339),
 		}
 	}
 	return tableRows
+}
+
+// queryCRMSource counts rows for the CRM data sources (plan 09).
+//
+// Tasks, deals and conversations are ordinary counts over one table, so they do
+// not need a bespoke query per source the way messages and campaigns do — the
+// table and the timestamp a period is measured against are the only things that
+// differ.
+func (a *App) queryCRMSource(orgID uuid.UUID, widget models.Widget, filters []FilterInput, start, end time.Time) float64 {
+	spec, ok := crmWidgetTables[widget.DataSource]
+	if !ok {
+		return 0
+	}
+
+	query := a.DB.Table(spec.Table).
+		Where("organization_id = ?", orgID).
+		Where(spec.TimeColumn+" >= ? AND "+spec.TimeColumn+" <= ?", start, end)
+
+	// Soft-deleted rows are not part of any count; the raw table bypasses
+	// GORM's default scope.
+	query = query.Where("deleted_at IS NULL")
+
+	for _, f := range filters {
+		query = applyFilter(widget.DataSource, query, f)
+	}
+
+	// Only deals carry an amount worth summing; count is the metric everywhere
+	// else, and summing a task would mean nothing.
+	if widget.Metric == "sum" && widget.DataSource == "deals" {
+		var total float64
+		query.Select("COALESCE(SUM(value), 0)").Scan(&total)
+		return total
+	}
+
+	var count int64
+	query.Count(&count)
+	return float64(count)
+}
+
+// widgetFunnelData serves a funnel widget from the report that already computes
+// it, so a pinned card and the report page cannot disagree (plan 09).
+//
+// config.funnel selects which: "lifecycle" (the default) or "pipeline".
+func (a *App) widgetFunnelData(orgID uuid.UUID, widget models.Widget, start, end time.Time) []DataPoint {
+	viewer := reports.Viewer{OrgID: orgID, SeesEveryone: true}
+	period := a.widgetReportRange(orgID, start, end)
+
+	kind, _ := widget.Config["funnel"].(string)
+	if kind == "pipeline" {
+		pipelineID, err := a.defaultPipelineID(orgID)
+		if err != nil {
+			return nil
+		}
+		result, err := a.Reports().PipelineFunnel(context.Background(), viewer, period, pipelineID)
+		if err != nil {
+			a.Log.Error("widget pipeline funnel", "error", err, "widget", widget.ID)
+			return nil
+		}
+		out := make([]DataPoint, 0, len(result.Steps))
+		for _, step := range result.Steps {
+			out = append(out, DataPoint{Label: step.Label, Value: float64(step.Reached)})
+		}
+		return out
+	}
+
+	result, err := a.Reports().LifecycleFunnel(context.Background(), viewer, period)
+	if err != nil {
+		a.Log.Error("widget lifecycle funnel", "error", err, "widget", widget.ID)
+		return nil
+	}
+	out := make([]DataPoint, 0, len(result.Steps))
+	for _, step := range result.Steps {
+		out = append(out, DataPoint{Label: step.Label, Value: float64(step.Reached)})
+	}
+	return out
+}
+
+// widgetLeaderboardData serves a ranked list of agents (plan 09).
+//
+// config.leaderboard picks the measure: "tasks_completed" (the default),
+// "tasks_open" or "tasks_overdue".
+func (a *App) widgetLeaderboardData(orgID uuid.UUID, widget models.Widget, start, end time.Time) []DataPoint {
+	viewer := reports.Viewer{OrgID: orgID, SeesEveryone: true}
+	period := a.widgetReportRange(orgID, start, end)
+
+	result, err := a.Reports().TasksByAgent(context.Background(), viewer, period, nil, "")
+	if err != nil {
+		a.Log.Error("widget leaderboard", "error", err, "widget", widget.ID)
+		return nil
+	}
+
+	measure, _ := widget.Config["leaderboard"].(string)
+	out := make([]DataPoint, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		var value float64
+		switch measure {
+		case "tasks_open":
+			value = float64(row.Open)
+		case "tasks_overdue":
+			value = float64(row.Overdue)
+		default:
+			value = float64(row.Completed)
+		}
+		out = append(out, DataPoint{Label: row.Name, Value: value})
+	}
+
+	// Ranked, because a leaderboard that is not ordered is a list.
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Value > out[j].Value })
+	if len(out) > 10 {
+		out = out[:10]
+	}
+	return out
+}
+
+// defaultPipelineID returns the organization's default pipeline.
+func (a *App) defaultPipelineID(orgID uuid.UUID) (uuid.UUID, error) {
+	var pipeline models.Pipeline
+	err := a.DB.Where("organization_id = ?", orgID).
+		Order("is_default DESC, position").First(&pipeline).Error
+	return pipeline.ID, err
+}
+
+// widgetReportRange builds a report range for a widget's period.
+//
+// Constructed through NewRange rather than as a literal: the range carries the
+// organization's timezone and a bucket interval, and a zero Location makes the
+// day boundaries the reports group on meaningless.
+func (a *App) widgetReportRange(orgID uuid.UUID, start, end time.Time) reports.Range {
+	from, to := start, end
+	return reports.NewRange(&from, &to, string(reports.Day), a.OrgLocation(orgID))
 }

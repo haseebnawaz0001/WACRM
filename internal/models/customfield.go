@@ -32,6 +32,20 @@ const (
 	FieldKeyLifecycleStage = "lifecycle_stage"
 )
 
+// Lifecycle stages, the options of the built-in lifecycle_stage field.
+//
+// They are constants rather than literals repeated at each use because the
+// field seed, the default applied to a new contact and the funnel report all
+// have to agree on the spelling; a typo in any one of them produces a stage
+// that exists but which nothing else can ever match.
+const (
+	LifecycleNew       = "new"
+	LifecycleLead      = "lead"
+	LifecycleQualified = "qualified"
+	LifecycleCustomer  = "customer"
+	LifecycleChurned   = "churned"
+)
+
 // CustomFieldDefinition describes one org-defined field.
 //
 // Contacts previously carried a free-form metadata JSONB: no types, no

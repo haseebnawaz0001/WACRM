@@ -380,7 +380,7 @@ func (a *App) Board(r *fastglue.Request) error {
 			// card report whether it is rotting without another query.
 			stage := column.Stage
 			card.Stage = &stage
-			cards = append(cards, toDealResponse(card))
+			cards = append(cards, a.toDealResponse(orgID, card))
 		}
 		out = append(out, BoardColumnResponse{
 			Stage:    column.Stage,
@@ -420,7 +420,7 @@ func (a *App) StageDeals(r *fastglue.Request) error {
 
 	items := make([]DealResponse, 0, len(cards))
 	for _, card := range cards {
-		items = append(items, toDealResponse(card))
+		items = append(items, a.toDealResponse(orgID, card))
 	}
 	next := ""
 	if more && len(cards) > 0 {

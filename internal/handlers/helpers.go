@@ -115,16 +115,25 @@ func listEnvelope(key string, items, total any, pg Pagination) map[string]any {
 	}
 }
 
-// parseDateRange parses start and end date strings in YYYY-MM-DD format.
-// Applies end-of-day to the end date. Returns an error message suitable for
-// display if parsing fails.
-func parseDateRange(startStr, endStr string) (start, end time.Time, errMsg string) {
+// parseDateRange parses start and end date strings in YYYY-MM-DD format and
+// interprets them in the organization's timezone (plan 10, S11).
+//
+// A date has no instant of its own; it needs a zone to become one. These were
+// parsed as UTC while the date picker that produced them built them from the
+// browser's local calendar, so "today" meant two different windows at each end
+// of the request. For an organization far from UTC that silently moved several
+// hours of activity into the wrong day — enough to make a daily report
+// disagree with the conversation list it summarises.
+func parseDateRange(startStr, endStr string, loc *time.Location) (start, end time.Time, errMsg string) {
+	if loc == nil {
+		loc = time.UTC
+	}
 	var err error
-	start, err = time.Parse("2006-01-02", startStr)
+	start, err = time.ParseInLocation("2006-01-02", startStr, loc)
 	if err != nil {
 		return time.Time{}, time.Time{}, "Invalid start date format. Use YYYY-MM-DD"
 	}
-	end, err = time.Parse("2006-01-02", endStr)
+	end, err = time.ParseInLocation("2006-01-02", endStr, loc)
 	if err != nil {
 		return time.Time{}, time.Time{}, "Invalid end date format. Use YYYY-MM-DD"
 	}

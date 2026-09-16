@@ -74,8 +74,15 @@ func Scope(v Viewer) Compiled {
 	if v.CanSeeAllContacts {
 		return Compiled{}
 	}
-	// An agent sees contacts they own, plus any contact with an active
-	// transfer assigned to them.
+	// An agent sees contacts they own, any contact with an active transfer
+	// assigned to them, and anything waiting in a queue they can pick from
+	// (plan 10, S9).
+	//
+	// The queue arm matters because visibility is contact ∪ conversation: the
+	// inbox's Unassigned view exists so agents can take work nobody owns yet.
+	// Without it a filter or segment would silently exclude exactly the
+	// conversations the agent is supposed to act on, and disagree with the
+	// inbox sitting next to it.
 	return Compiled{
 		SQL: `(contacts.assigned_user_id = ? OR EXISTS (
 			SELECT 1 FROM agent_transfers t
@@ -83,8 +90,19 @@ func Scope(v Viewer) Compiled {
 			  AND t.organization_id = contacts.organization_id
 			  AND t.status = 'active'
 			  AND t.agent_id = ?
-			  AND t.deleted_at IS NULL))`,
-		Args: []any{v.UserID, v.UserID},
+			  AND t.deleted_at IS NULL
+		) OR EXISTS (
+			SELECT 1 FROM conversations c
+			WHERE c.contact_id = contacts.id
+			  AND c.organization_id = contacts.organization_id
+			  AND c.assignee_id IS NULL
+			  AND c.bot_active = false
+			  AND c.status <> 'resolved'
+			  AND c.deleted_at IS NULL
+			  AND (c.team_id IS NULL OR c.team_id IN (
+			        SELECT tm.team_id FROM team_members tm WHERE tm.user_id = ?
+			      ))))`,
+		Args: []any{v.UserID, v.UserID, v.UserID},
 	}
 }
 

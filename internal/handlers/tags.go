@@ -163,17 +163,22 @@ func (a *App) UpdateTag(r *fastglue.Request) error {
 		// Update contacts that use this tag
 		// Note: Tags are stored as JSONB array of strings in contacts
 		// This requires a raw SQL update
+		// The tag names are compared and written as JSON values built by
+		// Postgres (to_jsonb / jsonb_build_array) rather than by pasting quotes
+		// around the text in Go. A tag containing a double quote — "12\" pipe"
+		// is a real product name — produced invalid JSON that way, and the
+		// rename silently did nothing to the contacts (plan 10, X10).
 		if err := a.DB.Exec(`
 			UPDATE contacts
 			SET tags = (
 				SELECT jsonb_agg(
-					CASE WHEN elem::text = ? THEN ?::jsonb ELSE elem END
+					CASE WHEN elem = to_jsonb(?::text) THEN to_jsonb(?::text) ELSE elem END
 				)
 				FROM jsonb_array_elements(COALESCE(tags, '[]'::jsonb)) elem
 			)
 			WHERE organization_id = ?
-			AND tags @> ?::jsonb
-		`, `"`+tagName+`"`, `"`+req.Name+`"`, orgID, `["`+tagName+`"]`).Error; err != nil {
+			AND tags @> jsonb_build_array(?::text)
+		`, tagName, req.Name, orgID, tagName).Error; err != nil {
 			a.Log.Error("Failed to update contacts with renamed tag", "error", err)
 			// Continue anyway - tag rename will still work
 		}
@@ -246,17 +251,19 @@ func (a *App) DeleteTag(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Tag not found", nil, "")
 	}
 
-	// Remove tag from all contacts that have it
+	// Remove tag from all contacts that have it. As with rename, the JSON
+	// values are built by Postgres so a quote in the tag name cannot produce
+	// a malformed literal (plan 10, X10).
 	if err := a.DB.Exec(`
 		UPDATE contacts
 		SET tags = (
 			SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
 			FROM jsonb_array_elements(COALESCE(tags, '[]'::jsonb)) elem
-			WHERE elem::text != ?
+			WHERE elem <> to_jsonb(?::text)
 		)
 		WHERE organization_id = ?
-		AND tags @> ?::jsonb
-	`, `"`+tagName+`"`, orgID, `["`+tagName+`"]`).Error; err != nil {
+		AND tags @> jsonb_build_array(?::text)
+	`, tagName, orgID, tagName).Error; err != nil {
 		a.Log.Error("Failed to remove tag from contacts", "error", err)
 		// Continue anyway - tag deletion will still work
 	}

@@ -331,7 +331,7 @@ func TestMaskIfPhoneNumber(t *testing.T) {
 func TestParseDateRange_Valid(t *testing.T) {
 	t.Parallel()
 
-	start, end, errMsg := parseDateRange("2024-01-15", "2024-01-20")
+	start, end, errMsg := parseDateRange("2024-01-15", "2024-01-20", time.UTC)
 
 	assert.Empty(t, errMsg)
 	assert.Equal(t, 2024, start.Year())
@@ -351,7 +351,7 @@ func TestParseDateRange_Valid(t *testing.T) {
 func TestParseDateRange_InvalidStartDate(t *testing.T) {
 	t.Parallel()
 
-	_, _, errMsg := parseDateRange("invalid", "2024-01-20")
+	_, _, errMsg := parseDateRange("invalid", "2024-01-20", time.UTC)
 
 	assert.Contains(t, errMsg, "Invalid start date")
 }
@@ -359,7 +359,7 @@ func TestParseDateRange_InvalidStartDate(t *testing.T) {
 func TestParseDateRange_InvalidEndDate(t *testing.T) {
 	t.Parallel()
 
-	_, _, errMsg := parseDateRange("2024-01-15", "invalid")
+	_, _, errMsg := parseDateRange("2024-01-15", "invalid", time.UTC)
 
 	assert.Contains(t, errMsg, "Invalid end date")
 }
@@ -384,7 +384,7 @@ func TestParseDateRange_WrongFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, _, errMsg := parseDateRange(tt.startStr, tt.endStr)
+			_, _, errMsg := parseDateRange(tt.startStr, tt.endStr, time.UTC)
 			assert.Contains(t, errMsg, tt.wantErr)
 		})
 	}
@@ -393,11 +393,42 @@ func TestParseDateRange_WrongFormat(t *testing.T) {
 func TestParseDateRange_SameDay(t *testing.T) {
 	t.Parallel()
 
-	start, end, errMsg := parseDateRange("2024-06-15", "2024-06-15")
+	start, end, errMsg := parseDateRange("2024-06-15", "2024-06-15", time.UTC)
 
 	assert.Empty(t, errMsg)
 	assert.Equal(t, start.Day(), end.Day())
 	// Start at beginning of day, end at end of day
 	assert.Equal(t, 0, start.Hour())
 	assert.Equal(t, 23, end.Hour())
+}
+
+// Plan 10, S11: a date range means the organization's days, not UTC's.
+//
+// A date has no instant of its own; it needs a zone to become one. These were
+// parsed as UTC while the date picker that produced them built them from the
+// browser's local calendar, so "today" meant two different windows at each end
+// of the request. For an organization far from UTC that silently moved several
+// hours of activity into the wrong day, which is enough to make a daily report
+// disagree with the conversation list it summarises.
+func TestParseDateRange_InterpretsDatesInTheGivenZone(t *testing.T) {
+	kolkata, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		t.Skip("tzdata unavailable on this platform")
+	}
+
+	start, end, errMsg := parseDateRange("2026-03-01", "2026-03-01", kolkata)
+	require.Empty(t, errMsg)
+
+	// Midnight in Kolkata is 18:30 the previous day in UTC.
+	assert.Equal(t, "2026-02-28T18:30:00Z", start.UTC().Format(time.RFC3339))
+	assert.Equal(t, "2026-03-01T18:29:59Z", end.UTC().Truncate(time.Second).Format(time.RFC3339),
+		"the day must end when it ends locally, not when UTC's does")
+}
+
+// A nil location is UTC rather than a panic: some call sites resolve the org
+// lazily and a missing timezone must not take the request down.
+func TestParseDateRange_NilLocationIsUTC(t *testing.T) {
+	start, _, errMsg := parseDateRange("2026-03-01", "2026-03-02", nil)
+	require.Empty(t, errMsg)
+	assert.Equal(t, time.UTC, start.Location())
 }

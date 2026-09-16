@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/contacts"
+	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
@@ -111,8 +112,22 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		return nil // Don't retry
 	}
 
+	// A template deleted after the campaign's jobs were queued comes back from
+	// Preload as nil, and sendTemplateMessage dereferences it immediately. The
+	// scheduler checks this when it starts a campaign, but a delete that lands
+	// mid-run reaches the worker instead, where a panic would take down every
+	// other job on the same worker (plan 10, X6).
+	if campaign.Template == nil {
+		w.Log.Error("Campaign template is missing, failing recipient",
+			"campaign_id", job.CampaignID, "recipient", job.PhoneNumber)
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Campaign template no longer exists")
+		w.incrementCampaignCount(job.CampaignID, "failed_count")
+		w.checkCampaignCompletion(ctx, job.CampaignID, job.OrganizationID)
+		return nil // Don't retry: the template will not come back.
+	}
+
 	// Check marketing opt-out
-	if contact.MarketingOptOut && campaign.Template != nil && strings.EqualFold(campaign.Template.Category, "MARKETING") {
+	if contact.MarketingOptOut && strings.EqualFold(campaign.Template.Category, "MARKETING") {
 		w.Log.Info("Skipping marketing message for opted-out contact", "contact_id", contact.ID, "phone", job.PhoneNumber)
 		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Contact opted out of marketing messages")
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
@@ -144,16 +159,14 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 			"recipient_name": job.RecipientName,
 		},
 	}
-	if campaign.Template != nil {
-		message.TemplateName = campaign.Template.Name
-		content := templateutil.ReplaceWithJSONBParams(campaign.Template.BodyContent, campaign.Template.BodyContent, job.TemplateParams)
-		message.Content = content
-		// Store campaign header media so it renders in the chat bubble
-		if campaign.HeaderMediaLocalPath != "" {
-			message.MediaURL = campaign.HeaderMediaLocalPath
-			message.MediaMimeType = campaign.HeaderMediaMimeType
-			message.MediaFilename = campaign.HeaderMediaFilename
-		}
+	message.TemplateName = campaign.Template.Name
+	message.Content = templateutil.ReplaceWithJSONBParams(
+		campaign.Template.BodyContent, campaign.Template.BodyContent, job.TemplateParams)
+	// Store campaign header media so it renders in the chat bubble
+	if campaign.HeaderMediaLocalPath != "" {
+		message.MediaURL = campaign.HeaderMediaLocalPath
+		message.MediaMimeType = campaign.HeaderMediaMimeType
+		message.MediaFilename = campaign.HeaderMediaFilename
 	}
 
 	// Persist before calling Meta, the same order SendOutgoingMessage uses.
@@ -191,9 +204,10 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 
 	// Side effects the worker used to skip entirely by writing the row
-	// directly: the contact's last-message state and the outgoing event.
+	// directly: the contact's last-message state, the conversation record and
+	// the outgoing event.
 	if message.Status == models.MessageStatusSent {
-		w.recordCampaignSend(contact, &message)
+		w.recordCampaignSend(ctx, contact, &message)
 	}
 
 	// Check if campaign is complete (all recipients processed)
@@ -360,7 +374,7 @@ func (w *Worker) Close() error {
 // message.outgoing event (no webhook, no realtime update). It has no *App and
 // cannot reach the WebSocket hub, but it does not need to: writing an outbox
 // row is enough, and the relay fans the event out to every replica.
-func (w *Worker) recordCampaignSend(contact *models.Contact, message *models.Message) {
+func (w *Worker) recordCampaignSend(ctx context.Context, contact *models.Contact, message *models.Message) {
 	now := time.Now()
 	if err := w.DB.Model(&models.Contact{}).Where("id = ?", contact.ID).
 		Updates(map[string]any{
@@ -368,6 +382,24 @@ func (w *Worker) recordCampaignSend(contact *models.Contact, message *models.Mes
 			"last_message_preview": campaignPreview(message),
 		}).Error; err != nil {
 		w.Log.Error("Failed to update contact after campaign send", "error", err, "contact_id", contact.ID)
+	}
+
+	// Record the send against the contact's conversation, the same hook
+	// SendOutgoingMessage runs (plan 10, S4/X3). RecordOutbound deliberately
+	// does not open a conversation for a campaign sender — a blast to ten
+	// thousand contacts is not ten thousand conversations — but where one is
+	// already open the message belongs to it and has to be counted and linked,
+	// or the thread shows a message the conversation does not know about.
+	if conv, err := conversation.New(w.DB).RecordOutbound(ctx, message.OrganizationID,
+		contact.ID, message.SenderType, nil, now); err != nil {
+		w.Log.Error("Failed to record campaign send against conversation",
+			"error", err, "message_id", message.ID)
+	} else if conv != nil {
+		if err := w.DB.Model(&models.Message{}).Where("id = ?", message.ID).
+			Update("conversation_id", conv.ID.String()).Error; err != nil {
+			w.Log.Error("Failed to link campaign message to conversation",
+				"error", err, "message_id", message.ID)
+		}
 	}
 
 	event := crmevents.New(message.OrganizationID, string(models.WebhookEventMessageOutgoing),

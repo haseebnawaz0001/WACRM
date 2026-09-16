@@ -139,9 +139,7 @@ func (h *Hub) broadcastMessage(msg BroadcastMessage) {
 			select {
 			case client.send <- data:
 			default:
-				h.log.Warn("Client send buffer full, skipping",
-					"user_id", client.userID,
-					"org_id", client.organizationID)
+				h.dropped(client, msg.Message.Type)
 			}
 		}
 		return
@@ -152,19 +150,65 @@ func (h *Hub) broadcastMessage(msg BroadcastMessage) {
 		// Iterate through all clients (tabs) for each user
 		for client := range userClients {
 			// If ContactID is specified, only send to clients viewing that contact
-			if msg.ContactID != uuid.Nil && client.currentContact != nil && *client.currentContact != msg.ContactID {
+			// Read through the accessor: currentContact is written on the
+			// client's own goroutine.
+			viewing := client.CurrentContact()
+			if msg.ContactID != uuid.Nil && viewing != nil && *viewing != msg.ContactID {
 				continue
 			}
 
 			select {
 			case client.send <- data:
 			default:
-				// Client buffer full, skip
-				h.log.Warn("Client send buffer full, skipping",
-					"user_id", client.userID,
-					"org_id", client.organizationID)
+				h.dropped(client, msg.Message.Type)
 			}
 		}
+	}
+}
+
+// dropped records a message a client could not keep up with, and tells the
+// client it has a hole in its stream (plan 10, S10).
+//
+// A full send buffer used to mean the message was discarded with only a server
+// log line to show for it. The client went on believing it was up to date,
+// showing a conversation that had since been resolved or an inbox missing the
+// message that just arrived, and nothing would correct it until the agent
+// happened to reload.
+//
+// If the notice does not fit either — which is the normal case, the buffer
+// being full is why we are here — one queued message is discarded to make room.
+// That is not a loss: this client is already missing messages, and "refetch
+// everything" supersedes whatever was waiting in the queue.
+func (h *Hub) dropped(client *Client, msgType string) {
+	h.log.Warn("Client send buffer full, dropping message",
+		"user_id", client.userID,
+		"org_id", client.organizationID,
+		"message_type", msgType)
+
+	notice, err := json.Marshal(WSMessage{
+		Type:    TypeResyncRequired,
+		Payload: map[string]any{"dropped_type": msgType},
+	})
+	if err != nil {
+		return
+	}
+
+	select {
+	case client.send <- notice:
+		return
+	default:
+	}
+
+	select {
+	case <-client.send:
+	default:
+		// The write pump emptied it in the meantime; nothing to evict.
+	}
+	select {
+	case client.send <- notice:
+	default:
+		// Racing with a writer that refilled it. The connection is beyond
+		// help; the read pump will close it and the client reconnects.
 	}
 }
 

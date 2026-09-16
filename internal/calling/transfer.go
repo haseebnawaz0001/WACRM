@@ -12,6 +12,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/templating"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 )
 
@@ -1213,11 +1214,11 @@ func (m *Manager) fireTransferCallback(session *CallSession, hook *TransferHTTPC
 		return
 	}
 	go func() {
-		url := interpolateTemplate(hook.URL, vars)
-		body := interpolateTemplate(hook.BodyTemplate, vars)
+		url := interpolateTemplate(hook.URL, vars, templating.EscapeQuery)
+		body := interpolateTemplate(hook.BodyTemplate, vars, templating.EscapeJSON)
 		headers := make(map[string]string)
 		for k, v := range hook.Headers {
-			headers[k] = interpolateTemplate(v, vars)
+			headers[k] = interpolateTemplate(v, vars, templating.EscapeHeader)
 		}
 		method := hook.Method
 		if method == "" {

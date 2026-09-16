@@ -68,12 +68,15 @@ type KeywordRuleResponse struct {
 	MatchType       models.MatchType    `json:"match_type"`
 	ResponseType    models.ResponseType `json:"response_type"`
 	ResponseContent json.RawMessage     `json:"response_content"`
-	Priority        int                 `json:"priority"`
-	Enabled         bool                `json:"enabled"`
-	CreatedByName   string              `json:"created_by_name,omitempty"`
-	UpdatedByName   string              `json:"updated_by_name,omitempty"`
-	CreatedAt       string              `json:"created_at"`
-	UpdatedAt       string              `json:"updated_at"`
+	// Actions is the optional CRM action list the rule runs after replying
+	// (plan 10, S7).
+	Actions       json.RawMessage `json:"actions,omitempty"`
+	Priority      int             `json:"priority"`
+	Enabled       bool            `json:"enabled"`
+	CreatedByName string          `json:"created_by_name,omitempty"`
+	UpdatedByName string          `json:"updated_by_name,omitempty"`
+	CreatedAt     string          `json:"created_at"`
+	UpdatedAt     string          `json:"updated_at"`
 }
 
 // ChatbotFlowResponse represents a chatbot flow for API response
@@ -622,6 +625,7 @@ func (a *App) CreateKeywordRule(r *fastglue.Request) error {
 		MatchType       models.MatchType    `json:"match_type"`
 		ResponseType    models.ResponseType `json:"response_type"`
 		ResponseContent map[string]any      `json:"response_content"`
+		Actions         []map[string]any    `json:"actions"`
 		Priority        int                 `json:"priority"`
 		Enabled         bool                `json:"enabled"`
 	}
@@ -632,6 +636,12 @@ func (a *App) CreateKeywordRule(r *fastglue.Request) error {
 
 	if len(req.Keywords) == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "At least one keyword is required", nil, "")
+	}
+
+	// Rejected at save time rather than at the moment a customer triggers the
+	// rule, which is the whole point of the library having Validate.
+	if err := validateKeywordActions(req.Actions); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// Set defaults
@@ -653,6 +663,7 @@ func (a *App) CreateKeywordRule(r *fastglue.Request) error {
 		MatchType:       req.MatchType,
 		ResponseType:    req.ResponseType,
 		ResponseContent: models.JSONB(req.ResponseContent),
+		Actions:         keywordActionsJSONB(req.Actions),
 		Priority:        req.Priority,
 		IsEnabled:       req.Enabled,
 		CreatedByID:     &userID,

@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // TeamRequest represents create/update team request
@@ -279,20 +282,50 @@ func (a *App) DeleteTeam(r *fastglue.Request) error {
 	var teamForAudit models.Team
 	a.DB.Where("id = ? AND organization_id = ?", teamID, orgID).First(&teamForAudit)
 
-	// Delete team members first
-	if err := a.DB.Where("team_id = ?", teamID).Delete(&models.TeamMember{}).Error; err != nil {
-		a.Log.Error("Failed to delete team members", "error", err)
+	// Live work naming this team has to go somewhere (plan 10, S8). Deleting
+	// regardless leaves transfers and conversations pointing at a team that no
+	// longer exists: they disappear from every team view without ever being
+	// reassigned, which is how a queue silently loses its backlog.
+	reassignTo, err := a.teamReassignTarget(r, orgID, teamID)
+	if err != nil {
+		return nil
+	}
+	if reassignTo == nil {
+		dependents, countErr := entityrefs.CountTeamRefs(a.DB, orgID, teamID)
+		if countErr != nil {
+			a.Log.Error("Failed to count team references", "error", countErr)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete team", nil, "")
+		}
+		if len(dependents) > 0 {
+			return r.SendErrorEnvelope(fasthttp.StatusConflict,
+				"This team still has work assigned to it. Reassign it first, or pass reassign_to_team_id.",
+				map[string]any{"dependents": dependents}, "")
+		}
+	}
+
+	var rowsAffected int64
+	txErr := a.DB.Transaction(func(tx *gorm.DB) error {
+		if reassignTo != nil {
+			if err := entityrefs.ReassignTeam(tx, orgID, teamID, *reassignTo); err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("team_id = ?", teamID).Delete(&models.TeamMember{}).Error; err != nil {
+			return err
+		}
+		result := tx.Where("id = ? AND organization_id = ?", teamID, orgID).Delete(&models.Team{})
+		if result.Error != nil {
+			return result.Error
+		}
+		rowsAffected = result.RowsAffected
+		return nil
+	})
+	if txErr != nil {
+		a.Log.Error("Failed to delete team", "error", txErr)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete team", nil, "")
 	}
 
-	// Delete team
-	result := a.DB.Where("id = ? AND organization_id = ?", teamID, orgID).Delete(&models.Team{})
-	if result.Error != nil {
-		a.Log.Error("Failed to delete team", "error", result.Error)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete team", nil, "")
-	}
-
-	if result.RowsAffected == 0 {
+	if rowsAffected == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
@@ -556,4 +589,39 @@ func buildTeamResponse(team *models.Team, includeMembers bool) TeamResponse {
 	}
 
 	return resp
+}
+
+// teamReassignTarget reads an optional reassign_to_team_id from the request.
+//
+// It is validated here rather than trusted: moving a queue to a team in another
+// organization, or to the team being deleted, would lose the work just as
+// surely as deleting it.
+func (a *App) teamReassignTarget(r *fastglue.Request, orgID, teamID uuid.UUID) (*uuid.UUID, error) {
+	raw := string(r.RequestCtx.QueryArgs().Peek("reassign_to_team_id"))
+	if raw == "" {
+		return nil, nil
+	}
+
+	target, err := uuid.Parse(raw)
+	if err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid reassign_to_team_id", nil, "")
+		return nil, err
+	}
+	if target == teamID {
+		_ = r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"Cannot reassign a team's work to itself", nil, "")
+		return nil, fmt.Errorf("teams: reassign target is the team being deleted")
+	}
+
+	var count int64
+	if err := a.DB.Model(&models.Team{}).
+		Where("id = ? AND organization_id = ?", target, orgID).Count(&count).Error; err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete team", nil, "")
+		return nil, err
+	}
+	if count == 0 {
+		_ = r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Target team not found", nil, "")
+		return nil, fmt.Errorf("teams: reassign target not found")
+	}
+	return &target, nil
 }

@@ -19,7 +19,7 @@ import (
 // the contact can see what happened to it. A separate permission would mean a
 // timeline that shows a contact the viewer cannot open.
 func (a *App) GetContactTimeline(r *fastglue.Request) error {
-	orgID, _, err := a.requireAnyPermission(r,
+	orgID, userID, err := a.requireAnyPermission(r,
 		perm(models.ResourceContacts, models.ActionRead),
 		perm(models.ResourceChat, models.ActionRead))
 	if err != nil {
@@ -32,8 +32,13 @@ func (a *App) GetContactTimeline(r *fastglue.Request) error {
 	}
 
 	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).
-		First(&contact).Error; err != nil {
+	query := a.scopeAssignedContact(
+		a.DB.Where("id = ? AND organization_id = ?", contactID, orgID), userID, orgID)
+	if err := query.First(&contact).Error; err != nil {
+		// Scoped, not just org-checked: the timeline is the contact's whole
+		// history, and reaching it only needed chat:read and an id, so an agent
+		// could read the full record of a contact the list refuses to show them
+		// (plan 10, S9).
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
@@ -56,6 +61,8 @@ func (a *App) GetContactTimeline(r *fastglue.Request) error {
 		}
 	}
 
+	opts.HideActivity = a.hiddenTimelineActivity(userID, orgID)
+
 	items, err := timeline.New(a.DB).Build(context.Background(), orgID, contactID, opts)
 	if err != nil {
 		a.Log.Error("Failed to build timeline", "error", err, "contact_id", contactID)
@@ -69,4 +76,29 @@ func (a *App) GetContactTimeline(r *fastglue.Request) error {
 		payload["next_before"] = items[len(items)-1].OccurredAt.UTC().Format(time.RFC3339Nano)
 	}
 	return r.SendEnvelope(payload)
+}
+
+// hiddenTimelineActivity lists the activity types this viewer may not read
+// (plan 02).
+//
+// The timeline gathers a contact's whole story, which means it would otherwise
+// be a way around every other permission in the product: an agent with no
+// access to the Deals board could still read a contact's deal history, and one
+// without tasks could read the follow-ups. The contact-level check is not
+// enough on its own.
+func (a *App) hiddenTimelineActivity(userID, orgID uuid.UUID) []string {
+	var hidden []string
+
+	if !a.HasPermission(userID, models.ResourceDeals, models.ActionRead, orgID) {
+		hidden = append(hidden,
+			"deal.created", "deal.updated", "deal.deleted",
+			"deal.stage_changed", "deal.won", "deal.lost")
+	}
+	if !a.HasPermission(userID, models.ResourceTasks, models.ActionRead, orgID) {
+		hidden = append(hidden,
+			"task.created", "task.completed", "task.cancelled",
+			"task.overdue", "task.updated", "task.due")
+	}
+
+	return hidden
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { contactFieldsService } from '@/services/api'
 
 export interface PanelField {
   key: string
@@ -14,6 +15,12 @@ export interface PanelField {
   order: number
   display_type?: 'text' | 'badge' | 'tag'
   color?: 'default' | 'success' | 'warning' | 'error' | 'info'
+  /**
+   * Copies the value onto a contact custom field as well as showing it
+   * (plan 10, S7). Panel fields are session data by default; this marks the
+   * ones that are facts about the customer rather than about one conversation.
+   */
+  save_to_field?: string
 }
 
 export interface PanelSection {
@@ -48,6 +55,21 @@ const emit = defineEmits<{
 function update(config: PanelConfig) {
   emit('update:panelConfig', config)
 }
+
+/**
+ * Contact fields come from the org's own definitions, so a field added in
+ * Settings is immediately a destination here without a code change.
+ */
+const contactFields = ref<{ key: string; label: string }[]>([])
+
+onMounted(() => {
+  contactFieldsService.list()
+    .then(({ data }) => {
+      const rows = ((data as any)?.data ?? data)?.fields || []
+      contactFields.value = rows.map((f: any) => ({ key: f.key, label: f.label || f.key }))
+    })
+    .catch(() => { contactFields.value = [] })
+})
 
 const assignedKeys = computed(() => {
   const s = new Set<string>()
@@ -282,6 +304,21 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
                   <SelectItem value="warning">Warning</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                   <SelectItem value="info">Info</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="shrink-0 text-[10px] text-muted-foreground">Save to</span>
+              <Select
+                :model-value="field.save_to_field || '__session__'"
+                @update:model-value="(v: any) => setField(sectionIdx, fieldIdx, { save_to_field: v === '__session__' ? '' : String(v) })"
+              >
+                <SelectTrigger class="h-6 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__session__">Session data only</SelectItem>
+                  <SelectItem v-for="f in contactFields" :key="f.key" :value="f.key">
+                    Contact field: {{ f.label }}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

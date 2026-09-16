@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -30,12 +29,14 @@ import { PageHeader, FilterBuilder, ErrorState } from '@/components/shared'
 import {
   automationsService, contactsService,
   type Automation, type AutomationCatalog, type AutomationRun,
-  type AutomationActionSpec, type FilterNode, type FilterFieldInfo
+  type FilterNode, type FilterFieldInfo
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { unwrapResponse, unwrapListResponse } from '@/lib/api-utils'
+import CrmActionList from '@/components/crmactions/CrmActionList.vue'
 import { toast } from 'vue-sonner'
 import { formatDateTime } from '@/lib/utils'
-import { Zap, Trash2, FlaskConical, ArrowLeft } from 'lucide-vue-next'
+import { Zap, FlaskConical, ArrowLeft } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -63,9 +64,13 @@ async function load() {
       automationsService.get(String(route.params.id)),
       automationsService.catalog()
     ])
-    rule.value = ruleResult.data.automation
-    catalog.value = catalogResult.data
-    filter.value = ruleResult.data.automation.contact_filter || { op: 'and', rules: [] }
+    // Same envelope as everywhere else: {status, data}. Reading it directly
+    // meant the rule never loaded and the action catalog came back empty, so
+    // the picker had nothing in it.
+    const loaded = unwrapResponse<{ automation: Automation }>(ruleResult).automation
+    rule.value = loaded
+    catalog.value = unwrapResponse<AutomationCatalog>(catalogResult)
+    filter.value = loaded.contact_filter || { op: 'and', rules: [] }
     fetchError.value = false
   } catch {
     fetchError.value = true
@@ -74,8 +79,9 @@ async function load() {
   }
 
   try {
-    const { data } = await contactsService.filterFields()
-    filterFields.value = data.fields || []
+    filterFields.value = unwrapListResponse<FilterFieldInfo>(
+      await contactsService.filterFields(), 'fields'
+    )
   } catch {
     filterFields.value = []
   }
@@ -84,8 +90,9 @@ async function load() {
 async function loadRuns() {
   if (!rule.value) return
   try {
-    const { data } = await automationsService.runs(rule.value.id, { limit: 50 })
-    runs.value = data.runs || []
+    runs.value = unwrapListResponse<AutomationRun>(
+      await automationsService.runs(rule.value.id, { limit: 50 }), 'runs'
+    )
   } catch {
     runs.value = []
   }
@@ -143,87 +150,6 @@ function setDuration(key: string, part: 'amount' | 'unit', raw: string) {
 
 const actionTypes = computed(() => catalog.value?.actions || [])
 const maxActions = computed(() => catalog.value?.limits.max_actions_per_rule ?? 10)
-
-function addAction(type: string) {
-  if (!rule.value) return
-  rule.value.actions.push({
-    id: `a${Date.now().toString(36)}`,
-    type,
-    config: {},
-    continue_on_error: false
-  })
-}
-
-function removeAction(index: number) {
-  rule.value?.actions.splice(index, 1)
-}
-
-function move(index: number, direction: -1 | 1) {
-  if (!rule.value) return
-  const target = index + direction
-  if (target < 0 || target >= rule.value.actions.length) return
-  const actions = rule.value.actions
-  ;[actions[index], actions[target]] = [actions[target], actions[index]]
-}
-
-/**
- * Each action type has a couple of fields worth a label. Everything else falls
- * back to a JSON editor rather than silently hiding settings the backend
- * accepts.
- */
-const actionFields: Record<string, Array<{ key: string; label: string; kind: 'text' | 'list' | 'number' | 'textarea' }>> = {
-  add_tags: [{ key: 'tags', label: 'tags', kind: 'list' }],
-  remove_tags: [{ key: 'tags', label: 'tags', kind: 'list' }],
-  set_field: [
-    { key: 'field', label: 'field', kind: 'text' },
-    { key: 'value', label: 'value', kind: 'text' }
-  ],
-  create_task: [
-    { key: 'title', label: 'title', kind: 'text' },
-    { key: 'description', label: 'description', kind: 'textarea' },
-    { key: 'type_key', label: 'type_key', kind: 'text' }
-  ],
-  add_note: [{ key: 'content', label: 'content', kind: 'textarea' }],
-  send_message: [{ key: 'text', label: 'text', kind: 'textarea' }],
-  send_template: [{ key: 'template_id', label: 'template_id', kind: 'text' }],
-  notify_users: [
-    { key: 'title', label: 'title', kind: 'text' },
-    { key: 'body', label: 'body', kind: 'textarea' }
-  ],
-  call_webhook: [
-    { key: 'url', label: 'url', kind: 'text' },
-    { key: 'method', label: 'method', kind: 'text' },
-    { key: 'body', label: 'body', kind: 'textarea' }
-  ],
-  set_conversation_status: [{ key: 'status', label: 'status', kind: 'text' }],
-  assign_conversation: [
-    { key: 'mode', label: 'mode', kind: 'text' },
-    { key: 'team_id', label: 'team_id', kind: 'text' },
-    { key: 'user_id', label: 'user_id', kind: 'text' }
-  ],
-  set_contact_owner: [
-    { key: 'mode', label: 'mode', kind: 'text' },
-    { key: 'user_id', label: 'user_id', kind: 'text' }
-  ],
-  create_deal: [
-    { key: 'title', label: 'title', kind: 'text' },
-    { key: 'value', label: 'value', kind: 'number' }
-  ],
-  move_deal_stage: [{ key: 'stage_id', label: 'stage_id', kind: 'text' }]
-}
-
-function fieldsFor(action: AutomationActionSpec) {
-  return actionFields[action.type] || []
-}
-
-function configList(action: AutomationActionSpec, key: string): string {
-  const value = action.config[key]
-  return Array.isArray(value) ? value.join(', ') : ''
-}
-
-function setConfigList(action: AutomationActionSpec, key: string, raw: string) {
-  action.config[key] = raw.split(',').map(s => s.trim()).filter(Boolean)
-}
 
 // --- Saving and testing ---
 
@@ -453,87 +379,19 @@ onMounted(async () => {
 
           <!-- 3. Then -->
           <Card>
-            <CardHeader class="flex-row items-center justify-between space-y-0">
+            <CardHeader>
               <CardTitle class="text-base">{{ t('automations.then') }}</CardTitle>
-              <Select
-                v-if="canWrite && rule.actions.length < maxActions"
-                @update:model-value="v => addAction(String(v))"
-              >
-                <SelectTrigger class="w-48">
-                  <SelectValue :placeholder="t('automations.addAction')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="type in actionTypes" :key="type" :value="type">
-                    {{ t(`automations.actions.${type}`, type) }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
             </CardHeader>
-            <CardContent class="space-y-3">
-              <p v-if="!rule.actions.length" class="text-sm text-muted-foreground">
-                {{ t('automations.noActions') }}
-              </p>
-
-              <div
-                v-for="(action, index) in rule.actions"
-                :key="action.id"
-                class="space-y-3 rounded-md border p-3"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <div class="flex items-center gap-2">
-                    <Badge variant="secondary" class="px-1.5 py-0">{{ index + 1 }}</Badge>
-                    <span class="font-medium">
-                      {{ t(`automations.actions.${action.type}`, action.type) }}
-                    </span>
-                  </div>
-                  <div v-if="canWrite" class="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" :disabled="index === 0" @click="move(index, -1)">↑</Button>
-                    <Button
-                      variant="ghost" size="sm"
-                      :disabled="index === rule.actions.length - 1"
-                      @click="move(index, 1)"
-                    >↓</Button>
-                    <Button variant="ghost" size="icon" @click="removeAction(index)">
-                      <Trash2 class="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div
-                  v-for="field in fieldsFor(action)"
-                  :key="field.key"
-                  class="space-y-1.5"
-                >
-                  <Label class="text-xs">{{ t(`automations.config.${field.label}`, field.label) }}</Label>
-                  <Textarea
-                    v-if="field.kind === 'textarea'"
-                    v-model="action.config[field.key]"
-                    :rows="2"
-                    :disabled="!canWrite"
-                  />
-                  <Input
-                    v-else-if="field.kind === 'list'"
-                    :model-value="configList(action, field.key)"
-                    :disabled="!canWrite"
-                    @update:model-value="v => setConfigList(action, field.key, String(v))"
-                  />
-                  <Input
-                    v-else
-                    v-model="action.config[field.key]"
-                    :type="field.kind === 'number' ? 'number' : 'text'"
-                    :disabled="!canWrite"
-                  />
-                </div>
-
-                <label class="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Switch
-                    :model-value="!!action.continue_on_error"
-                    :disabled="!canWrite"
-                    @update:model-value="(v: boolean) => action.continue_on_error = v"
-                  />
-                  {{ t('automations.continueOnError') }}
-                </label>
-              </div>
+            <CardContent>
+              <!-- Shared with the chatbot CRM-action node and keyword rules
+                   (plan 10, S7), so the three cannot disagree about what an
+                   action needs. -->
+              <CrmActionList
+                v-model="rule.actions"
+                :available-types="actionTypes"
+                :editable="canWrite"
+                :max-actions="maxActions"
+              />
             </CardContent>
           </Card>
 

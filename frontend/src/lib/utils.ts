@@ -5,22 +5,65 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Display preferences for every formatted date in the app (plan 10, S11).
+ *
+ * These formatters hardcoded 'en-US' and the browser's own timezone, so the
+ * organization's `timezone` and `date_format` settings — which have always
+ * existed — were applied nowhere, and two agents in different countries looking
+ * at the same conversation could disagree about what day a message arrived.
+ *
+ * They are held as a module singleton rather than threaded through every call
+ * site because they are a property of the viewer, not of any one component, and
+ * thirty-odd files call these functions from outside a Vue setup context. The
+ * auth store pushes the values in via setDisplayPreferences whenever the user
+ * or the UI language changes; components that need reactivity use
+ * useFormatters() instead.
+ */
+const DATE_STYLES: Record<string, Intl.DateTimeFormatOptions> = {
+  'DD/MM/YYYY': { day: '2-digit', month: '2-digit', year: 'numeric' },
+  'MM/DD/YYYY': { month: '2-digit', day: '2-digit', year: 'numeric' },
+  'YYYY-MM-DD': { year: 'numeric', month: '2-digit', day: '2-digit' },
+  'DD MMM YYYY': { day: 'numeric', month: 'short', year: 'numeric' },
+}
+
+const DEFAULT_DATE_STYLE: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+}
+
+let displayLocale = 'en-US'
+let displayTimeZone: string | undefined
+let displayDateStyle: Intl.DateTimeFormatOptions = DEFAULT_DATE_STYLE
+
+export function setDisplayPreferences(prefs: { locale?: string; timeZone?: string; dateFormat?: string }) {
+  if (prefs.locale) displayLocale = prefs.locale
+  if (prefs.timeZone !== undefined) displayTimeZone = prefs.timeZone || undefined
+  if (prefs.dateFormat !== undefined) {
+    displayDateStyle = DATE_STYLES[prefs.dateFormat] || DEFAULT_DATE_STYLE
+  }
+}
+
+/** intlFormat never throws: an unknown IANA zone must not blank out a screen. */
+function intlFormat(date: Date, options: Intl.DateTimeFormatOptions): string {
+  try {
+    return new Intl.DateTimeFormat(displayLocale, { timeZone: displayTimeZone, ...options }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat(displayLocale, options).format(date)
+  }
+}
+
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    ...options
-  })
+  if (Number.isNaN(d.getTime())) return typeof date === 'string' ? date : ''
+  return intlFormat(d, { ...displayDateStyle, ...options })
 }
 
 export function formatTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  if (Number.isNaN(d.getTime())) return ''
+  return intlFormat(d, { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDateTime(date: string | Date): string {

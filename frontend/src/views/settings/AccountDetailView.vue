@@ -58,6 +58,9 @@ interface WhatsAppAccount {
   is_default_incoming: boolean
   is_default_outgoing: boolean
   auto_read_receipt: boolean
+  // The API returns this (AccountResponse.business_calling_enabled) and the
+  // edit form reads it; it was simply missing from the local type.
+  business_calling_enabled: boolean
   status: string
   has_access_token: boolean
   has_app_secret: boolean

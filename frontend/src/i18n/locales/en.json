@@ -116,7 +116,9 @@
     "loadMore": "Load more",
     "stay": "Stay",
     "unsavedChangesDesc": "You have unsaved changes. Are you sure you want to leave?",
-    "unsavedChangesTitle": "Unsaved Changes"
+    "unsavedChangesTitle": "Unsaved Changes",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "auth": {
     "login": "Login",
@@ -617,7 +619,10 @@
     "metaAppCredentialsDesc": "Set tenant-specific Meta App configurations for WhatsApp Embedded Signup. Leave secret blank to keep existing.",
     "metaAppId": "Meta App ID",
     "metaConfigId": "Meta Config ID",
-    "metaAppSecret": "Meta App Secret"
+    "metaAppSecret": "Meta App Secret",
+    "myTimezone": "My timezone",
+    "myTimezoneDesc": "Overrides the organization timezone for dates you see. Leave unset to follow the organization.",
+    "useOrgTimezone": "Use the organization's timezone"
   },
   "users": {
     "title": "User Management",
@@ -2796,24 +2801,34 @@
       "time": "Time"
     },
     "triggers": {
-      "contact.created": "a contact is created",
-      "contact.tag_added": "a tag is added",
-      "contact.tag_removed": "a tag is removed",
-      "contact.field_changed": "a field changes",
-      "contact.assigned": "a contact is assigned",
-      "conversation.created": "a conversation starts",
-      "conversation.status_changed": "a conversation changes status",
-      "conversation.assigned": "a conversation is assigned",
-      "task.created": "a task is created",
-      "task.completed": "a task is completed",
-      "task.overdue": "a task goes overdue",
-      "deal.created": "a deal is created",
-      "deal.stage_changed": "a deal changes stage",
-      "deal.won": "a deal is won",
-      "deal.lost": "a deal is lost",
-      "time.no_customer_reply": "the customer has not replied",
-      "time.no_agent_reply": "nobody has replied to the customer",
-      "time.date_field": "a date field comes due"
+      "contact": {
+        "created": "a contact is created",
+        "tag_added": "a tag is added",
+        "tag_removed": "a tag is removed",
+        "field_changed": "a field changes",
+        "assigned": "a contact is assigned"
+      },
+      "conversation": {
+        "created": "a conversation starts",
+        "status_changed": "a conversation changes status",
+        "assigned": "a conversation is assigned"
+      },
+      "task": {
+        "created": "a task is created",
+        "completed": "a task is completed",
+        "overdue": "a task goes overdue"
+      },
+      "deal": {
+        "created": "a deal is created",
+        "stage_changed": "a deal changes stage",
+        "won": "a deal is won",
+        "lost": "a deal is lost"
+      },
+      "time": {
+        "no_customer_reply": "the customer has not replied",
+        "no_agent_reply": "nobody has replied to the customer",
+        "date_field": "a date field comes due"
+      }
     },
     "actions": {
       "add_tags": "add tags",
@@ -2878,7 +2893,8 @@
       "loop_depth": "the chain of rules was too long",
       "self_trigger": "the rule caused this itself",
       "disabled": "the rule is off"
-    }
+    },
+    "noConfigurableFields": "This action takes no extra settings."
   },
   "crmReports": {
     "title": "CRM Reports",
@@ -3045,5 +3061,17 @@
       "invalid_phone": "No usable number",
       "duplicate": "Duplicate number"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "You're all caught up",
+    "emptyHint": "Task reminders, assignments and alerts will appear here.",
+    "unread": "Unread",
+    "loadMore": "Load older",
+    "justNow": "just now",
+    "minutesAgo": "{n}m ago",
+    "hoursAgo": "{n}h ago",
+    "daysAgo": "{n}d ago"
   }
 }

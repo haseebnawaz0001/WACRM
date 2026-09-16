@@ -75,7 +75,18 @@ async function load() {
       contactsService.get(contactId.value),
       timelineService.forContact(contactId.value, { limit: 50 })
     ])
-    contact.value = contactResult.data.contact || contactResult.data
+    const loaded = contactResult.data.contact || contactResult.data
+
+    // A merged contact's URL resolves to the survivor (plan 06). The API has
+    // already returned the surviving record; rewriting the address keeps a
+    // bookmark or an old link from staying on an id that no longer holds the
+    // history. replace(), not push(), so Back does not bounce between them.
+    if (loaded?.merged_into_id && loaded.merged_into_id !== contactId.value) {
+      router.replace({ name: 'contact-profile', params: { id: loaded.merged_into_id } })
+      return
+    }
+
+    contact.value = loaded
     items.value = timelineResult.data.items || []
     nextBefore.value = timelineResult.data.next_before
     fetchError.value = false

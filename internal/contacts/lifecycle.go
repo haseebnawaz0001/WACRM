@@ -257,9 +257,44 @@ func (s *Service) create(db *gorm.DB, orgID uuid.UUID, id Identity, opts Resolve
 		return nil, "", err
 	}
 
+	s.seedLifecycleStage(db, orgID, contact)
+
 	s.publish(db, orgID, contact, "contact.created", opts.Actor)
 	return contact, OutcomeCreated, nil
 }
+
+// seedLifecycleStage gives a brand-new contact the "new" lifecycle stage
+// (plan 01).
+//
+// Without it the field is simply absent until somebody edits the contact by
+// hand, so the lifecycle funnel starts at whatever stage people remembered to
+// set and a segment on "new" never matches the contacts that actually are.
+//
+// A failure is logged by the caller's error path, not returned: the contact
+// exists and the message that created it must not be lost over a default.
+func (s *Service) seedLifecycleStage(db *gorm.DB, orgID uuid.UUID, contact *models.Contact) {
+	var def models.CustomFieldDefinition
+	if err := db.Where("organization_id = ? AND entity_type = ? AND key = ?",
+		orgID, models.FieldEntityContact, models.FieldKeyLifecycleStage).
+		First(&def).Error; err != nil {
+		// Organizations seeded before plan 01 may not have the field yet.
+		return
+	}
+
+	value := models.CustomFieldValue{
+		OrganizationID: orgID,
+		EntityType:     models.FieldEntityContact,
+		EntityID:       contact.ID,
+		FieldID:        def.ID,
+		ValueOption:    ptrString(models.LifecycleNew),
+	}
+	// Ignore a conflict: a concurrent writer setting it first is fine.
+	_ = db.Where("organization_id = ? AND entity_type = ? AND entity_id = ? AND field_id = ?",
+		orgID, models.FieldEntityContact, contact.ID, def.ID).
+		FirstOrCreate(&value).Error
+}
+
+func ptrString(s string) *string { return &s }
 
 // Delete soft-deletes a contact, recording why so a later inbound message knows
 // whether restoring is allowed.

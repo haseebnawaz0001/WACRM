@@ -3,84 +3,25 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/safehttp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
 
-// validateWebhookURL performs structural validation of a webhook URL.
-// It blocks known-internal hostnames and IP literals pointing to private ranges.
-// Runtime SSRF protection (DNS rebinding) is handled by SSRFSafeDialer.
-func validateWebhookURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL: %w", err)
-	}
+// validateWebhookURL validates an outbound webhook URL. The rules live in
+// internal/safehttp so webhooks, custom actions and IVR callbacks cannot drift
+// apart on what counts as an internal address.
+func validateWebhookURL(rawURL string) error { return safehttp.ValidateURL(rawURL) }
 
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("URL scheme must be http or https")
-	}
-
-	hostname := u.Hostname()
-	if hostname == "" {
-		return fmt.Errorf("URL must have a hostname")
-	}
-
-	// Block obvious internal hostnames
-	lower := strings.ToLower(hostname)
-	if lower == "localhost" || lower == "0.0.0.0" || strings.HasSuffix(lower, ".local") ||
-		strings.HasSuffix(lower, ".internal") {
-		return fmt.Errorf("URL must not point to internal addresses")
-	}
-
-	// Block private/loopback IP literals (e.g. http://127.0.0.1, http://[::1])
-	if ip := net.ParseIP(hostname); ip != nil {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-			ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-			return fmt.Errorf("URL must not point to internal addresses")
-		}
-	}
-
-	return nil
-}
-
-// SSRFSafeDialer returns a DialContext function that blocks connections to
-// private/loopback IPs after DNS resolution. Use this in http.Transport
-// for webhook and custom action HTTP calls.
+// SSRFSafeDialer returns the shared SSRF-safe DialContext.
 func SSRFSafeDialer() func(ctx context.Context, network, addr string) (net.Conn, error) {
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			return nil, err
-		}
-
-		ips, err := net.DefaultResolver.LookupHost(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ipStr := range ips {
-			ip := net.ParseIP(ipStr)
-			if ip == nil {
-				continue
-			}
-			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-				ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-				return nil, fmt.Errorf("connection to private address %s is not allowed", ipStr)
-			}
-		}
-
-		// Connect to first resolved IP
-		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
-	}
+	return safehttp.Dialer()
 }
 
 // WebhookRequest represents the request body for creating/updating a webhook
@@ -106,15 +47,67 @@ type WebhookResponse struct {
 	UpdatedAt string            `json:"updated_at"`
 }
 
-// AvailableWebhookEvents returns the list of available webhook event types
-var AvailableWebhookEvents = []map[string]string{
-	{"value": string(models.WebhookEventMessageIncoming), "label": "Message Incoming", "description": "When a new message is received from a contact"},
-	{"value": string(models.WebhookEventMessageSent), "label": "Message Sent", "description": "When an agent sends a message"},
-	{"value": string(models.WebhookEventMessageOutgoing), "label": "Message Outgoing", "description": "When a message is sent to a contact (includes echoes)"},
-	{"value": string(models.WebhookEventContactCreated), "label": "Contact Created", "description": "When a new contact is created"},
-	{"value": string(models.WebhookEventTransferCreated), "label": "Transfer Created", "description": "When a transfer to human agent is requested"},
-	{"value": string(models.WebhookEventTransferAssigned), "label": "Transfer Assigned", "description": "When a transfer is assigned to an agent"},
-	{"value": string(models.WebhookEventTransferResumed), "label": "Transfer Resumed", "description": "When chatbot is resumed (transfer closed)"},
+// webhookEventLabels gives each catalog event a human name for the picker.
+//
+// Only the wording lives here. Which events exist is the catalog's business, so
+// a new event cannot be silently unsubscribable — the previous hand-maintained
+// list had drifted to the point that none of the CRM events plans 03, 04 and 07
+// added could be subscribed to at all.
+var webhookEventLabels = map[string]struct{ Label, Description string }{
+	"message.incoming":    {"Message Incoming", "A new message is received from a contact"},
+	"message.outgoing":    {"Message Outgoing", "A message is sent to a contact (includes echoes)"},
+	"message.sent":        {"Message Sent", "An agent sends a message"},
+	"contact.created":     {"Contact Created", "A new contact is created"},
+	"contact.updated":     {"Contact Updated", "A contact's details or custom fields change"},
+	"contact.deleted":     {"Contact Deleted", "A contact is deleted"},
+	"contact.restored":    {"Contact Restored", "A deleted contact is restored"},
+	"contact.merged":      {"Contact Merged", "Two contacts are merged"},
+	"contact.assigned":    {"Contact Assigned", "A contact's owner changes"},
+	"contact.tag_added":   {"Tag Added", "A tag is added to a contact"},
+	"contact.tag_removed": {"Tag Removed", "A tag is removed from a contact"},
+
+	"conversation.created":        {"Conversation Started", "A new conversation opens"},
+	"conversation.status_changed": {"Conversation Status Changed", "A conversation is resolved, snoozed, pending or reopened"},
+	"conversation.assigned":       {"Conversation Assigned", "A conversation is assigned to an agent or team"},
+
+	"task.created":   {"Task Created", "A follow-up task is created"},
+	"task.completed": {"Task Completed", "A task is completed"},
+	"task.overdue":   {"Task Overdue", "A task passes its deadline"},
+
+	"deal.created":       {"Deal Created", "A deal is added to a pipeline"},
+	"deal.updated":       {"Deal Updated", "A deal's details change"},
+	"deal.stage_changed": {"Deal Stage Changed", "A deal moves to another stage"},
+	"deal.won":           {"Deal Won", "A deal is marked won"},
+	"deal.lost":          {"Deal Lost", "A deal is marked lost"},
+	"deal.deleted":       {"Deal Deleted", "A deal is deleted"},
+
+	"transfer.created":  {"Transfer Created", "A transfer to a human agent is requested"},
+	"transfer.assigned": {"Transfer Assigned", "A transfer is assigned to an agent"},
+	"transfer.resumed":  {"Transfer Resumed", "The chatbot resumes (transfer closed)"},
+}
+
+// availableWebhookEvents builds the picker list from the catalog.
+func availableWebhookEvents() []map[string]string {
+	types := crmevents.WebhookEventTypes()
+	out := make([]map[string]string, 0, len(types))
+	for _, t := range types {
+		meta, ok := webhookEventLabels[t]
+		if !ok {
+			// A catalog event with no wording yet is still offered, labelled
+			// by its type: unsubscribable is worse than unpolished.
+			meta.Label = t
+		}
+		out = append(out, map[string]string{
+			"value": t, "label": meta.Label, "description": meta.Description,
+		})
+	}
+	return out
+}
+
+// isKnownWebhookEvent reports whether an event may be subscribed to.
+func isKnownWebhookEvent(eventType string) bool {
+	spec, ok := crmevents.Lookup(eventType)
+	return ok && spec.Webhook
 }
 
 // ListWebhooks returns all webhooks for the organization
@@ -152,7 +145,7 @@ func (a *App) ListWebhooks(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]any{
 		"webhooks":         result,
-		"available_events": AvailableWebhookEvents,
+		"available_events": availableWebhookEvents(),
 		"total":            total,
 		"page":             pg.Page,
 		"limit":            pg.Limit,
@@ -201,6 +194,14 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 
 	if len(req.Events) == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "at least one event must be selected", nil, "")
+	}
+	// An event that is not in the catalog can never be delivered, so accepting
+	// it would create a subscription that silently does nothing (plan 00, F11).
+	for _, e := range req.Events {
+		if !isKnownWebhookEvent(e) {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+				"unknown event type: "+e, nil, "")
+		}
 	}
 
 	// Convert headers to JSONB
@@ -273,6 +274,12 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 		webhook.URL = req.URL
 	}
 	if len(req.Events) > 0 {
+		for _, e := range req.Events {
+			if !isKnownWebhookEvent(e) {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					"unknown event type: "+e, nil, "")
+			}
+		}
 		webhook.Events = req.Events
 	}
 

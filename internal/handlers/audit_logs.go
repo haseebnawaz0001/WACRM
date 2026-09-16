@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -127,5 +128,26 @@ func (a *App) GetAuditLog(r *fastglue.Request) error {
 		Action:       log.Action,
 		Changes:      log.Changes,
 		CreatedAt:    log.CreatedAt,
+	})
+}
+
+// GetAuditCatalog returns the resource types and actions the audit log can
+// contain (plan 10, S9).
+//
+// The filter dropdowns were hand-written in the Vue component and had drifted
+// badly: they offered ten resource types against the twenty-nine the server
+// actually writes, so changes to accounts, roles, webhooks, canned responses,
+// tasks, deals, pipelines, segments and every settings section were recorded
+// and then unfindable. One offered value was never written at all, so picking
+// it always came back empty. Serving the catalog makes the picker a projection
+// of what the server does rather than a list somebody has to remember to
+// update.
+func (a *App) GetAuditCatalog(r *fastglue.Request) error {
+	if _, _, err := a.requireAuth(r, models.ResourceAuditLogs, models.ActionRead); err != nil {
+		return nil
+	}
+	return r.SendEnvelope(map[string]any{
+		"resource_types": audit.ResourceTypes(),
+		"actions":        audit.Actions(),
 	})
 }

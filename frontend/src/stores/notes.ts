@@ -74,11 +74,23 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   // WebSocket event handlers
+  //
+  // This store holds one contact's notes at a time, but note events reach every
+  // client that has no contact selected — so a note a colleague wrote on another
+  // customer was appended to whatever panel happened to be open (plan 10, S10).
+  // Notes are internal and often blunt; showing one under the wrong customer is
+  // worse than not showing it live at all.
+  function belongsToCurrentContact(note: ConversationNote): boolean {
+    return !note.contact_id || note.contact_id === currentContactId.value
+  }
+
   function addNote(note: ConversationNote) {
+    if (!belongsToCurrentContact(note)) return
     pushIfNew(note)
   }
 
   function onNoteUpdated(note: ConversationNote) {
+    if (!belongsToCurrentContact(note)) return
     const index = notes.value.findIndex(n => n.id === note.id)
     if (index !== -1) {
       notes.value[index] = note

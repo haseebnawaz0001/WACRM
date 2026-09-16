@@ -70,6 +70,16 @@ func (a *App) RegisterJobs(s *scheduler.Scheduler) {
 		Timeout:  15 * time.Minute,
 		Run:      a.scanForDuplicates,
 	})
+	// Chatbot session timeouts (plan 10, X14). Runs every minute because the
+	// shortest timeout an organization can configure is one minute, and a
+	// session that times out ten minutes late has already resumed on the
+	// customer's next unrelated message.
+	s.Register(scheduler.Job{
+		Name:     "chatbot_session_timeout",
+		Interval: time.Minute,
+		Timeout:  2 * time.Minute,
+		Run:      a.TimeoutStaleChatSessions,
+	})
 }
 
 // SegmentCountStaleAfter is how recently a segment must have been used for the

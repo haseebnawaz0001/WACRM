@@ -12,10 +12,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/crypto"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // AccountRequest represents the request body for creating/updating an account
@@ -263,13 +265,28 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 	account.IsDefaultOutgoing = req.IsDefaultOutgoing
 	account.UpdatedByID = &userID
 
-	if err := a.DB.Save(account).Error; err != nil {
+	// Eighteen columns reference this account by name. A rename has to move
+	// them with the account row or the history detaches from it: campaigns stop
+	// resolving their account and the worker's lookup-by-name fails, all
+	// without an error (plan 10, X5/S8).
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(account).Error; err != nil {
+			return err
+		}
+		return entityrefs.RenameAccount(tx, orgID, oldAccount.Name, account.Name)
+	}); err != nil {
 		a.Log.Error("Failed to update account", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update account", nil, "")
 	}
 
 	// Invalidate cache
 	a.InvalidateWhatsAppAccountCache(account.PhoneID)
+	if oldAccount.Name != account.Name {
+		a.Log.Info("WhatsApp account renamed; references cascaded",
+			"account", account.ID, "from", oldAccount.Name, "to", account.Name)
+		// Anything cached against the old name is now wrong.
+		a.InvalidateChatbotSettingsCache(orgID)
+	}
 
 	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(account, "id = ?", account.ID)
 
@@ -641,13 +658,30 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, err.Error(), nil, "")
 	}
 
-	if err := a.DB.Save(account).Error; err != nil {
+	// Re-connecting an existing account can change its display name, which is
+	// a rename like any other and has to cascade to the references (plan 10,
+	// X5/S8). This path is easy to miss because nobody typed a new name.
+	priorName := ""
+	if oldAccount != nil {
+		priorName = oldAccount.Name
+	}
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(account).Error; err != nil {
+			return err
+		}
+		return entityrefs.RenameAccount(tx, orgID, priorName, account.Name)
+	}); err != nil {
 		a.Log.Error("Failed to save account", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save account", nil, "")
 	}
 
 	// Invalidate cache
 	a.InvalidateWhatsAppAccountCache(account.PhoneID)
+	if priorName != "" && priorName != account.Name {
+		a.Log.Info("WhatsApp account renamed on reconnect; references cascaded",
+			"account", account.ID, "from", priorName, "to", account.Name)
+		a.InvalidateChatbotSettingsCache(orgID)
+	}
 
 	a.Log.Info("WhatsApp account connected via embedded signup successfully",
 		"account_id", account.ID,

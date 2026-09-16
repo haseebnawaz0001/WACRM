@@ -19,6 +19,18 @@ func chatRWRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomRole {
 	return testutil.CreateTestRoleWithKeys(t, db, orgID, "chat-rw", []string{"chat:read", "chat:write"})
 }
 
+// ownedContact gives the acting user a claim on the contact.
+//
+// Listing or writing notes now goes through the contact scope (plan 10, S9):
+// an agent without contacts:read has to actually be working the contact, or
+// the endpoint is a way to read any contact's internal notes by id.
+func ownedContact(t *testing.T, db *gorm.DB, orgID, userID uuid.UUID) *models.Contact {
+	t.Helper()
+	contact := testutil.CreateTestContact(t, db, orgID)
+	require.NoError(t, db.Model(contact).Update("assigned_user_id", userID).Error)
+	return contact
+}
+
 // --- ListConversationNotes ---
 
 func TestApp_ListConversationNotes_Success(t *testing.T) {
@@ -26,7 +38,7 @@ func TestApp_ListConversationNotes_Success(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	role := chatRWRole(t, app.DB, org.ID)
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	contact := ownedContact(t, app.DB, org.ID, user.ID)
 
 	for i := range 3 {
 		require.NoError(t, app.DB.Create(&models.ConversationNote{
@@ -113,7 +125,7 @@ func TestApp_CreateConversationNote_Success(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	role := chatRWRole(t, app.DB, org.ID)
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	contact := ownedContact(t, app.DB, org.ID, user.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{"content": "follow up tomorrow"})
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -141,7 +153,7 @@ func TestApp_CreateConversationNote_EmptyContentRejected(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	role := chatRWRole(t, app.DB, org.ID)
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	contact := ownedContact(t, app.DB, org.ID, user.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{"content": ""})
 	testutil.SetAuthContext(req, org.ID, user.ID)

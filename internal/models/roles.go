@@ -280,6 +280,12 @@ func DefaultPermissions() []Permission {
 		{Resource: ResourceTags, Action: ActionRead, Description: "View tags"},
 		{Resource: ResourceTags, Action: ActionWrite, Description: "Create and edit tags"},
 		{Resource: ResourceTags, Action: ActionDelete, Description: "Delete tags"},
+		// import_export.go serves tags as well as contacts and checks
+		// tags:import / tags:export. Without these rows nobody could ever hold
+		// the permission, so the feature was unreachable rather than
+		// restricted (plan 10, X11).
+		{Resource: ResourceTags, Action: ActionImport, Description: "Import tags"},
+		{Resource: ResourceTags, Action: ActionExport, Description: "Export tags"},
 
 		// Analytics
 		{Resource: ResourceAnalytics, Action: ActionRead, Description: "View analytics dashboard"},
@@ -384,7 +390,10 @@ func SystemRolePermissions() map[string][]string {
 		// Segments
 		"segments:read", "segments:write", "segments:delete",
 		// Tags
-		"tags:read", "tags:write", "tags:delete",
+		// Managers already manage tags outright and hold contacts:import /
+		// contacts:export; import/export is one page, so splitting the two
+		// resources across roles would only make it half-work for them.
+		"tags:read", "tags:write", "tags:delete", "tags:import", "tags:export",
 		// Analytics
 		"analytics:read", "analytics.agents:read",
 		// Transfers

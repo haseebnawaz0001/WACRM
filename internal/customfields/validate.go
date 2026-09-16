@@ -203,7 +203,14 @@ func coerceNumber(d models.CustomFieldDefinition, raw any) (Value, error) {
 func coerceDate(d models.CustomFieldDefinition, raw any) (Value, error) {
 	switch v := raw.(type) {
 	case time.Time:
-		return Value{Date: &v}, nil
+		// Normalised exactly like the string form below (plan 10, S11). A
+		// time.Time carries a zone and a time of day; the column is a bare
+		// date, so Postgres truncates it in whatever zone the session happens
+		// to use. A renewal set from a machine five hours ahead of UTC then
+		// landed on the previous day, and the reminder built on it fired a day
+		// early — with nothing anywhere recording that the day had moved.
+		day := time.Date(v.Year(), v.Month(), v.Day(), 0, 0, 0, 0, time.UTC)
+		return Value{Date: &day}, nil
 	case string:
 		for _, layout := range []string{"2006-01-02", time.RFC3339Nano, time.RFC3339} {
 			if parsed, err := time.Parse(layout, strings.TrimSpace(v)); err == nil {

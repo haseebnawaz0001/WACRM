@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"fmt"
+
 	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/deals"
 	"github.com/shridarpatil/whatomate/internal/tasks"
@@ -55,6 +57,32 @@ func init() {
 		Name: "2026_09_22_grant_segment_permissions",
 		Run:  grantSegmentPermissions,
 	})
+	Register(Migration{
+		Name: "2026_09_23_normalize_audit_resource_types",
+		Run:  normalizeAuditResourceTypes,
+	})
+}
+
+// normalizeAuditResourceTypes collapses the two spellings the audit log
+// grew for the same entity (plan 10, S9).
+//
+// Contact edits were logged as "contact" while a contact merge was logged as
+// "contacts", and campaigns split the same way. Filtering the audit log for
+// contacts therefore returned the edits but hid the merges — the single most
+// consequential change a contact can undergo. The handlers now write one
+// spelling; this moves the history onto it so the filter reaches the past too.
+func normalizeAuditResourceTypes(tx *gorm.DB) error {
+	renames := map[string]string{
+		"contact":  "contacts",
+		"campaign": "campaigns",
+	}
+	for from, to := range renames {
+		if err := tx.Exec(`UPDATE audit_logs SET resource_type = ? WHERE resource_type = ?`,
+			to, from).Error; err != nil {
+			return fmt.Errorf("normalize audit resource_type %s: %w", from, err)
+		}
+	}
+	return nil
 }
 
 // backfillContactPhoneNormalized fills phone_normalized on contacts created

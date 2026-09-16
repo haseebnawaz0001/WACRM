@@ -29,6 +29,7 @@ import { automationsService, type Automation } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
 import { Zap, Plus, MoreVertical, AlertTriangle } from 'lucide-vue-next'
+import { unwrapResponse, unwrapListResponse } from '@/lib/api-utils'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -101,8 +102,11 @@ const recipes = computed(() => [
 
 async function fetchAutomations() {
   try {
-    const { data } = await automationsService.list()
-    automations.value = data.automations || []
+    // The API wraps payloads in {status, data}. Reading the envelope directly
+    // left this list permanently empty however many rules the org had.
+    automations.value = unwrapListResponse<Automation>(
+      await automationsService.list(), 'automations'
+    )
     fetchError.value = false
   } catch {
     fetchError.value = true
@@ -116,10 +120,10 @@ async function toggle(rule: Automation, enabled: boolean) {
   // broken even when it works.
   rule.enabled = enabled
   try {
-    const { data } = enabled
+    const response = enabled
       ? await automationsService.enable(rule.id)
       : await automationsService.disable(rule.id)
-    Object.assign(rule, data.automation)
+    Object.assign(rule, unwrapResponse<{ automation: Automation }>(response).automation)
   } catch (error: any) {
     rule.enabled = !enabled
     toast.error(error?.response?.data?.message || t('common.error'))
@@ -128,9 +132,11 @@ async function toggle(rule: Automation, enabled: boolean) {
 
 async function createFromRecipe(recipe: { body: Record<string, any> }) {
   try {
-    const { data } = await automationsService.create(recipe.body as any)
+    const created = unwrapResponse<{ automation: Automation }>(
+      await automationsService.create(recipe.body as any)
+    ).automation
     showRecipes.value = false
-    router.push(`/automations/${data.automation.id}`)
+    router.push(`/automations/${created.id}`)
   } catch (error: any) {
     toast.error(error?.response?.data?.message || t('common.error'))
   }
@@ -138,13 +144,15 @@ async function createFromRecipe(recipe: { body: Record<string, any> }) {
 
 async function duplicate(rule: Automation) {
   try {
-    const { data } = await automationsService.create({
-      ...rule,
-      name: t('automations.copyOf', { name: rule.name }),
-      enabled: false
-    } as any)
+    const copy = unwrapResponse<{ automation: Automation }>(
+      await automationsService.create({
+        ...rule,
+        name: t('automations.copyOf', { name: rule.name }),
+        enabled: false
+      } as any)
+    ).automation
     await fetchAutomations()
-    router.push(`/automations/${data.automation.id}`)
+    router.push(`/automations/${copy.id}`)
   } catch (error: any) {
     toast.error(error?.response?.data?.message || t('common.error'))
   }

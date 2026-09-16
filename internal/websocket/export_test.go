@@ -26,3 +26,30 @@ func ClientOrgID(c *Client) uuid.UUID {
 func ClientHandleAuthMessage(c *Client, data []byte) bool {
 	return c.handleAuthMessage(data)
 }
+
+// ClientSetCurrentContact exposes the guarded setter for testing.
+func ClientSetCurrentContact(c *Client, contactID *uuid.UUID) {
+	c.setCurrentContact(contactID)
+}
+
+// ClientFillSendBuffer packs the client's send channel so the next broadcast
+// has nowhere to go — the condition the resync notice exists for.
+func ClientFillSendBuffer(c *Client) {
+	for {
+		select {
+		case c.send <- []byte("{}"):
+		default:
+			return
+		}
+	}
+}
+
+// ClientDrainOne takes one message off the client's send channel.
+func ClientDrainOne(c *Client) []byte {
+	select {
+	case data := <-c.send:
+		return data
+	default:
+		return nil
+	}
+}

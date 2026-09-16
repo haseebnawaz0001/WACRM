@@ -42,6 +42,9 @@ import {
   Plus,
 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
+import { automationsService } from '@/services/api'
+import CrmActionList from '@/components/crmactions/CrmActionList.vue'
+import type { CrmActionSpec } from '@/components/crmactions/schema'
 
 const route = useRoute()
 const router = useRouter()
@@ -75,6 +78,9 @@ const form = ref({
   buttons: [] as ButtonItem[],
   priority: 0,
   enabled: true,
+  // CRM actions the rule runs after replying (plan 10, S7). A keyword rule is
+  // the cheapest automation in the product; until now it could only answer.
+  actions: [] as CrmActionSpec[],
 })
 
 const breadcrumbs = computed(() => [
@@ -109,6 +115,13 @@ function syncForm() {
     buttons: [...(keyword.value.response_content?.buttons || [])],
     priority: keyword.value.priority || 0,
     enabled: keyword.value.enabled ?? true,
+    // Stored under a "list" key: the column is a JSON object, matching how
+    // automation_rules.actions is persisted.
+    actions: (((keyword.value as any).actions?.list) || []).map((a: any, i: number) => ({
+      id: `a${i}`,
+      type: a.type,
+      config: a.config || {}
+    })),
   }
 }
 
@@ -141,6 +154,7 @@ function buildPayload() {
     },
     priority: form.value.priority,
     enabled: form.value.enabled,
+    actions: form.value.actions.map(a => ({ type: a.type, config: a.config })),
   }
 }
 
@@ -193,7 +207,21 @@ async function deleteKeyword() {
   deleteDialogOpen.value = false
 }
 
+/**
+ * Action types come from the backend catalog rather than a list held here, so
+ * an action added to the library appears in every editor at once (plan 10, S7).
+ * A failed fetch leaves the picker empty rather than blocking the page — the
+ * rest of the rule is still editable.
+ */
+const availableActionTypes = ref<string[]>([])
+
 onMounted(async () => {
+  automationsService.catalog()
+    .then(({ data }) => {
+      availableActionTypes.value = ((data as any)?.data ?? data)?.actions || []
+    })
+    .catch(() => { availableActionTypes.value = [] })
+
   if (isNew.value) {
     isLoading.value = false
     hasChanges.value = false
@@ -346,6 +374,26 @@ onMounted(async () => {
           <Switch :checked="form.enabled" @update:checked="form.enabled = $event" :disabled="!canWrite" />
           <Label class="text-xs">{{ $t('keywords.enabled', 'Enabled') }}</Label>
         </div>
+      </CardContent>
+    </Card>
+
+    <!-- Actions (plan 10, S7): the same editor the automation builder and the
+         chatbot CRM-action node use, so the three cannot drift on what an
+         action needs. -->
+    <Card>
+      <CardHeader class="pb-3">
+        <CardTitle class="text-sm font-medium">{{ $t('keywords.actions', 'Actions') }}</CardTitle>
+        <p class="text-xs text-muted-foreground">
+          {{ $t('keywords.actionsHint', 'Run these after the reply is sent — tag the contact, raise a task, and so on.') }}
+        </p>
+      </CardHeader>
+      <CardContent>
+        <CrmActionList
+          v-model="form.actions"
+          :available-types="availableActionTypes"
+          :editable="canWrite"
+          :show-continue-on-error="false"
+        />
       </CardContent>
     </Card>
 

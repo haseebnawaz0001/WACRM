@@ -40,9 +40,13 @@ var catalog = map[string]Spec{
 	// to help.
 	"contact.created": {Type: "contact.created", RecordActivity: true, Webhook: true, Automatable: true},
 	"contact.deleted": {Type: "contact.deleted", RecordActivity: true, Webhook: true},
-	// field_changed is not exposed as its own webhook: it is already carried
-	// by contact.updated, and a separate delivery per edited field would
-	// flood subscribers during an import.
+	// contact.updated is the subscriber-facing "this record changed" event. It
+	// carries the contact with its typed custom fields, which is why
+	// field_changed is not a webhook of its own: one delivery per edited field
+	// would flood subscribers during an import.
+	"contact.updated": {Type: "contact.updated", Webhook: true},
+	// field_changed stays an activity and an automation trigger: the timeline
+	// and a rule both need to know *which* field moved.
 	"contact.field_changed": {Type: "contact.field_changed", RecordActivity: true, Automatable: true},
 	"contact.restored":      {Type: "contact.restored", RecordActivity: true, Webhook: true},
 	// Tags and ownership (plan 08). These are the changes people most often

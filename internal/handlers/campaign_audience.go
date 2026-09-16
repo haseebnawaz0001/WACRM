@@ -159,7 +159,7 @@ func (a *App) buildAudiencePreview(orgID, userID uuid.UUID, campaign *models.Bul
 		row := SampleRow{
 			ContactID:   contact.ID.String(),
 			Name:        contact.ProfileName,
-			PhoneNumber: contact.PhoneNumber,
+			PhoneNumber: a.maskPhone(orgID, contact.PhoneNumber),
 		}
 		if hasTemplate {
 			// The rendered body, not the raw template: approving "Hi {{1}},

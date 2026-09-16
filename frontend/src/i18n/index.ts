@@ -1,5 +1,6 @@
 import { createI18n } from 'vue-i18n'
 import en from './locales/en.json'
+import { setDisplayPreferences } from '@/lib/utils'
 
 export type MessageSchema = typeof en
 
@@ -74,6 +75,10 @@ export const i18n = createI18n({
   messages,
 })
 
+// Dates follow the UI language too (plan 10, S11): switching the interface to
+// French switched the labels and left the month names in English.
+setDisplayPreferences({ locale: i18n.global.locale.value })
+
 // Helper to change locale
 export function setLocale(locale: string) {
   if (!messages[locale]) {
@@ -81,6 +86,7 @@ export function setLocale(locale: string) {
     return
   }
   i18n.global.locale.value = locale
+  setDisplayPreferences({ locale })
   localStorage.setItem('locale', locale)
   document.documentElement.setAttribute('lang', locale)
 }

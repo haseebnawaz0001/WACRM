@@ -8,7 +8,9 @@
 package templating
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -463,4 +465,134 @@ func ExtractResponseMapping(responseData map[string]any, mapping map[string]stri
 	}
 
 	return result
+}
+
+// Resolved is the outcome of looking one {{path}} up.
+type Resolved struct {
+	// Value is the raw value, formatted for substitution.
+	Value string
+	// Raw is the placeholder exactly as written, e.g. "{{contact.name}}". A
+	// caller that leaves unresolvable references visible substitutes this.
+	Raw string
+	// Found is false when the path does not exist in the data at all, which a
+	// caller may want to treat differently from a path that exists and is
+	// empty — leaving the placeholder visible rather than blanking it.
+	Found bool
+}
+
+// ProcessVariablesWith renders {{path}} references, handing each resolution to
+// encode before it is substituted (plan 10, S6).
+//
+// Four places in the product grew their own {{...}} renderer: the chatbot, the
+// CRM action library, custom actions and the IVR http_callback node. They
+// disagreed about dotted paths, about arrays and — the part that mattered —
+// about whether a value was escaped for the document it was being written
+// into. This is the one renderer; the differences that are real (how to encode
+// for JSON, a URL or a header) are the caller's, expressed through encode.
+func ProcessVariablesWith(template string, data map[string]any, encode func(Resolved) string) string {
+	if encode == nil {
+		return ProcessVariables(template, data)
+	}
+	return variablePattern.ReplaceAllStringFunc(template, func(match string) string {
+		path := strings.TrimSpace(match[2 : len(match)-2])
+		value, found := LookupNested(data, path)
+		return encode(Resolved{Value: FormatValue(value), Raw: match, Found: found})
+	})
+}
+
+// LookupNested is NestedValue with a reported miss.
+//
+// NestedValue returns nil both for "no such path" and for "the value is nil".
+// Found distinguishes them: it is false only when the walk breaks — a segment
+// before the last one is absent or is not an object, so the path cannot be
+// resolved at all. A path that resolves to a missing final key is Found with an
+// empty value, because the object it names does exist.
+//
+// The distinction is not academic: it is what lets a caller blank a field that
+// is simply unset while leaving a mistyped path visible.
+func LookupNested(data map[string]any, path string) (any, bool) {
+	if data == nil || path == "" {
+		return nil, false
+	}
+	if strings.Contains(path, "[") {
+		// Array indexing is NestedValue's business.
+		v := NestedValue(data, path)
+		return v, v != nil
+	}
+
+	parts := SplitPath(path)
+	var current any = data
+	for i, part := range parts {
+		container, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current = container[part]
+		if i == len(parts)-1 {
+			return current, true
+		}
+	}
+	return current, true
+}
+
+// Escape modes say how a substituted value must be encoded for the place it is
+// written into (plan 10, S6/X9).
+//
+// A value interpolated into a request is attacker-influenced far more often
+// than it looks: a contact's profile name is chosen by whoever is messaging.
+// Substituted raw, a name containing a quote closes the JSON string and adds
+// fields to the payload, and a name containing CR/LF splits a header.
+type EscapeMode int
+
+const (
+	// EscapeRaw performs no encoding. Only for plain text destinations.
+	EscapeRaw EscapeMode = iota
+	// EscapeJSON encodes for the inside of a JSON string literal.
+	EscapeJSON
+	// EscapeQuery encodes for a URL query component.
+	EscapeQuery
+	// EscapeHeader strips the characters that would split a header.
+	EscapeHeader
+)
+
+var headerStripper = strings.NewReplacer("\r", "", "\n", "")
+
+// Encode applies the encoding a mode requires.
+func Encode(mode EscapeMode, raw string) string {
+	switch mode {
+	case EscapeJSON:
+		// Marshal produces a quoted JSON string; the template supplies the
+		// surrounding quotes, so they are trimmed off.
+		b, err := json.Marshal(raw)
+		if err != nil {
+			return ""
+		}
+		return string(b[1 : len(b)-1])
+	case EscapeQuery:
+		return url.QueryEscape(raw)
+	case EscapeHeader:
+		return headerStripper.Replace(raw)
+	}
+	return raw
+}
+
+// RenderEscaped renders {{path}} references and encodes each value for mode.
+// Unresolvable paths are left as written so a mistyped reference is visible.
+func RenderEscaped(template string, data map[string]any, mode EscapeMode) string {
+	return ProcessVariablesWith(template, data, func(r Resolved) string {
+		if !r.Found {
+			return r.Raw
+		}
+		return Encode(mode, r.Value)
+	})
+}
+
+// RenderEscapedStrings is RenderEscaped for a flat string map, which is the
+// shape the IVR and call-transfer hooks carry their variables in.
+func RenderEscapedStrings(template string, vars map[string]string, mode EscapeMode) string {
+	data := make(map[string]any, len(vars))
+	for k, v := range vars {
+		data[k] = v
+	}
+	return RenderEscaped(template, data, mode)
 }

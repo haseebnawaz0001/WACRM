@@ -2,13 +2,12 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +15,9 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/templating"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
@@ -331,17 +332,26 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	a.DB.First(&org, orgID)
 
 	// Build context for variable replacement
-	context := buildActionContext(contact, user, org)
+	// Custom field values are loaded here rather than inside the builder so a
+	// failure degrades to "no fields" instead of failing the action.
+	fieldValues, err := customfields.New(a.DB).Values(
+		context.Background(), orgID, contact.ID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("load contact fields for custom action", "error", err, "contact", contact.ID)
+		fieldValues = map[string]any{}
+	}
+
+	actionContext := buildActionContext(contact, user, org, fieldValues)
 
 	// Execute based on action type
 	var result *ActionResult
 	switch action.ActionType {
 	case models.ActionTypeWebhook:
-		result, err = a.executeWebhookAction(*action, context)
+		result, err = a.executeWebhookAction(*action, actionContext)
 	case models.ActionTypeURL:
-		result, err = a.executeURLAction(*action, context)
+		result, err = a.executeURLAction(*action, actionContext)
 	case models.ActionTypeJavascript:
-		result, err = a.executeJavaScriptAction(*action, context)
+		result, err = a.executeJavaScriptAction(*action, actionContext)
 	default:
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unknown action type", nil, "")
 	}
@@ -407,18 +417,20 @@ func (a *App) executeWebhookAction(action models.CustomAction, context map[strin
 	}
 
 	// Replace variables in URL
-	url := replaceVariables(config.URL, context)
+	// The URL is a template the admin wrote; only the substituted values are
+	// encoded, so a path or query the admin typed still works.
+	url := replaceVariables(config.URL, context, templating.EscapeQuery)
 
 	// Replace variables in headers
 	headers := make(map[string]string)
 	for k, v := range config.Headers {
-		headers[k] = replaceVariables(v, context)
+		headers[k] = replaceVariables(v, context, templating.EscapeHeader)
 	}
 
 	// Replace variables in body or use default
 	var body string
 	if config.Body != "" {
-		body = replaceVariables(config.Body, context)
+		body = replaceVariables(config.Body, context, templating.EscapeJSON)
 	} else {
 		// Default body with all context
 		bodyJSON, _ := json.Marshal(context)
@@ -483,7 +495,7 @@ func (a *App) executeURLAction(action models.CustomAction, context map[string]an
 	}
 
 	// Replace variables in URL
-	finalURL := replaceVariables(config.URL, context)
+	finalURL := replaceVariables(config.URL, context, templating.EscapeQuery)
 
 	// Generate a random token
 	tokenBytes := make([]byte, 16)
@@ -591,7 +603,8 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 }
 
 // buildActionContext builds the context object for variable replacement
-func buildActionContext(contact models.Contact, user models.User, org models.Organization) map[string]any {
+func buildActionContext(contact models.Contact, user models.User, org models.Organization,
+	fields map[string]any) map[string]any {
 	return map[string]any{
 		"contact": map[string]any{
 			"id":           contact.ID.String(),
@@ -600,6 +613,10 @@ func buildActionContext(contact models.Contact, user models.User, org models.Org
 			"profile_name": contact.ProfileName,
 			"tags":         contact.Tags,
 			"metadata":     contact.Metadata,
+			// The typed custom fields (plan 01): {{contact.fields.company}}.
+			// metadata above is the untyped blob those fields replaced, kept
+			// so templates written against it keep working.
+			"fields": fields,
 		},
 		"user": map[string]any{
 			"id":    user.ID.String(),
@@ -614,38 +631,22 @@ func buildActionContext(contact models.Contact, user models.User, org models.Org
 	}
 }
 
-// replaceVariables replaces {{variable}} placeholders with context values
-func replaceVariables(template string, context map[string]any) string {
-	re := regexp.MustCompile(`\{\{([^}]+)\}\}`)
-	return re.ReplaceAllStringFunc(template, func(match string) string {
-		// Extract variable path (e.g., "contact.phone_number")
-		path := strings.TrimSuffix(strings.TrimPrefix(match, "{{"), "}}")
-		path = strings.TrimSpace(path)
-
-		parts := strings.Split(path, ".")
-		var value any = context
-
-		for _, part := range parts {
-			if m, ok := value.(map[string]any); ok {
-				value = m[part]
-			} else {
-				return match // Return original if path not found
-			}
+// replaceVariables replaces {{variable}} placeholders with context values,
+// encoded for the destination.
+//
+// The traversal and formatting are the shared renderer's (plan 10, S6); what is
+// specific here is the encoding and the decision to leave an unresolvable
+// placeholder as written, so a typo in an admin's template is visible in the
+// request rather than silently becoming an empty string.
+func replaceVariables(template string, context map[string]any, mode templating.EscapeMode) string {
+	return templating.ProcessVariablesWith(template, context, func(r templating.Resolved) string {
+		if !r.Found {
+			// Left as written, which is the behaviour this renderer already
+			// had: a mistyped path is then visible in the request instead of
+			// silently becoming an empty string.
+			return r.Raw
 		}
-
-		if value == nil {
-			return ""
-		}
-
-		switch v := value.(type) {
-		case string:
-			return v
-		case []string:
-			return strings.Join(v, ", ")
-		default:
-			jsonBytes, _ := json.Marshal(v)
-			return string(jsonBytes)
-		}
+		return templating.Encode(mode, r.Value)
 	})
 }
 

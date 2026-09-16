@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/fasthttp/websocket"
@@ -48,8 +49,27 @@ type Client struct {
 	// Function to validate JWT tokens
 	authFn AuthenticateFn
 
+	// mu guards currentContact, which is written by this client's read
+	// goroutine and read by the hub's broadcast goroutine. Unsynchronised,
+	// that is a data race on a pointer: the hub can read a half-written
+	// value while an agent switches chats (plan 10, S10).
+	mu sync.RWMutex
 	// Current contact being viewed (nil if none)
 	currentContact *uuid.UUID
+}
+
+// setCurrentContact records which contact this client is looking at.
+func (c *Client) setCurrentContact(contactID *uuid.UUID) {
+	c.mu.Lock()
+	c.currentContact = contactID
+	c.mu.Unlock()
+}
+
+// CurrentContact reports which contact this client is looking at, if any.
+func (c *Client) CurrentContact() *uuid.UUID {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.currentContact
 }
 
 // NewClient creates a new unauthenticated Client instance.
@@ -259,14 +279,14 @@ func (c *Client) handleSetContact(payload any) {
 	}
 
 	if setContact.ContactID == "" {
-		c.currentContact = nil
+		c.setCurrentContact(nil)
 		c.hub.log.Debug("Client cleared current contact", "user_id", c.userID)
 	} else {
 		contactID, err := uuid.Parse(setContact.ContactID)
 		if err != nil {
 			return
 		}
-		c.currentContact = &contactID
+		c.setCurrentContact(&contactID)
 		c.hub.log.Debug("Client set current contact",
 			"user_id", c.userID,
 			"contact_id", contactID)

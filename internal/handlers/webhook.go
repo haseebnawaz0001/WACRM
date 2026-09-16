@@ -548,6 +548,15 @@ func (a *App) processTemplateStatusUpdate(wabaID, event, templateName, templateL
 				"status", status,
 				"reason", reason,
 			)
+
+			// Meta moves a template out of APPROVED on its own schedule.
+			// Anything scheduled against it would otherwise wake up and fail
+			// every recipient (plan 10, S8).
+			var template models.Template
+			if err := a.DB.Where("whats_app_account = ? AND name = ? AND language = ?",
+				account.Name, templateName, templateLanguage).First(&template).Error; err == nil {
+				a.GuardTemplateDependents(&template, reason)
+			}
 		}
 	}
 }

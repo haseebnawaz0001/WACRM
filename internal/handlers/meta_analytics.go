@@ -81,7 +81,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	}
 
 	// Parse dates
-	startDate, endDate, errMsg := parseDateRange(startStr, endStr)
+	startDate, endDate, errMsg := parseDateRange(startStr, endStr, a.OrgLocation(orgID))
 	if errMsg != "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, errMsg, nil, "")
 	}

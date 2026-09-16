@@ -36,22 +36,231 @@ The fix is a **shared spine** (section 3) built first, then features that plug i
 
 Legend: ✅ verified live or by direct code inspection during this review; 🔎 reported by a reviewer with file references (verify during implementation).
 
+> **Status (Phase 0 fix-first): all 14 closed.** Each row below is marked
+> **[FIXED]** with where the fix lives. X1 and X2 landed in `619a6f1`; the rest
+> are covered by regression tests, several of which were first confirmed to fail
+> against the unfixed code. S6 (one renderer) and the X5 half of S8 (rename
+> cascade) are also done. S7 now has its chatbot side: a **CRM action** node and
+> a **CRM condition** node run the shared library from a flow, `save_to_field`
+> writes a prompt's answer onto the contact record, and keyword rules carry an
+> optional action list validated at save time. **S7 is now complete:** the
+> automation builder, the chatbot CRM-action node and keyword rules all render
+> the shared `components/crmactions/` editor; api_call nodes have
+> `field_mapping` (writing straight to contact fields, where `response_mapping`
+> only reaches session state); and PanelConfig gained "Save to contact field"
+> per variable, with the sidebar showing contact fields above a section now
+> labelled "Session data".
+>
+> Verifying S7 in a browser surfaced three further pre-existing bugs, all fixed:
+> the automations list read the `{status, data}` envelope directly and was
+> **permanently empty** however many rules an org had — the detail view, action
+> catalog and run log had the same bug; every automation trigger rendered as a
+> raw identifier, because vue-i18n reads the dots in `contact.created` as
+> nesting while the locale file stored those keys flat; and `<CrmActionList>`
+> was briefly used without being imported, which renders nothing and only warns,
+> so the typecheck passed. The e2e check now fails on console warnings for that
+> reason.
+>
+> **S9 (access scope)** is done for the part that was breaking users: visibility
+> is now contact ∪ conversation. The inbox's Unassigned view lists conversations
+> nobody has taken, but the contact scope only allowed contacts an agent owned
+> or held a transfer for — so an agent saw a queued conversation and got a 404
+> opening it, which reads as the product being broken rather than as a
+> permission boundary. Both the handler scope and `contactquery.Scope` now
+> include the general queue and the agent's own team queues, and stop there: a
+> bot-held conversation and another team's queue remain hidden.
+>
+> **S8** gained a team-delete guard. Deleting a team left its transfers and
+> conversations pointing at a team that no longer existed — they vanished from
+> every team view without being reassigned. Delete is now refused with 409 and
+> the dependent counts, or moves the work when `reassign_to_team_id` is given;
+> resolved work names its team historically and does not block.
+>
+> Two suite failures that had been written off as "time-dependent flakiness"
+> turned out to be the same class of bug and are fixed. A chatbot timing test
+> read the weekday from the server's local clock while the engine evaluates
+> schedules in the organization's zone, so for the five hours a day when the
+> server's date runs ahead the schedule named tomorrow and the flow correctly
+> routed out-of-hours. And `customfields.Coerce` normalised a date given as a
+> string but not one given as a `time.Time` — the column is a bare date, so
+> Postgres truncated it in whatever zone the session used, and a renewal set
+> from a machine five hours ahead of UTC landed on the previous day, firing its
+> reminder a day early with nothing recording that the day had moved. Only the
+> Windows symlink test still fails locally, and that is a privilege the sandbox
+> does not have rather than a defect.
+>
+> **S11 (time and formatting) is done.** Two settings had existed since before
+> the CRM and were applied nowhere.
+>
+> The organization timezone offered five zones — UTC, New York, Los Angeles,
+> London, Tokyo — so anyone outside them had to pick the wrong one, and that
+> wrong zone then decided their business hours, SLA windows and every report
+> range. The picker is now a searchable list of the browser's full IANA
+> database, each entry showing its current UTC offset because "Asia/Thimphu"
+> means nothing to most people and "UTC+06:00" does. Agents can override it for
+> themselves, which is what someone working from another country needs; the
+> server rejects a zone it cannot resolve rather than storing one that would be
+> silently ignored.
+>
+> `date_format` was written to the database and read by nothing: every date in
+> the product went through two helpers that hardcoded `'en-US'` and the
+> browser's own timezone, so a team in Mumbai read American dates and two agents
+> in different countries could disagree about what day a message arrived. The
+> helpers now take the viewer's zone, the org's date format and the UI language
+> — switching the interface to French switches the month names too. They are
+> held as a module singleton that the auth store pushes into, rather than
+> threaded through the thirty-odd files that call them from outside a Vue setup
+> context; `useFormatters()` is there for components that want reactivity.
+>
+> API date ranges are also interpreted in the organization's timezone now. A
+> date has no instant of its own, and these were parsed as UTC while the date
+> picker that produced them built them from the browser's local calendar — so
+> "today" meant two different windows at each end of the request, quietly moving
+> several hours of activity into the wrong day.
+>
+> **S12** took its navigation item. The dashboard kept its own hand-written list
+> of shortcut destinations, never updated for anything the CRM added: Contacts,
+> Tasks, Pipeline, Segments, Automations, Reports, the Inbox and the audit log
+> could not be pinned at all, and its "Contacts" tile went to the settings page
+> while the sidebar's went to the contact list. The catalog is derived from
+> `navigation.ts` now, with the old keys kept as aliases so shortcuts people had
+> already saved still resolve.
+>
+> **S10 (realtime) has its correctness and privacy half.** `new_message` was
+> broadcast to the entire organization with the contact's name and the message
+> body in the payload, so every connected client received every customer
+> conversation in the org — a support agent who could not open a contact in the
+> list still had that contact's messages arriving in their socket, and the same
+> feed drove the toast notifications, so the leak was on screen. Delivery now
+> goes through the S9 rules, computed in three queries regardless of how many
+> clients are connected. Three more, all found in the same pass:
+>
+> - The toast targeted the **contact owner**. An owner is a relationship, often
+>   a salesperson; the person who needs to know a reply landed is the agent the
+>   conversation is assigned to. The payload now carries the conversation
+>   assignee and the owner is the fallback.
+> - Every inbound message called `fetchContacts()`, which refetches page 1 and
+>   replaces the array — so an agent who had scrolled the inbox was thrown back
+>   to the top each time a message arrived anywhere in the org. One row is
+>   refreshed instead, and a row that is not in the list is only inserted when
+>   no filter is active.
+> - `currentContact` was written on the client's read goroutine and read on the
+>   hub's broadcast goroutine with no synchronisation — a data race on a pointer,
+>   hit whenever an agent switched chats under load. It is behind a lock now.
+> - A full client send buffer dropped the message and logged a line. The client
+>   went on believing it was up to date and nothing corrected it until the agent
+>   happened to reload. It now gets a `resync_required` notice, and because that
+>   notice would not fit either — the buffer being full is why we are there — one
+>   queued message is evicted to make room. That is not a loss: the client is
+>   already missing messages, and "refetch everything" supersedes whatever was
+>   waiting. Note events are also filtered client-side to the open contact; the
+>   singleton notes store was appending notes a colleague wrote on a different
+>   customer to whatever panel happened to be open.
+>
+> Topic subscriptions (`subscribe`/`unsubscribe` replacing `set_contact`) remain
+> the open half of S10, along with the per-store realtime dispatcher.
+>
+> **S9 is now complete too.** Beyond the visibility fix above, three things:
+>
+> *Scope reached the endpoints that had skipped it.* The notes list and the
+> contact timeline were gated on `chat:read` and an id, nothing else — so any
+> agent could read the internal notes and the entire history of any contact in
+> the organization, including the ones the contact list deliberately refuses to
+> show them. Both now go through the same scope as the contact itself, and
+> creating a note on an unreachable contact is refused rather than silently
+> filed. The notes cursor was also reading a note by id with no org check.
+>
+> *Masking became a property of the setting rather than of each handler.*
+> Masking was applied handler by handler and every list written afterwards
+> simply did not know about it: the deals list and board, the duplicate-contact
+> list and the campaign audience preview all returned full phone numbers to
+> organizations that had turned masking on. A setting that holds in some lists
+> and not others is worse than no setting, because it is trusted. The stored
+> campaign recipients are deliberately not masked — that is the send list, not a
+> view of it.
+>
+> *The last hardcoded catalog went.* The audit log's resource filter was a list
+> in the Vue component: ten entries against the twenty-nine the server writes,
+> so changes to accounts, roles, webhooks, canned responses, tasks, deals,
+> pipelines, segments and every settings section were recorded and then
+> unfindable — and one of its ten was never written at all, so picking it always
+> returned nothing. It is now served from `internal/audit`, grouped, with a test
+> that parses the actual `logAudit` call sites and fails in either direction.
+> Writing that test found a split nobody had noticed: contact edits were logged
+> as `contact` while a contact merge was logged as `contacts`, and campaigns
+> split the same way, so filtering for contacts returned the edits and hid the
+> merges. The handlers now write one spelling and a migration moves the history
+> onto it.
+>
+> **S8 is now complete.** Three gaps closed this pass:
+>
+> *User deactivation and removal.* Turning a user off changed one boolean.
+> Their conversations stayed assigned to an account that could no longer sign
+> in, so those conversations appeared in neither the Unassigned view nor any
+> active agent's list and the customer waited on somebody who was gone; their
+> API keys kept authenticating, because a key checks its own hash and never
+> reads `users.is_active`; their team membership kept feeding round-robin; and
+> their private segments became visible to nobody and editable by nobody.
+> `entityrefs.ReleaseUser` now runs the plan's table in one transaction from
+> both deactivation and org removal, and the rows the plan says to keep —
+> contact, task and deal ownership — are deliberately left alone, because an
+> owner is a relationship record and blanking it loses history an admin may
+> want to reassign deliberately. Reactivation is not a deactivation and does
+> nothing.
+>
+> *Template dependencies.* Meta moves templates out of APPROVED on its own
+> schedule and nothing noticed: a campaign scheduled for the next morning woke
+> up, materialised its audience and failed every recipient, and the first
+> anyone knew was an all-red report with the audience already spent. Campaigns
+> in draft/scheduled/queued are now paused and their owners notified, on both
+> the status webhook and template deletion. A processing campaign is left
+> alone — Meta has accepted those sends, and pausing mid-flight would strand
+> half an audience.
+>
+> *Org purge.* `wacrm org purge <id>` deletes an organization and everything
+> scoped to it, with `-dry-run` and a confirmation that makes the operator type
+> the org name. Deleting the `organizations` row alone had left every other
+> table behind, scoped to an id that resolved to nothing — invisible to every
+> list query and deletable by nothing. The table list is discovered from
+> `information_schema` rather than registered: for reference *checks* a
+> registry is right because a missing entry fails loudly, but for a purge the
+> unregistered table is precisely the data that silently survives. Two things
+> the tests found rather than the design: foreign keys between org-scoped
+> tables mean there is no static delete order, so blocked tables are retried
+> under savepoints until a pass makes no progress; and a user who belongs to a
+> second organization has to be re-homed onto it first, since `users` points at
+> `organizations` and leaving them here blocks the purge outright.
+>
+> **Acceptance audit of plans 01-09.** The 58 criteria were checked against the
+> code rather than assumed from the views existing. Eight gaps were found and
+> closed: a new contact had no lifecycle stage; `{{contact.fields.*}}` was not
+> available to custom actions; `contact.updated` did not exist as a webhook
+> despite the catalog claiming it carried `field_changed`; the webhook picker
+> was hand-maintained and offered 7 of 26 deliverable events, so every
+> conversation, task and deal webhook was unsubscribable; a merged contact's
+> URL did not resolve to the survivor; the pipeline module could not be
+> switched off; the timeline returned deal and task history to viewers without
+> those permissions; and the dashboard had no CRM data sources and no funnel or
+> leaderboard display type. Two pre-existing widget filter fields
+> (`contacts.is_read`, `transfers.source`) were offered in the picker but
+> dropped at query time, and are now whitelisted.
+
 | # | Issue | Evidence | Impact | Fix owner |
 |---|---|---|---|---|
-| X1 ✅ | **Server-side permissions are missing in most handlers.** `campaigns.go`, `templates.go`, `webhooks.go`, `custom_actions.go`, `canned_responses.go`, `roles.go`, `messages.go`, `flows.go` contain no `requireAuth` / `requirePermission` / `HasPermission` call; the route-level RBAC hook is a no-op (`cmd/wacrm/main.go:568-579`). Verified: the demo **agent** (no webhooks/roles/campaigns permissions) gets `200` on `GET /api/webhooks`, `/api/roles`, `/api/campaigns`, `/api/custom-actions`. `CreateRole`/`CreateWebhook`/`StartCampaign` check only authentication + org | Any authenticated user or API key can read and very likely create webhooks/roles and start campaigns. Every permission table in plans 00–09 assumes enforcement that does not exist | S1 |
-| X2 ✅ | Webhook signing secret lost on cache hits → unsigned deliveries | `models.go:262`, `cache.go:268-290` | Receivers cannot verify events | F11 |
-| X3 ✅ | Campaign worker writes `Message` rows directly, bypassing `SendOutgoingMessage` (no contact `last_message_at`, no WS, no `message.outgoing` webhook, no conversation hooks) | `worker.go:161` | 03 conversation hooks and F2 events would miss every campaign send | S4 |
-| X4 🔎 | Every inbound message, reaction, echo, call **and campaign send** restores a soft-deleted contact (also overwriting tags/metadata on manual re-create) | `contactutil.go:30,44,65`, `contacts.go:1362-1386` | Deletes and merges are not durable | S2 |
-| X5 🔎 | WhatsApp accounts are referenced by **name** in ~15 tables; renaming an account (`accounts.go:209`, also on re-connect `:772-806`) has no cascade; the worker looks accounts up by name | `models/*.go`, `worker.go:85` | Campaigns fail and history detaches after a rename; new plans copy the pattern | S8 |
-| X6 🔎 | A template deleted during a campaign makes the worker dereference nil | `worker.go:119,260`, `templates.go:537-551` | Worker panic | S8 |
-| X7 🔎 | "One active transfer per contact" is count-then-insert with no unique index; inbound webhooks run in goroutines | `agent_transfers.go:426,1221`, `webhook.go:329` | Two active transfers → ambiguous conversation assignee (03) | S5 |
-| X8 🔎 | Dashboard table widget returns raw `phone_number` ignoring phone masking | `widgets.go:1355-1383` | PII leak where masking is enabled | S9 |
-| X9 🔎 | Custom action execute has no permission/contact-scope check and interpolates values into JSON bodies without escaping | `custom_actions.go:270-305,600-632` | Data exposure, broken/injected payloads | S1, S6 |
-| X10 🔎 | Tag rename/delete builds JSON literals by string concatenation | `tags.go:176` | Tags with quotes break updates | S8 |
-| X11 🔎 | `tags:import/export` permissions are never seeded (import/export for tags cannot pass checks) | `import_export.go:109,170`, `models/roles.go:178-181` | Broken feature; same trap for tasks/deals export | S1 |
-| X12 🔎 | IVR `http_callback` uses a plain `http.Client` (not the SSRF-safe client) | `calling/http_callback.go:36` | SSRF from IVR flows | S7 |
-| X13 🔎 | Business-hours checks in 4 places with different boundary rules (`<=` vs `<`) and server-local time | `chatbot_processor.go:1633`, `chatbot_graph_runner.go:554`, `calling/ivr.go:540`, transfer helpers | Inconsistent routing; F9 timezone ignored | S11 |
-| X14 🔎 | Flow settings `on_complete_action`, `completion_message`, `cancel_keywords`, `timeout_message` are saved but the v2 runner never runs them; session `timeout` status is never written; AI context `trigger_keywords` ignored; `ExcludedNumbers` never read | `chatbot.go:910-915`, `chatbot_processor.go:663,859`, `models/chatbot.go:110` | UI promises behaviour that does not exist; 02/08 plans relied on `timeout`/completion | S7 (flow_completed event), 03 |
+| X1 ✅ | **[FIXED — `619a6f1`; verified: an agent now gets 403 on webhooks/roles/campaigns/api-keys/audit-logs, and `custom-actions` returns the list with `config` redacted]** **Server-side permissions are missing in most handlers.** `campaigns.go`, `templates.go`, `webhooks.go`, `custom_actions.go`, `canned_responses.go`, `roles.go`, `messages.go`, `flows.go` contain no `requireAuth` / `requirePermission` / `HasPermission` call; the route-level RBAC hook is a no-op (`cmd/wacrm/main.go:568-579`). Verified: the demo **agent** (no webhooks/roles/campaigns permissions) gets `200` on `GET /api/webhooks`, `/api/roles`, `/api/campaigns`, `/api/custom-actions`. `CreateRole`/`CreateWebhook`/`StartCampaign` check only authentication + org | Any authenticated user or API key can read and very likely create webhooks/roles and start campaigns. Every permission table in plans 00–09 assumes enforcement that does not exist | S1 |
+| X2 ✅ | **[FIXED — `619a6f1`; `cachedWebhook` keeps the secret, encrypted, across cache hits]** Webhook signing secret lost on cache hits → unsigned deliveries | `models.go:262`, `cache.go:268-290` | Receivers cannot verify events | F11 |
+| X3 ✅ | **[FIXED — the campaign worker now calls `RecordOutbound` and links `messages.conversation_id`; tests in `campaign_conversation_test.go`]** Campaign worker writes `Message` rows directly, bypassing `SendOutgoingMessage` (no contact `last_message_at`, no WS, no `message.outgoing` webhook, no conversation hooks) | `worker.go:161` | 03 conversation hooks and F2 events would miss every campaign send | S4 |
+| X4 🔎 | **[FIXED — `internal/contacts` lifecycle service refuses to restore a user-deleted or merged contact]** Every inbound message, reaction, echo, call **and campaign send** restores a soft-deleted contact (also overwriting tags/metadata on manual re-create) | `contactutil.go:30,44,65`, `contacts.go:1362-1386` | Deletes and merges are not durable | S2 |
+| X5 🔎 | **[FIXED — `internal/entityrefs` cascades a rename across all 18 name columns in one transaction, on both the edit and re-connect paths; a test asserts the registry covers the live schema]** WhatsApp accounts are referenced by **name** in ~15 tables; renaming an account (`accounts.go:209`, also on re-connect `:772-806`) has no cascade; the worker looks accounts up by name | `models/*.go`, `worker.go:85` | Campaigns fail and history detaches after a rename; new plans copy the pattern | S8 |
+| X6 🔎 | **[FIXED — the worker fails the recipient permanently instead of dereferencing a nil template]** A template deleted during a campaign makes the worker dereference nil | `worker.go:119,260`, `templates.go:537-551` | Worker panic | S8 |
+| X7 🔎 | **[FIXED — partial unique index `idx_agent_transfers_one_active`]** "One active transfer per contact" is count-then-insert with no unique index; inbound webhooks run in goroutines | `agent_transfers.go:426,1221`, `webhook.go:329` | Two active transfers → ambiguous conversation assignee (03) | S5 |
+| X8 🔎 | **[FIXED — table widgets mask contact-derived labels and phone columns; verified live with masking on]** Dashboard table widget returns raw `phone_number` ignoring phone masking | `widgets.go:1355-1383` | PII leak where masking is enabled | S9 |
+| X9 🔎 | **[FIXED — `ExecuteCustomAction` requires `chat:write`, and values are encoded per destination (JSON/query/header); tests in `custom_actions_escape_test.go`]** Custom action execute has no permission/contact-scope check and interpolates values into JSON bodies without escaping | `custom_actions.go:270-305,600-632` | Data exposure, broken/injected payloads | S1, S6 |
+| X10 🔎 | **[FIXED — rename/delete build JSON with `to_jsonb`/`jsonb_build_array`; regression tests confirmed failing against the old code]** Tag rename/delete builds JSON literals by string concatenation | `tags.go:176` | Tags with quotes break updates | S8 |
+| X11 🔎 | **[FIXED — `tags:import`/`tags:export` seeded, and the admin system role is now topped up with newly added permissions so this cannot recur]** `tags:import/export` permissions are never seeded (import/export for tags cannot pass checks) | `import_export.go:109,170`, `models/roles.go:178-181` | Broken feature; same trap for tasks/deals export | S1 |
+| X12 🔎 | **[FIXED — `internal/safehttp` is the one SSRF-safe client; IVR `http_callback` validates and dials through it]** IVR `http_callback` uses a plain `http.Client` (not the SSRF-safe client) | `calling/http_callback.go:36` | SSRF from IVR flows | S7 |
+| X13 🔎 | **[FIXED — one `schedule.IsOpen` using the org timezone]** Business-hours checks in 4 places with different boundary rules (`<=` vs `<`) and server-local time | `chatbot_processor.go:1633`, `chatbot_graph_runner.go:554`, `calling/ivr.go:540`, transfer helpers | Inconsistent routing; F9 timezone ignored | S11 |
+| X14 🔎 | **[FIXED — completion message, `on_complete_action`, cancel keywords, excluded numbers and session timeouts are all executed now; tests in `chatbot_flow_settings_test.go`]** Flow settings `on_complete_action`, `completion_message`, `cancel_keywords`, `timeout_message` are saved but the v2 runner never runs them; session `timeout` status is never written; AI context `trigger_keywords` ignored; `ExcludedNumbers` never read | `chatbot.go:910-915`, `chatbot_processor.go:663,859`, `models/chatbot.go:110` | UI promises behaviour that does not exist; 02/08 plans relied on `timeout`/completion | S7 (flow_completed event), 03 |
 
 ---
 

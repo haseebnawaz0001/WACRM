@@ -7,12 +7,19 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
 import { PageHeader, DataTable, DateRangePicker, type Column } from '@/components/shared'
-import { auditLogsService, type AuditLogEntry } from '@/services/api'
+import {
+  auditLogsService,
+  type AuditLogEntry,
+  type AuditActionOption,
+  type AuditResourceType,
+} from '@/services/api'
 import { useUsersStore } from '@/stores/users'
 import { useDateRange } from '@/composables/useDateRange'
 import { ScrollText } from 'lucide-vue-next'
@@ -37,6 +44,34 @@ const sortDirection = ref<'asc' | 'desc'>('desc')
 const filterUser = ref('all')
 const filterAction = ref('all')
 const filterResourceType = ref('all')
+
+// Filter options come from the server: the hand-written list here offered ten
+// resource types against the twenty-nine the audit log actually records, so
+// most changes were logged and then unfindable (plan 10, S9).
+const resourceTypes = ref<AuditResourceType[]>([])
+const actionOptions = ref<AuditActionOption[]>([])
+
+const groupedResourceTypes = computed(() => {
+  const groups = new Map<string, AuditResourceType[]>()
+  for (const rt of resourceTypes.value) {
+    const list = groups.get(rt.group) ?? []
+    list.push(rt)
+    groups.set(rt.group, list)
+  }
+  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+})
+
+async function fetchCatalog() {
+  try {
+    const response = await auditLogsService.catalog()
+    const data = (response.data as any).data || response.data
+    resourceTypes.value = data.resource_types || []
+    actionOptions.value = data.actions || []
+  } catch {
+    resourceTypes.value = []
+    actionOptions.value = []
+  }
+}
 
 // Date range
 const {
@@ -109,7 +144,7 @@ function changeSummary(log: AuditLogEntry): string {
 }
 
 onMounted(async () => {
-  await usersStore.fetchUsers()
+  await Promise.all([usersStore.fetchUsers(), fetchCatalog()])
   fetchLogs()
 })
 </script>
@@ -151,9 +186,13 @@ onMounted(async () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{{ t('auditLogs.allActions') }}</SelectItem>
-                      <SelectItem value="created">{{ t('auditLogs.created') }}</SelectItem>
-                      <SelectItem value="updated">{{ t('auditLogs.updated') }}</SelectItem>
-                      <SelectItem value="deleted">{{ t('auditLogs.deleted') }}</SelectItem>
+                      <SelectItem
+                        v-for="option in actionOptions"
+                        :key="option.value"
+                        :value="option.value"
+                      >
+                        {{ t(`auditLogs.${option.value}`, option.label) }}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <Select v-model="filterResourceType" @update:model-value="applyFilter">
@@ -162,15 +201,12 @@ onMounted(async () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{{ t('auditLogs.allResources') }}</SelectItem>
-                      <SelectItem value="account">Account</SelectItem>
-                      <SelectItem value="ai_context">AI Context</SelectItem>
-                      <SelectItem value="campaign">Campaign</SelectItem>
-                      <SelectItem value="chatbot_settings">Chatbot Settings</SelectItem>
-                      <SelectItem value="chatbot_flow">Chatbot Flow</SelectItem>
-                      <SelectItem value="ivr_flow">IVR Flow</SelectItem>
-                      <SelectItem value="keyword_rule">Keyword Rule</SelectItem>
-                      <SelectItem value="team">Team</SelectItem>
-                      <SelectItem value="template">Template</SelectItem>
+                      <SelectGroup v-for="[group, items] in groupedResourceTypes" :key="group">
+                        <SelectLabel>{{ group }}</SelectLabel>
+                        <SelectItem v-for="rt in items" :key="rt.value" :value="rt.value">
+                          {{ rt.label }}
+                        </SelectItem>
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                   <DateRangePicker

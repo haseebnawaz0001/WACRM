@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, type Component } from 'vue'
+import { navigationShortcuts } from '@/components/layout/navigation'
 import { useI18n } from 'vue-i18n'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -50,22 +51,8 @@ import {
   Pencil,
   Trash2,
   BarChart3,
-  FileText,
   X,
   GripVertical,
-  Megaphone,
-  Settings,
-  Contact,
-  Workflow,
-  Key,
-  UserX,
-  MessageSquareText,
-  Webhook,
-  ShieldCheck,
-  Zap,
-  Shield,
-  LineChart,
-  Tags
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Pie } from '@/lib/charts'
@@ -125,28 +112,55 @@ const widgetForm = ref({
 const selectedShortcuts = ref<string[]>([])
 
 // Shortcut registry
-const SHORTCUT_REGISTRY = computed(() => ({
-  chat: { label: t('dashboard.startChat'), to: '/chat', icon: MessageSquare, gradient: 'from-emerald-500 to-green-600' },
-  campaigns: { label: t('nav.campaigns'), to: '/campaigns', icon: Megaphone, gradient: 'from-orange-500 to-amber-600' },
-  templates: { label: t('nav.templates'), to: '/templates', icon: FileText, gradient: 'from-blue-500 to-cyan-600' },
-  chatbot: { label: t('nav.chatbot'), to: '/chatbot', icon: Bot, gradient: 'from-purple-500 to-pink-600' },
-  contacts: { label: t('nav.contacts'), to: '/settings/contacts', icon: Contact, gradient: 'from-cyan-500 to-blue-600' },
-  flows: { label: t('nav.flows'), to: '/flows', icon: Workflow, gradient: 'from-indigo-500 to-violet-600' },
-  transfers: { label: t('nav.transfers'), to: '/chatbot/transfers', icon: UserX, gradient: 'from-rose-500 to-red-600' },
-  agentAnalytics: { label: t('nav.agentAnalytics'), to: '/analytics/agents', icon: BarChart3, gradient: 'from-teal-500 to-cyan-600' },
-  metaInsights: { label: t('nav.metaInsights'), to: '/analytics/meta-insights', icon: LineChart, gradient: 'from-sky-500 to-blue-600' },
-  settings: { label: t('nav.settings'), to: '/settings', icon: Settings, gradient: 'from-gray-500 to-zinc-600' },
-  accounts: { label: t('nav.accounts'), to: '/settings/accounts', icon: Users, gradient: 'from-violet-500 to-purple-600' },
-  cannedResponses: { label: t('nav.cannedResponses'), to: '/settings/canned-responses', icon: MessageSquareText, gradient: 'from-amber-500 to-yellow-600' },
-  tags: { label: t('nav.tags'), to: '/settings/tags', icon: Tags, gradient: 'from-pink-500 to-rose-600' },
-  teams: { label: t('nav.teams'), to: '/settings/teams', icon: Users, gradient: 'from-lime-500 to-green-600' },
-  users: { label: t('nav.users'), to: '/settings/users', icon: Users, gradient: 'from-fuchsia-500 to-pink-600' },
-  roles: { label: t('nav.roles'), to: '/settings/roles', icon: Shield, gradient: 'from-slate-500 to-gray-600' },
-  apiKeys: { label: t('nav.apiKeys'), to: '/settings/api-keys', icon: Key, gradient: 'from-yellow-500 to-orange-600' },
-  webhooks: { label: t('nav.webhooks'), to: '/settings/webhooks', icon: Webhook, gradient: 'from-red-500 to-rose-600' },
-  customActions: { label: t('nav.customActions'), to: '/settings/custom-actions', icon: Zap, gradient: 'from-amber-500 to-orange-600' },
-  sso: { label: t('nav.sso'), to: '/settings/sso', icon: ShieldCheck, gradient: 'from-emerald-500 to-teal-600' },
-}))
+// SHORTCUT_GRADIENTS keeps the tile colours; everything else about a shortcut
+// now comes from navigation.ts (plan 10, S12).
+//
+// This used to be a hand-written list of twenty destinations that had never
+// been updated for the CRM: Contacts, Tasks, Pipeline, Segments, Automations,
+// Reports, the Inbox and the audit log could not be pinned to a dashboard at
+// all, and its "Contacts" tile went to the settings page while the sidebar's
+// went to the contact list.
+const SHORTCUT_GRADIENTS: Record<string, string> = {
+  '/chat': 'from-emerald-500 to-green-600',
+  '/inbox': 'from-teal-500 to-emerald-600',
+  '/contacts': 'from-cyan-500 to-blue-600',
+  '/tasks': 'from-lime-500 to-green-600',
+  '/segments': 'from-sky-500 to-cyan-600',
+  '/pipeline': 'from-indigo-500 to-blue-600',
+  '/automations': 'from-amber-500 to-orange-600',
+  '/campaigns': 'from-orange-500 to-amber-600',
+  '/templates': 'from-blue-500 to-cyan-600',
+  '/chatbot': 'from-purple-500 to-pink-600',
+  '/flows': 'from-indigo-500 to-violet-600',
+  '/chatbot/transfers': 'from-rose-500 to-red-600',
+  '/analytics/agents': 'from-teal-500 to-cyan-600',
+  '/analytics/meta-insights': 'from-sky-500 to-blue-600',
+  '/settings': 'from-gray-500 to-zinc-600',
+  '/settings/accounts': 'from-violet-500 to-purple-600',
+  '/settings/canned-responses': 'from-amber-500 to-yellow-600',
+  '/settings/tags': 'from-pink-500 to-rose-600',
+  '/settings/teams': 'from-lime-500 to-green-600',
+  '/settings/users': 'from-fuchsia-500 to-pink-600',
+  '/settings/roles': 'from-slate-500 to-gray-600',
+  '/settings/api-keys': 'from-yellow-500 to-orange-600',
+  '/settings/webhooks': 'from-red-500 to-rose-600',
+  '/settings/custom-actions': 'from-amber-500 to-orange-600',
+  '/settings/sso': 'from-emerald-500 to-teal-600',
+  '/settings/audit-logs': 'from-zinc-500 to-slate-600',
+}
+
+const SHORTCUT_REGISTRY = computed(() => {
+  const out: Record<string, { label: string; to: string; icon: Component; gradient: string }> = {}
+  for (const shortcut of navigationShortcuts()) {
+    out[shortcut.key] = {
+      label: t(shortcut.name),
+      to: shortcut.path,
+      icon: shortcut.icon,
+      gradient: SHORTCUT_GRADIENTS[shortcut.path] || 'from-slate-500 to-gray-600',
+    }
+  }
+  return out
+})
 
 // Color options
 const colorOptions = computed(() => [

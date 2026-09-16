@@ -82,6 +82,14 @@ type Opts struct {
 	Limit  int
 	// Types restricts to certain item types; empty means everything.
 	Types []string
+
+	// HideActivity drops activity entries whose crmevents type is listed.
+	//
+	// This is how the viewer's permissions reach the timeline (plan 02): an
+	// agent who cannot open the Deals board should not read a contact's deal
+	// history here either, and gating only the contact would make the timeline
+	// a way around every other permission in the product.
+	HideActivity []string
 }
 
 // Service builds timelines.
@@ -310,6 +318,11 @@ func (s *Service) activities(ctx context.Context, orgID, contactID uuid.UUID, op
 	if opts.Before != nil {
 		q = q.Where("occurred_at < ?", *opts.Before)
 	}
+	// Excluded in SQL rather than after the read, so a contact whose history is
+	// mostly deal activity still fills a page for a viewer who cannot see deals.
+	if len(opts.HideActivity) > 0 {
+		q = q.Where("type NOT IN ?", opts.HideActivity)
+	}
 
 	var rows []models.ContactActivity
 	if err := q.Order("occurred_at DESC").Limit(limit * 2).Find(&rows).Error; err != nil {
@@ -389,6 +402,32 @@ func summaryForActivity(row models.ContactActivity) string {
 		return fmt.Sprintf("Task %q completed by %s", row.Data["title"], who)
 	case "task.overdue":
 		return fmt.Sprintf("Task %q is overdue", row.Data["title"])
+	case "task.cancelled":
+		return fmt.Sprintf("Task %q cancelled by %s", row.Data["title"], who)
+	case "contact.assigned":
+		if name, ok := row.Data["assignee"]; ok {
+			return fmt.Sprintf("Contact assigned to %v by %s", name, who)
+		}
+		return fmt.Sprintf("Contact assigned by %s", who)
+	case "contact.merged":
+		return fmt.Sprintf("Contact merged by %s", who)
+	case "deal.created":
+		return fmt.Sprintf("Deal %q created by %s", row.Data["title"], who)
+	case "deal.stage_changed":
+		// The stage name is carried on the event: resolving an id here would
+		// mean a query per timeline row, and a deleted stage would render as
+		// a blank.
+		if to, ok := row.Data["to_stage"]; ok {
+			return fmt.Sprintf("Deal moved to %v by %s", to, who)
+		}
+		return fmt.Sprintf("Deal moved to a new stage by %s", who)
+	case "deal.won":
+		return fmt.Sprintf("Deal won by %s", who)
+	case "deal.lost":
+		if reason, ok := row.Data["reason"]; ok && reason != "" {
+			return fmt.Sprintf("Deal lost by %s — %v", who, reason)
+		}
+		return fmt.Sprintf("Deal lost by %s", who)
 	case "transfer.created":
 		return "Transferred to an agent"
 	case "transfer.resumed":

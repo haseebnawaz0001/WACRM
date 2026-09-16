@@ -659,6 +659,52 @@ func FixSystemRolePermissions(db *gorm.DB) error {
 		}
 	}
 
+	return grantNewPermissionsToAdmins(db, systemRoles, permissions)
+}
+
+// grantNewPermissionsToAdmins gives every admin system role the permissions it
+// does not have yet.
+//
+// The loop above deliberately skips any role that already has permissions, so
+// customised roles are not reset. That is right for manager and agent, whose
+// permission sets are curated, but it means a permission added to the catalog
+// after an organization was created never reaches its admin — and a feature
+// gated on that permission is then unreachable for everyone rather than merely
+// restricted. tags:import/export shipped in exactly that state (plan 10, X11).
+//
+// Only the admin role is topped up, and only by adding: "admin" is defined as
+// full system access, so a permission it lacks is a bug rather than a choice.
+func grantNewPermissionsToAdmins(db *gorm.DB, systemRoles []models.CustomRole, all []models.Permission) error {
+	for _, role := range systemRoles {
+		if role.Name != "admin" {
+			continue
+		}
+
+		var held []uuid.UUID
+		if err := db.Table("role_permissions").Where("custom_role_id = ?", role.ID).
+			Pluck("permission_id", &held).Error; err != nil {
+			return fmt.Errorf("failed to read permissions for role %s: %w", role.ID, err)
+		}
+		have := make(map[uuid.UUID]bool, len(held))
+		for _, id := range held {
+			have[id] = true
+		}
+
+		var missing []models.Permission
+		for _, p := range all {
+			if !have[p.ID] {
+				missing = append(missing, p)
+			}
+		}
+		if len(missing) == 0 {
+			continue
+		}
+
+		if err := db.Model(&role).Association("Permissions").Append(missing); err != nil {
+			return fmt.Errorf("failed to grant new permissions to admin role %s: %w", role.ID, err)
+		}
+	}
+
 	return nil
 }
 

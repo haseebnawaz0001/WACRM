@@ -1,17 +1,23 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/expr-lang/expr"
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/safehttp"
 	"github.com/shridarpatil/whatomate/internal/schedule"
 )
 
@@ -128,6 +134,7 @@ func (a *App) runChatGraph(
 				next := graph.ResolveEdge(node.ID, "default")
 				if next == "" {
 					session.Status = models.SessionStatusCompleted
+					a.finishChatFlow(flow, ctx)
 					return a.persistChatSession(session)
 				}
 				session.CurrentStep = next
@@ -177,6 +184,7 @@ func (a *App) runChatGraph(
 		if next == "" {
 			// No matching edge → terminal.
 			session.Status = models.SessionStatusCompleted
+			a.finishChatFlow(flow, ctx)
 			return a.persistChatSession(session)
 		}
 		session.CurrentStep = next
@@ -222,6 +230,10 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatWhatsAppFlow(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
+	case ChatNodeCRMAction:
+		return a.execChatCRMAction(node, ctx)
+	case ChatNodeCRMCondition:
+		return a.execChatCRMCondition(node, ctx)
 	default:
 		return nodeOutcome{outcome: "", yield: true},
 			fmt.Errorf("chat node type %q not implemented in this phase", node.Type)
@@ -358,8 +370,34 @@ func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, err
 		}
 		ctx.session.SessionData[storeAs] = input
 	}
+	// save_to_field writes the answer onto the contact record itself, not just
+	// the session (plan 10, S7). A session variable disappears when the flow
+	// ends, so a flow that asked for the customer's email was collecting it
+	// into a scratchpad nobody could filter, segment or read later.
+	a.saveAnswerToContactField(node, ctx, input)
+
 	ctx.session.StepRetries = 0
 	return nodeOutcome{outcome: "default"}, nil
+}
+
+// saveAnswerToContactField persists a collected answer to a custom field when
+// the node names one in "save_to_field".
+//
+// Failures are logged rather than returned: the customer has answered the
+// question, and failing the flow at this point would make them answer it again
+// for a reason that is not theirs.
+func (a *App) saveAnswerToContactField(node *ChatNode, ctx *chatNodeCtx, value string) {
+	fieldKey := stringFromConfig(node.Config, "save_to_field")
+	if fieldKey == "" || value == "" {
+		return
+	}
+	tx := a.DB.WithContext(context.Background())
+	if _, err := customfields.New(a.DB).SetValues(tx, ctx.account.OrganizationID,
+		ctx.contact.ID, models.FieldEntityContact,
+		map[string]any{fieldKey: value}, nil); err != nil {
+		a.Log.Error("save_to_field failed", "node", node.ID, "field", fieldKey,
+			"contact", ctx.contact.ID, "error", err)
+	}
 }
 
 func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
@@ -401,6 +439,11 @@ func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOut
 //	  "headers": { "Authorization": "Bearer {{token}}" },
 //	  "body":    "{\"phone\":\"{{phone_number}}\"}",
 //	  "response_mapping": { "customer_id": "data.id", "status": "data.status" },
+//	  // Writes straight onto the contact record instead of the session
+//	  // (plan 10, S7). response_mapping cannot do this: its keys are stored
+//	  // flat in SessionData, so "contact.fields.company" would become a
+//	  // session variable of that literal name and never reach the field.
+//	  "field_mapping": { "company": "data.account.name" },
 //	  // Optional. If set, a 2xx response renders this template against
 //	  // SessionData (post-response_mapping) and sends it to the user.
 //	  // Lets the same node act as v1's "fetch + send templated message"
@@ -442,6 +485,12 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 			maps.Copy(sessionData, extracted)
 		}
 	}
+
+	// field_mapping writes the response onto the contact record (plan 10, S7).
+	// It is separate from response_mapping because the destinations are
+	// different: one is scratch state for the rest of the flow, the other is
+	// the customer's record, which outlives the conversation.
+	a.applyAPIFieldMapping(node, ctx, respBody)
 
 	// Optionally render and send a message after the fetch. Mirrors v1
 	// api_fetch's bundled "fetch + send" behavior so the converter can
@@ -978,6 +1027,184 @@ func buttonsFromConfig(cfg map[string]any) []map[string]any {
 	for _, item := range raw {
 		if m, ok := item.(map[string]any); ok {
 			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// finishChatFlow runs the flow's completion settings (plan 10, X14).
+//
+// completion_message, on_complete_action and completion_config were editable in
+// the flow builder and saved to the database, but the v2 runner never read
+// them: a flow that promised "send a thank-you and post the answers to our
+// CRM" silently did neither. Failures are logged rather than returned — the
+// session has already completed, and un-completing it because a webhook was
+// down would be worse than the missed call.
+func (a *App) finishChatFlow(flow *models.ChatbotFlow, ctx *chatNodeCtx) {
+	if flow == nil {
+		return
+	}
+
+	// Panel fields marked save_to_field become contact fields (plan 10, S7).
+	// Done before the completion message so a template can reference what was
+	// just written.
+	a.syncPanelFieldsToContact(flow, ctx)
+
+	if msg := strings.TrimSpace(flow.CompletionMessage); msg != "" {
+		rendered := processTemplate(msg, ctx.session.SessionData)
+		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, rendered); err != nil {
+			a.Log.Error("send flow completion message", "flow", flow.ID,
+				"session", ctx.session.ID, "error", err)
+		} else {
+			a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, rendered, "completion")
+		}
+	}
+
+	switch flow.OnCompleteAction {
+	case "", "none":
+		// Nothing further to do.
+	case "webhook":
+		a.postFlowCompletion(flow, ctx)
+	case "create_record":
+		// The collected answers are already on the session, and the contact
+		// record is what the product stores them against. Writing them to the
+		// contact's metadata keeps the data reachable without inventing a
+		// record type the rest of the product does not know about.
+		a.storeFlowAnswers(flow, ctx)
+	default:
+		a.Log.Warn("unknown on_complete_action; ignoring",
+			"flow", flow.ID, "action", flow.OnCompleteAction)
+	}
+}
+
+// postFlowCompletion posts the session's collected variables to the URL in
+// completion_config. The URL is org-configured, so it goes through the same
+// SSRF-safe client as every other outbound call.
+func (a *App) postFlowCompletion(flow *models.ChatbotFlow, ctx *chatNodeCtx) {
+	url := stringFromConfig(flow.CompletionConfig, "url")
+	if url == "" {
+		a.Log.Warn("flow on_complete_action=webhook has no url", "flow", flow.ID)
+		return
+	}
+	if err := safehttp.ValidateURL(url); err != nil {
+		a.Log.Error("flow completion webhook URL rejected", "flow", flow.ID, "error", err)
+		return
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"flow_id":      flow.ID.String(),
+		"flow_name":    flow.Name,
+		"session_id":   ctx.session.ID.String(),
+		"contact_id":   ctx.contact.ID.String(),
+		"contact_name": ctx.contact.ProfileName,
+		"phone_number": ctx.contact.PhoneNumber,
+		"variables":    ctx.session.SessionData,
+		"completed_at": time.Now().UTC(),
+	})
+	if err != nil {
+		a.Log.Error("encode flow completion payload", "flow", flow.ID, "error", err)
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		a.Log.Error("build flow completion request", "flow", flow.ID, "error", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range stringMapFromConfig(flow.CompletionConfig, "headers") {
+		req.Header.Set(k, v)
+	}
+
+	client := a.HTTPClient
+	if client == nil {
+		client = safehttp.NewClient(15 * time.Second)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		a.Log.Error("flow completion webhook failed", "flow", flow.ID, "error", err)
+		return
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8*1024))
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		a.Log.Warn("flow completion webhook returned non-2xx",
+			"flow", flow.ID, "status", resp.StatusCode)
+	}
+}
+
+// storeFlowAnswers writes the session's collected variables onto the contact,
+// under the flow that collected them, so a later conversation can see what was
+// answered and when.
+func (a *App) storeFlowAnswers(flow *models.ChatbotFlow, ctx *chatNodeCtx) {
+	answers := map[string]any{}
+	for k, v := range ctx.session.SessionData {
+		// The runner's own bookkeeping is not an answer.
+		if strings.HasPrefix(k, "__") {
+			continue
+		}
+		answers[k] = v
+	}
+	if len(answers) == 0 {
+		return
+	}
+
+	metadata := ctx.contact.Metadata
+	if metadata == nil {
+		metadata = models.JSONB{}
+	}
+	responses, _ := metadata["flow_responses"].(map[string]any)
+	if responses == nil {
+		responses = map[string]any{}
+	}
+	responses[flow.Name] = map[string]any{
+		"flow_id":      flow.ID.String(),
+		"answers":      answers,
+		"completed_at": time.Now().UTC().Format(time.RFC3339),
+	}
+	metadata["flow_responses"] = responses
+
+	if err := a.DB.Model(&models.Contact{}).Where("id = ?", ctx.contact.ID).
+		Update("metadata", metadata).Error; err != nil {
+		a.Log.Error("store flow answers on contact", "flow", flow.ID,
+			"contact", ctx.contact.ID, "error", err)
+		return
+	}
+	ctx.contact.Metadata = metadata
+}
+
+// matchesCancelKeyword reports whether the customer asked to stop.
+//
+// The keywords were saved per flow and shown in the builder but never checked,
+// so "cancel" simply became the answer to whatever question was on screen and
+// the customer stayed trapped in the flow (plan 10, X14).
+func matchesCancelKeyword(flow *models.ChatbotFlow, input string) bool {
+	if flow == nil || len(flow.CancelKeywords) == 0 {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(input))
+	if text == "" {
+		return false
+	}
+	for _, kw := range flow.CancelKeywords {
+		if k := strings.ToLower(strings.TrimSpace(kw)); k != "" && text == k {
+			return true
+		}
+	}
+	return false
+}
+
+// stringMapFromConfig reads a map of string headers out of a JSONB config.
+func stringMapFromConfig(cfg map[string]any, key string) map[string]string {
+	raw, _ := cfg[key].(map[string]any)
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(raw))
+	for k, v := range raw {
+		if s, ok := v.(string); ok {
+			out[k] = s
 		}
 	}
 	return out

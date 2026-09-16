@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -319,6 +320,20 @@ func (a *App) MaskContactFields(orgID any, profileName, phoneNumber string) (str
 	return profileName, phoneNumber
 }
 
+// maskPhone applies the org's phone masking to one value (plan 10, S9).
+//
+// Masking was applied per-handler, and every list added after it was written
+// simply did not know about it: the deals list, the duplicate-contact list and
+// the campaign audience preview all returned full phone numbers to orgs that
+// had turned masking on. A setting that holds in some lists and not others is
+// worse than none, because it is trusted.
+func (a *App) maskPhone(orgID any, phone string) string {
+	if phone == "" || !a.ShouldMaskPhoneNumbers(orgID) {
+		return phone
+	}
+	return utils.MaskPhoneNumber(phone)
+}
+
 // ShouldMaskPhoneNumbers checks if phone masking is enabled for the organization
 func (a *App) ShouldMaskPhoneNumbers(orgID any) bool {
 	id, ok := orgID.(uuid.UUID)
@@ -342,6 +357,10 @@ type OrganizationResponse struct {
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug,omitempty"`
 	CreatedAt string    `json:"created_at"`
+	// Modules says which optional modules this organization uses, so the shell
+	// can leave out navigation for a module whose endpoints would 404 anyway
+	// (plan 07).
+	Modules map[string]bool `json:"modules,omitempty"`
 }
 
 // ListOrganizations returns all organizations (super admin or users with organizations:read)
@@ -394,6 +413,9 @@ func (a *App) GetCurrentOrganization(r *fastglue.Request) error {
 		Name:      org.Name,
 		Slug:      org.Slug,
 		CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		Modules: map[string]bool{
+			"pipelines": a.PipelinesEnabled(org.ID),
+		},
 	})
 }
 
@@ -752,4 +774,61 @@ func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
 		map[string]any{"role_id": previousRoleID}, map[string]any{"role_id": req.RoleID})
 
 	return r.SendEnvelope(map[string]string{"message": "Member role updated successfully"})
+}
+
+// OrgModuleKeyPipelines is the org setting that turns the pipeline module off.
+//
+// The key is absent for every organization that has never touched the setting,
+// and absent means enabled: a feature that silently disappears when a settings
+// row is added is worse than one that has to be switched off deliberately.
+const OrgModuleKeyPipelines = "pipelines_enabled"
+
+// PipelinesEnabled reports whether the pipeline module is on for an org
+// (plan 07).
+//
+// Not every organization sells. One that runs support only should not carry a
+// Deals board in its navigation, and its agents should not be able to reach the
+// API behind it either — hiding the menu item alone is a suggestion, not a
+// setting.
+func (a *App) PipelinesEnabled(orgID uuid.UUID) bool {
+	settings := a.getOrgSettingsCached(orgID)
+	enabled, present := settings[OrgModuleKeyPipelines].(bool)
+	if !present {
+		return true
+	}
+	return enabled
+}
+
+// requirePipelines rejects a request when the module is off, so the board's
+// endpoints behave as though they do not exist rather than returning data the
+// organization has chosen not to use.
+func (a *App) requirePipelines(r *fastglue.Request, orgID uuid.UUID) bool {
+	if a.PipelinesEnabled(orgID) {
+		return true
+	}
+	_ = r.SendErrorEnvelope(fasthttp.StatusNotFound,
+		"The pipeline module is not enabled for this organization", nil, "")
+	return false
+}
+
+// pipelinePathPrefixes are the API paths the pipeline module owns.
+var pipelinePathPrefixes = []string{
+	"/api/pipelines",
+	"/api/pipeline-stages",
+	"/api/deals",
+	"/api/reports/pipeline-",
+}
+
+// IsPipelinePath reports whether a request belongs to the pipeline module.
+//
+// The list lives beside the toggle rather than in the router so a new board
+// endpoint is added in the same file as the thing that switches it off.
+func IsPipelinePath(path string) bool {
+	for _, prefix := range pipelinePathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	// A contact's deals panel is part of the module too.
+	return strings.HasPrefix(path, "/api/contacts/") && strings.HasSuffix(path, "/deals")
 }

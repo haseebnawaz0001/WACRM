@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { api } from '@/services/api'
+import { setDisplayPreferences } from '@/lib/utils'
 
 export interface UserSettings {
   email_notifications?: boolean
   new_message_alerts?: boolean
   campaign_updates?: boolean
+  /** Per-user override of the organization's timezone (plan 10, S11). */
+  timezone?: string
 }
 
 export interface Permission {
@@ -34,6 +37,9 @@ export interface User {
   settings?: UserSettings
   is_available?: boolean
   is_super_admin?: boolean
+  /** The active organization's display settings, sent with the current user. */
+  org_timezone?: string
+  org_date_format?: string
 }
 
 export interface AuthState {
@@ -49,6 +55,25 @@ export const useAuthStore = defineStore('auth', () => {
   const organizationId = computed(() => user.value?.organization_id || '')
   const userSettings = computed(() => user.value?.settings || {})
   const isAvailable = computed(() => user.value?.is_available ?? true)
+
+  // The zone every date in the product is rendered in (plan 10, S11): the
+  // user's own choice if they made one, otherwise the organization's, and only
+  // then the browser's. Before this, every date was formatted in whatever zone
+  // the viewer's laptop happened to be set to, so two people looking at the
+  // same conversation could disagree about what day a message arrived.
+  const displayTimezone = computed(() =>
+    user.value?.settings?.timezone
+    || user.value?.org_timezone
+    || Intl.DateTimeFormat().resolvedOptions().timeZone
+  )
+
+  const displayDateFormat = computed(() => user.value?.org_date_format || '')
+
+  // Push the preferences into lib/utils so the thirty-odd files that call
+  // formatDate/formatTime outside a setup context get them too.
+  watch([displayTimezone, displayDateFormat], ([timeZone, dateFormat]) => {
+    setDisplayPreferences({ timeZone, dateFormat })
+  }, { immediate: true })
 
   function setAuth(authData: { user: User }) {
     user.value = authData.user
@@ -180,6 +205,23 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Check if user has a specific permission
+  /**
+   * Optional modules this organization uses (plan 07).
+   *
+   * Absent means enabled: a module has to be switched off deliberately, and a
+   * shell that hides navigation whenever the value has not loaded yet would
+   * flicker the menu on every refresh.
+   */
+  const modules = ref<Record<string, boolean>>({})
+
+  function setModules(next: Record<string, boolean> | undefined) {
+    modules.value = next || {}
+  }
+
+  function moduleEnabled(name: string): boolean {
+    return modules.value[name] !== false
+  }
+
   function hasPermission(resource: string, action: string = 'read'): boolean {
     // Super admins have all permissions
     if (user.value?.is_super_admin) {
@@ -201,6 +243,8 @@ export const useAuthStore = defineStore('auth', () => {
     userRole,
     organizationId,
     userSettings,
+    displayTimezone,
+    displayDateFormat,
     isAvailable,
     setAuth,
     clearAuth,
@@ -212,6 +256,9 @@ export const useAuthStore = defineStore('auth', () => {
     switchOrg,
     logout,
     setAvailability,
-    hasPermission
+    hasPermission,
+    modules,
+    setModules,
+    moduleEnabled
   }
 })

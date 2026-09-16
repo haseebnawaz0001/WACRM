@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,6 +20,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/safehttp"
 	"github.com/shridarpatil/whatomate/internal/scheduler"
 	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/tts"
@@ -57,6 +57,8 @@ func main() {
 		runServer(os.Args[2:])
 	case "worker":
 		runWorker(os.Args[2:])
+	case "org":
+		runOrg(os.Args[2:])
 	case "version":
 		fmt.Printf("WA CRM %s (built %s)\n", Version, BuildTime)
 	case "help", "-h", "--help":
@@ -77,6 +79,7 @@ Usage:
 Commands:
   server    Start the API server (with optional embedded workers)
   worker    Start background workers only (no API server)
+  org       Organization administration (purge)
   version   Show version information
   help      Show this help message
 
@@ -95,6 +98,7 @@ Examples:
   wacrm server -workers 4          # API + 4 embedded workers
   wacrm server -migrate            # Run migrations and start server
   wacrm worker -workers 4          # 4 workers only (no API)
+  wacrm org purge <id> -dry-run    # Show what purging an org would delete
 
 Deployment Scenarios:
   All-in-one:    wacrm server
@@ -200,15 +204,7 @@ func runServer(args []string) {
 
 	// Initialize app with dependencies
 	// Shared HTTP client with connection pooling for external API calls
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			DialContext:         handlers.SSRFSafeDialer(),
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
-		},
-	}
+	httpClient := safehttp.NewClient(30 * time.Second)
 
 	app := &handlers.App{
 		Config:     cfg,
@@ -638,6 +634,26 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		return r
 	})
 
+	// Module gating (plan 07). Not every organization sells, and one that has
+	// switched the pipeline module off should find its endpoints absent, not
+	// merely missing from the menu — a hidden nav item is a suggestion.
+	g.Before(func(r *fastglue.Request) *fastglue.Request {
+		if string(r.RequestCtx.Method()) == "OPTIONS" {
+			return r
+		}
+		path := string(r.RequestCtx.Path())
+		if !handlers.IsPipelinePath(path) {
+			return r
+		}
+		orgID, ok := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+		if !ok || app.PipelinesEnabled(orgID) {
+			return r
+		}
+		_ = r.SendErrorEnvelope(fasthttp.StatusNotFound,
+			"The pipeline module is not enabled for this organization", nil, "")
+		return nil
+	})
+
 	// Contact timeline (plan 02)
 	g.GET("/api/contacts/{id}/timeline", app.GetContactTimeline)
 
@@ -904,6 +920,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// Audit Logs
 	g.GET("/api/audit-logs", app.ListAuditLogs)
+	g.GET("/api/audit-logs/catalog", app.GetAuditCatalog)
 	g.GET("/api/audit-logs/{id}", app.GetAuditLog)
 
 	// Canned Responses

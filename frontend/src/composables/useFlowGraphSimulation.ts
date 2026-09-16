@@ -288,6 +288,29 @@ export function useFlowGraphSimulation(
       case 'webhook':
         addMessage('system', '[webhook] simulated — request not sent in preview')
         return 'default'
+      case 'crm_action': {
+        // The preview never writes to the CRM: an author trying a flow out
+        // should not tag real contacts or open real deals. It reports what
+        // would run and takes the success edge.
+        const actions = Array.isArray(node.config?.actions) ? node.config.actions : []
+        const names = actions.map((a: any) => a?.type).filter(Boolean)
+        addMessage(
+          'system',
+          names.length > 0
+            ? `[crm_action] would run: ${names.join(', ')}`
+            : '[crm_action] no actions configured'
+        )
+        return 'default'
+      }
+      case 'crm_condition':
+        // Contact state is not available in a preview, so the branch is not
+        // guessed: saying which way it went would be a claim the simulator
+        // cannot support. The false edge is the backend's own fallback.
+        addMessage(
+          'system',
+          '[crm_condition] not evaluated in preview — following the "does not match" edge'
+        )
+        return 'false'
       default:
         addMessage('system', `Unknown node type "${node.type}"`)
         return '__end__'

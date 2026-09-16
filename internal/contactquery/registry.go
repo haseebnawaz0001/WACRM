@@ -142,7 +142,12 @@ func NewRegistry() *Registry {
 	})
 	r.Register(Field{
 		Key: "whatsapp_account", LabelKey: "contacts.account", Type: TypeOption,
-		Column: "contacts.whatsapp_account",
+		// contacts does not pin this column, so GORM derives it from the
+		// WhatsAppAccount field as whats_app_account. conversations pins the
+		// unsplit spelling, which is what the filter key is named after; the
+		// column here has to be the one contacts actually has, or every filter
+		// on the account fails to prepare.
+		Column: "contacts.whats_app_account",
 	})
 	r.Register(Field{
 		Key: "tags", LabelKey: "contacts.tags", Type: TypeTags,

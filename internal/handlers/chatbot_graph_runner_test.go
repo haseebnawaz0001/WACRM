@@ -827,9 +827,12 @@ func TestEvaluateTimingSchedule(t *testing.T) {
 func TestRunChatGraph_Timing_RoutesByCurrentTime(t *testing.T) {
 	app, org, account, contact, session := newGraphTestFixtures(t)
 
-	// Today's weekday, 00:00-23:59 — always in hours regardless of when
-	// the test runs.
-	today := strings.ToLower(time.Now().Weekday().String())
+	// Today's weekday in the organization's zone, 00:00-23:59 — always in
+	// hours regardless of when the test runs. Reading the weekday from the
+	// server's local clock made this fail for the five hours a day when the
+	// server's date is ahead of the organization's: the schedule then named
+	// tomorrow and the flow correctly routed out_of_hours (plan 10, S11).
+	today := strings.ToLower(time.Now().In(app.OrgLocation(org.ID)).Weekday().String())
 	flow := &models.ChatbotFlow{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  org.ID,

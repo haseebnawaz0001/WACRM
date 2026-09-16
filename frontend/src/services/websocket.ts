@@ -46,6 +46,7 @@ const WS_TYPE_AUTH = 'auth'
 const WS_TYPE_NEW_MESSAGE = 'new_message'
 const WS_TYPE_STATUS_UPDATE = 'status_update'
 const WS_TYPE_SET_CONTACT = 'set_contact'
+const WS_TYPE_RESYNC_REQUIRED = 'resync_required'
 const WS_TYPE_PING = 'ping'
 const WS_TYPE_PONG = 'pong'
 
@@ -295,6 +296,16 @@ class WebSocketService {
         case WS_TYPE_DEAL_UPDATED:
           // Handled by whichever board is open, through subscribe().
           break
+        case WS_TYPE_RESYNC_REQUIRED: {
+          // The server could not fit a message into our socket buffer and
+          // dropped it. Before this notice existed the drop was invisible:
+          // the view simply stopped matching the server and stayed wrong
+          // until the agent happened to reload (plan 10, S10).
+          store.fetchContacts()
+          const openContact = store.currentContact
+          if (openContact) store.fetchMessages(openContact.id)
+          break
+        }
         default:
           // Unknown message type, ignore
           break
@@ -343,8 +354,13 @@ class WebSocketService {
       const currentUserId = authStore.user?.id
       const settings = authStore.userSettings
 
-      // Check if user is assigned to this contact
-      const isAssignedToUser = payload.assigned_user_id === currentUserId
+      // The toast belongs to whoever is handling the conversation, not to
+      // whoever owns the contact record (plan 10, S10). An owner is a
+      // relationship, often a salesperson; the person who needs to know a
+      // reply just landed is the agent the conversation is assigned to. Owner
+      // is the fallback for conversations nobody has taken.
+      const handlerId = payload.conversation_assignee_id || payload.assigned_user_id
+      const isAssignedToUser = handlerId === currentUserId
 
       // Check if new message alerts are enabled (default to true if not set)
       const alertsEnabled = settings.new_message_alerts !== false
@@ -385,9 +401,12 @@ class WebSocketService {
     if (isViewingThisContact && currentContact && payload.direction === 'incoming' && !alreadyRead && userActive) {
       contactsService.markRead(currentContact.id)
         .catch(() => { /* non-critical, will resync on next chat-open */ })
-        .finally(() => store.fetchContacts())
+        .finally(() => store.refreshContactRow(payload.contact_id))
     } else {
-      store.fetchContacts()
+      // One row, not the whole list (plan 10, S10). fetchContacts() refetches
+      // page 1 and replaces the array, so an agent who had scrolled the inbox
+      // was thrown back to the top every time any message arrived.
+      store.refreshContactRow(payload.contact_id)
     }
   }
 

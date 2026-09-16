@@ -350,10 +350,17 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete template", nil, "")
 	}
 
+	// Campaigns pointing at a template that no longer exists would fire on
+	// schedule and fail every recipient without saying why (plan 10, S8).
+	paused := a.GuardDeletedTemplateDependents(template)
+
 	a.logAudit(orgID, userID,
 		"template", id, models.AuditActionDeleted, template, nil)
 
-	return r.SendEnvelope(map[string]string{"message": "Template deleted successfully"})
+	return r.SendEnvelope(map[string]any{
+		"message":          "Template deleted successfully",
+		"campaigns_paused": paused,
+	})
 }
 
 // SubmitTemplate submits a template to Meta for approval

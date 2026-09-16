@@ -44,10 +44,15 @@ type ContactResponse struct {
 	ServiceWindowOpen  bool       `json:"service_window_open"`
 	MarketingOptOut    bool       `json:"marketing_opt_out"`
 	// Fields carries the contact's custom field values, keyed by field key.
-	Fields    map[string]any `json:"fields,omitempty"`
-	Source    string         `json:"source,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
+	Fields map[string]any `json:"fields,omitempty"`
+	Source string         `json:"source,omitempty"`
+	// MergedIntoID is set when this record was merged away. Clients use it to
+	// redirect from the secondary's URL to the surviving contact (plan 06);
+	// without it a bookmark or an old link renders an empty shell of a record
+	// whose history now lives somewhere else.
+	MergedIntoID *uuid.UUID `json:"merged_into_id,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // MessageResponse represents a message for the frontend
@@ -215,12 +220,58 @@ func (a *App) scopeAssignedContact(query *gorm.DB, userID, orgID uuid.UUID) *gor
 	if a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
 		return query
 	}
-	return query.Where("assigned_user_id = ? OR id IN (?)",
+	return query.Where("assigned_user_id = ? OR id IN (?) OR id IN (?)",
 		userID,
 		a.DB.Model(&models.AgentTransfer{}).
 			Select("contact_id").
 			Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive),
+		a.queueVisibleContactIDs(userID, orgID),
 	)
+}
+
+// queueVisibleContactIDs are the contacts an agent can reach through the queue
+// (plan 10, S9).
+//
+// Visibility has to be contact ∪ conversation, not contact alone. The inbox's
+// Unassigned view deliberately lists conversations nobody has picked up — that
+// is the queue, and any agent on the team is meant to take one. Scoping the
+// contact by ownership alone meant an agent could see the row and then get a
+// 404 opening it, which reads as the product being broken rather than as a
+// permission boundary.
+func (a *App) queueVisibleContactIDs(userID, orgID uuid.UUID) *gorm.DB {
+	myTeams := a.DB.Model(&models.TeamMember{}).
+		Select("team_id").
+		Where("user_id = ?", userID)
+
+	return a.DB.Model(&models.Conversation{}).
+		Select("contact_id").
+		Where("organization_id = ?", orgID).
+		Where("assignee_id IS NULL").
+		// A conversation the bot still holds is not waiting for a human.
+		Where("bot_active = false").
+		Where("status <> ?", models.ConversationResolved).
+		// Either the general queue, or one of the agent's own team queues.
+		Where("team_id IS NULL OR team_id IN (?)", myTeams)
+}
+
+// canSeeContact reports whether a viewer may reach one contact at all
+// (plan 10, S9).
+//
+// Endpoints keyed by a contact id — notes, the timeline — were gated only by
+// chat:read, so any agent could read the private notes and full history of any
+// contact in the organization by putting its id in the URL, including contacts
+// the contact list itself refuses to show them. The scope already exists; these
+// endpoints simply were not asking it.
+func (a *App) canSeeContact(orgID, userID, contactID uuid.UUID) bool {
+	query := a.scopeAssignedContact(
+		a.DB.Model(&models.Contact{}).Where("id = ? AND organization_id = ?", contactID, orgID),
+		userID, orgID)
+	var found int64
+	if err := query.Count(&found).Error; err != nil {
+		a.Log.Error("contact scope check failed", "error", err, "contact_id", contactID)
+		return false
+	}
+	return found > 0
 }
 
 // GetContact returns a single contact
@@ -244,6 +295,22 @@ func (a *App) GetContact(r *fastglue.Request) error {
 
 	if err := query.First(&contact).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	}
+
+	// A merged contact's URL resolves to the contact that survived (plan 06).
+	// Returning the emptied secondary instead would show a record whose
+	// messages, tasks and deals have all moved somewhere else — technically
+	// the row that was asked for, and useless.
+	if contact.MergedIntoID != nil {
+		var survivor models.Contact
+		if err := a.DB.Where("organization_id = ? AND id = ?", orgID, *contact.MergedIntoID).
+			First(&survivor).Error; err == nil {
+			response := a.buildContactResponse(&survivor, orgID)
+			// The pointer travels with the survivor so the client knows to
+			// rewrite the URL it arrived on.
+			response.MergedIntoID = &survivor.ID
+			return r.SendEnvelope(response)
+		}
 	}
 
 	response := a.buildContactResponse(&contact, orgID)
@@ -1422,7 +1489,7 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 	}
 
 	a.logAudit(orgID, userID,
-		"contact", contact.ID, models.AuditActionCreated, nil, &contact)
+		models.ResourceContacts, contact.ID, models.AuditActionCreated, nil, &contact)
 
 	return r.SendEnvelope(a.buildContactResponse(&contact, orgID))
 }
@@ -1537,7 +1604,7 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	a.DB.First(contact, contactID)
 
 	a.logAudit(orgID, userID,
-		"contact", contact.ID, models.AuditActionUpdated, &oldContact, contact)
+		models.ResourceContacts, contact.ID, models.AuditActionUpdated, &oldContact, contact)
 
 	// One activity entry per field that actually changed, so the timeline says
 	// what was edited rather than just "contact updated".
@@ -1547,6 +1614,11 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 				"field": key,
 			}).ForContact(contact.ID))
 	}
+
+	// One contact.updated for subscribers, carrying the record and its typed
+	// fields (plan 01). Integrations want "here is the contact now", not a
+	// delivery per field — during an import that would be thousands.
+	a.publishContactUpdated(orgID, userID, contact, changedFields)
 
 	return r.SendEnvelope(a.buildContactResponse(contact, orgID))
 }
@@ -1581,7 +1653,7 @@ func (a *App) DeleteContact(r *fastglue.Request) error {
 	}
 
 	a.logAudit(orgID, userID,
-		"contact", contactID, models.AuditActionDeleted, contact, nil)
+		models.ResourceContacts, contactID, models.AuditActionDeleted, contact, nil)
 
 	return r.SendEnvelope(map[string]any{
 		"message": "Contact deleted successfully",
@@ -1642,7 +1714,37 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 		MarketingOptOut:    contact.MarketingOptOut,
 		Fields:             fields,
 		Source:             contact.Source,
+		MergedIntoID:       contact.MergedIntoID,
 		CreatedAt:          contact.CreatedAt,
 		UpdatedAt:          contact.UpdatedAt,
 	}
+}
+
+// publishContactUpdated emits the subscriber-facing "this contact changed"
+// event (plan 01).
+//
+// The payload carries the typed custom fields as well as the built-in columns,
+// because an integration that has to call back for every field it cares about
+// is not being told anything useful by the webhook.
+func (a *App) publishContactUpdated(orgID, userID uuid.UUID, contact *models.Contact, changed []string) {
+	fields, err := customfields.New(a.DB).Values(
+		context.Background(), orgID, contact.ID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("load contact fields for contact.updated", "error", err, "contact", contact.ID)
+		fields = map[string]any{}
+	}
+
+	name, phone := a.MaskContactFields(orgID, contact.ProfileName, contact.PhoneNumber)
+
+	a.PublishEvent(crmevents.New(orgID, string(models.WebhookEventContactUpdated),
+		crmevents.UserActor(userID, ""), map[string]any{
+			"contact_id":     contact.ID.String(),
+			"contact_name":   name,
+			"contact_phone":  phone,
+			"tags":           contact.Tags,
+			"source":         contact.Source,
+			"assigned_to":    contact.AssignedUserID,
+			"fields":         fields,
+			"changed_fields": changed,
+		}).ForContact(contact.ID))
 }

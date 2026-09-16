@@ -188,7 +188,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 	}
 
 	a.logAudit(orgID, userID,
-		"campaign", campaign.ID, models.AuditActionCreated, nil, &campaign)
+		models.ResourceCampaigns, campaign.ID, models.AuditActionCreated, nil, &campaign)
 
 	a.Log.Info("Campaign created", "campaign_id", campaign.ID, "name", campaign.Name)
 
@@ -324,7 +324,7 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 	a.DB.Where("id = ?", id).Preload("Template").Preload("Creator").Preload("UpdatedBy").First(campaign)
 
 	a.logAudit(orgID, userID,
-		"campaign", campaign.ID, models.AuditActionUpdated, &oldCampaign, campaign)
+		models.ResourceCampaigns, campaign.ID, models.AuditActionUpdated, &oldCampaign, campaign)
 
 	response := CampaignResponse{
 		ID:                  campaign.ID,
@@ -392,7 +392,7 @@ func (a *App) DeleteCampaign(r *fastglue.Request) error {
 	}
 
 	a.logAudit(orgID, userID,
-		"campaign", id, models.AuditActionDeleted, campaign, nil)
+		models.ResourceCampaigns, id, models.AuditActionDeleted, campaign, nil)
 
 	a.Log.Info("Campaign deleted", "campaign_id", id)
 
@@ -712,7 +712,7 @@ func (a *App) ImportRecipients(r *fastglue.Request) error {
 		phoneNumbers[i] = rec.PhoneNumber
 	}
 	a.logAudit(orgID, userID,
-		"campaign", id, models.AuditActionUpdated, nil, nil,
+		models.ResourceCampaigns, id, models.AuditActionUpdated, nil, nil,
 		map[string]any{
 			"field":     "recipients_added",
 			"old_value": nil,
@@ -809,7 +809,7 @@ func (a *App) DeleteCampaignRecipient(r *fastglue.Request) error {
 	a.DB.Model(campaign).Update("total_recipients", gorm.Expr("total_recipients - 1"))
 
 	a.logAudit(orgID, userID,
-		"campaign", campaignUUID, models.AuditActionUpdated, nil, nil,
+		models.ResourceCampaigns, campaignUUID, models.AuditActionUpdated, nil, nil,
 		map[string]any{
 			"field":     "recipient_removed",
 			"old_value": recipient.PhoneNumber,

@@ -285,6 +285,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 				a.Log.Error("Failed to send transfer message", "error", err, "contact", contact.PhoneNumber)
 			}
 		}
+		a.runKeywordActions(account, contact, session, keywordResponse.Actions)
 		a.createTransferFromKeyword(account, contact)
 		return
 	}
@@ -302,6 +303,13 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		if flow.Graph == nil {
 			a.Log.Error("Active chatbot flow has no v2 graph; ignoring inbound", "session", session.ID, "flow", flow.ID)
 			a.exitFlow(session)
+			return
+		}
+		// "cancel" has to mean cancel. Without this the word was just the
+		// answer to whatever question was on screen, and the only way out of a
+		// flow was to finish it (plan 10, X14).
+		if matchesCancelKeyword(flow, messageText) {
+			a.cancelChatSession(account, contact, session, flow)
 			return
 		}
 		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
@@ -373,6 +381,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		}
 		// Log outgoing message
 		a.logSessionMessage(session.ID, models.DirectionOutgoing, keywordResponse.Body, "keyword_response")
+		// Actions run after the reply: the customer gets their answer even if
+		// tagging them or raising a task fails (plan 10, S7).
+		a.runKeywordActions(account, contact, session, keywordResponse.Actions)
 		return
 	}
 
@@ -433,6 +444,7 @@ type KeywordResponse struct {
 	Body         string
 	Buttons      []map[string]any
 	ResponseType models.ResponseType // text, transfer
+	Actions      []crmActionSpec
 }
 
 // matchKeywordRules checks if the message matches any keyword rules
@@ -483,6 +495,7 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 			if matched {
 				response := &KeywordResponse{
 					ResponseType: rule.ResponseType,
+					Actions:      keywordRuleActions(rule),
 				}
 
 				// For transfer type, use body as the transfer message
@@ -1676,4 +1689,114 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 // depending on which path handled the message (plan 10, S11 / X13).
 func (a *App) isWithinBusinessHours(orgID uuid.UUID, businessHours models.JSONBArray) bool {
 	return schedule.IsOpen(time.Now(), schedule.Parse(businessHours), a.OrgLocation(orgID))
+}
+
+// cancelChatSession ends a flow because the customer asked it to.
+//
+// Cancelled is deliberately not "completed": a flow the customer abandoned and
+// one they finished are different outcomes, and reporting that cannot tell them
+// apart would make an unusable flow look successful.
+func (a *App) cancelChatSession(account *models.WhatsAppAccount, contact *models.Contact,
+	session *models.ChatbotSession, flow *models.ChatbotFlow) {
+
+	now := time.Now()
+	a.DB.Model(session).Updates(map[string]any{
+		"current_step": "",
+		"step_retries": 0,
+		"status":       models.SessionStatusCancelled,
+		"completed_at": now,
+	})
+	session.Status = models.SessionStatusCancelled
+
+	// The cancellation message is the flow's timeout_message when it has one:
+	// both say "this is over, here is what happens next", and a flow author
+	// who wrote one has already said how they want that phrased.
+	if msg := strings.TrimSpace(flow.TimeoutMessage); msg != "" {
+		if err := a.sendAndSaveTextMessage(account, contact, msg); err != nil {
+			a.Log.Error("send flow cancel message", "flow", flow.ID, "error", err)
+		} else {
+			a.logSessionMessage(session.ID, models.DirectionOutgoing, msg, "cancelled")
+		}
+	}
+
+	a.ClearContactChatbotTracking(session.ContactID)
+	a.Log.Info("Chatbot session cancelled by keyword", "session", session.ID, "flow", flow.ID)
+}
+
+// TimeoutStaleChatSessions closes sessions that the customer walked away from.
+//
+// session_timeout_minutes and the flow's timeout_message were both
+// configurable, and the "timeout" session status existed in the model, but
+// nothing ever wrote it: an abandoned session stayed active forever, so the
+// customer's next unrelated message resumed a flow they had forgotten about
+// (plan 10, X14).
+func (a *App) TimeoutStaleChatSessions(ctx context.Context) error {
+	var settings []models.ChatbotSettings
+	if err := a.DB.WithContext(ctx).Find(&settings).Error; err != nil {
+		return err
+	}
+
+	for i := range settings {
+		s := &settings[i]
+		minutes := s.SessionTimeoutMins
+		if minutes <= 0 {
+			continue
+		}
+		cutoff := time.Now().Add(-time.Duration(minutes) * time.Minute)
+
+		var stale []models.ChatbotSession
+		if err := a.DB.WithContext(ctx).
+			Where("organization_id = ? AND status = ? AND last_activity_at < ?",
+				s.OrganizationID, models.SessionStatusActive, cutoff).
+			Limit(500).Find(&stale).Error; err != nil {
+			a.Log.Error("load stale chatbot sessions", "org", s.OrganizationID, "error", err)
+			continue
+		}
+
+		for j := range stale {
+			a.timeoutChatSession(ctx, &stale[j])
+		}
+	}
+	return nil
+}
+
+// timeoutChatSession closes one abandoned session and tells the customer.
+func (a *App) timeoutChatSession(ctx context.Context, session *models.ChatbotSession) {
+	now := time.Now()
+	if err := a.DB.WithContext(ctx).Model(session).Updates(map[string]any{
+		"current_step": "",
+		"step_retries": 0,
+		"status":       models.SessionStatusTimeout,
+		"completed_at": now,
+	}).Error; err != nil {
+		a.Log.Error("time out chatbot session", "session", session.ID, "error", err)
+		return
+	}
+	a.ClearContactChatbotTracking(session.ContactID)
+
+	if session.CurrentFlowID == nil {
+		return
+	}
+	flow, err := a.getChatbotFlowByIDCached(session.OrganizationID, *session.CurrentFlowID)
+	if err != nil || flow == nil {
+		return
+	}
+	msg := strings.TrimSpace(flow.TimeoutMessage)
+	if msg == "" {
+		return
+	}
+
+	var contact models.Contact
+	if err := a.DB.WithContext(ctx).Where("id = ?", session.ContactID).First(&contact).Error; err != nil {
+		return
+	}
+	account, err := a.resolveWhatsAppAccount(session.OrganizationID, session.WhatsAppAccount)
+	if err != nil {
+		return
+	}
+	if err := a.sendAndSaveTextMessage(account, &contact, msg); err != nil {
+		a.Log.Error("send flow timeout message", "session", session.ID, "error", err)
+		return
+	}
+	a.logSessionMessage(session.ID, models.DirectionOutgoing, msg, "timeout")
 }

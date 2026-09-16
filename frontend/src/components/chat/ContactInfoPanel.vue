@@ -377,11 +377,16 @@ async function updateContactTags(tags: string[]) {
           <p class="text-xs mt-1">Configure panel display in the chatbot flow settings.</p>
         </div>
 
-        <!-- Session Data with panel config -->
+        <!-- Session data with panel config.
+             Labelled explicitly (plan 10, S7): these values describe the
+             current conversation and go away with it, unlike the contact
+             fields above, which are the customer's record. An agent reading
+             the panel needs to know which of the two they are looking at. -->
         <template v-else>
-          <!-- Flow Name Badge -->
-          <div v-if="props.sessionData?.flow_name" class="flex items-center gap-2">
-            <Badge variant="outline" class="text-xs">
+          <div class="flex items-center justify-between border-t pt-4">
+            <h5 class="text-sm font-medium text-muted-foreground">Session data</h5>
+            <!-- Flow Name Badge -->
+            <Badge v-if="props.sessionData?.flow_name" variant="outline" class="text-xs">
               {{ props.sessionData?.flow_name }}
             </Badge>
           </div>

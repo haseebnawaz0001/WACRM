@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/customfields"
@@ -365,4 +366,41 @@ func TestValues_AreScopedToTheOrganization(t *testing.T) {
 	values, err := svc.Values(context.Background(), other.ID, contact.ID, models.FieldEntityContact)
 	require.NoError(t, err)
 	assert.Empty(t, values)
+}
+
+// Plan 10, S11: a date field stores a calendar day, not an instant.
+//
+// The column is a bare date, so Postgres truncates whatever it is given in
+// whatever zone the session happens to use. A time.Time carries both a zone and
+// a time of day, so a renewal date set from a machine five hours ahead of UTC
+// landed on the previous day — and the reminder built on it then fired a day
+// early, with nothing anywhere recording that the day had moved.
+func TestCoerce_DateKeepsTheDayItWasGiven(t *testing.T) {
+	def := models.CustomFieldDefinition{Key: "renewal_date", Type: models.FieldTypeDate}
+
+	ahead := time.FixedZone("UTC+5", 5*60*60)
+	// 01:35 on the 24th where the user is; 20:35 on the 23rd in UTC.
+	given := time.Date(2026, 9, 24, 1, 35, 0, 0, ahead)
+
+	v, err := customfields.Coerce(def, given)
+	require.NoError(t, err)
+	require.NotNil(t, v.Date)
+	assert.Equal(t, "2026-09-24", v.Date.Format("2006-01-02"),
+		"the day the user chose must survive being stored")
+	assert.Equal(t, time.UTC, v.Date.Location(),
+		"stored at UTC midnight so no session zone can move it")
+}
+
+// The string form has always normalised; this pins the two paths together.
+func TestCoerce_DateStringAndTimeAgree(t *testing.T) {
+	def := models.CustomFieldDefinition{Key: "renewal_date", Type: models.FieldTypeDate}
+
+	fromString, err := customfields.Coerce(def, "2026-09-24")
+	require.NoError(t, err)
+	fromTime, err := customfields.Coerce(def, time.Date(2026, 9, 24, 23, 59, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	require.NotNil(t, fromString.Date)
+	require.NotNil(t, fromTime.Date)
+	assert.True(t, fromString.Date.Equal(*fromTime.Date))
 }

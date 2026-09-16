@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // UserRequest represents the request body for creating/updating a user.
@@ -50,6 +53,14 @@ type UserResponse struct {
 	IsMember       bool         `json:"is_member"`
 	OrganizationID uuid.UUID    `json:"organization_id"`
 	Settings       models.JSONB `json:"settings,omitempty"`
+	// OrgTimezone and OrgDateFormat travel with the current user so the client
+	// can render dates the way the organization reads them (plan 10, S11). Both
+	// settings already existed and nothing outside the settings page could see
+	// them, so every date in the product was formatted as en-US in the
+	// browser's own timezone. They are populated on the current-user endpoint
+	// only; a user list has no business carrying org settings on every row.
+	OrgTimezone   string `json:"org_timezone,omitempty"`
+	OrgDateFormat string `json:"org_date_format,omitempty"`
 	CreatedAt      string       `json:"created_at"`
 	UpdatedAt      string       `json:"updated_at"`
 }
@@ -76,6 +87,10 @@ type UserSettingsRequest struct {
 	EmailNotifications bool `json:"email_notifications"`
 	NewMessageAlerts   bool `json:"new_message_alerts"`
 	CampaignUpdates    bool `json:"campaign_updates"`
+	// Timezone overrides the organization's for this user (plan 10, S11).
+	// A pointer so "not sent" and "cleared" are different: clients that predate
+	// the field must not silently wipe an override the user set.
+	Timezone *string `json:"timezone,omitempty"`
 }
 
 // ChangePasswordRequest represents the request body for changing password
@@ -511,11 +526,13 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		user.Role = nil // Clear the preloaded role to prevent GORM from using the old association
 	}
 
+	deactivated := false
 	if req.IsActive != nil {
 		// Prevent user from deactivating themselves
 		if currentUserID == id && !*req.IsActive {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot deactivate yourself", nil, "")
 		}
+		deactivated = user.IsActive && !*req.IsActive
 		user.IsActive = *req.IsActive
 	}
 
@@ -534,6 +551,14 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	if err := a.DB.Save(&user).Error; err != nil {
 		a.Log.Error("Failed to update user", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update user", nil, "")
+	}
+
+	// A deactivated user's live work has to go somewhere (plan 10, S8).
+	// Leaving it in place is the worst outcome: conversations stay assigned to
+	// somebody who can no longer sign in, so they show in neither the Unassigned
+	// view nor any active agent's list, and their API keys keep authenticating.
+	if deactivated {
+		a.releaseUserWork(orgID, id, currentUserID)
 	}
 
 	// Invalidate permissions cache if role changed
@@ -598,11 +623,15 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to remove member", nil, "")
 		}
 		a.InvalidateUserPermissionsCache(id)
+		cleanup := a.releaseUserWork(orgID, id, currentUserID)
 
 		a.logAudit(orgID, currentUserID,
 			"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
-		return r.SendEnvelope(map[string]string{"message": "Member removed from organization"})
+		return r.SendEnvelope(map[string]any{
+			"message": "Member removed from organization",
+			"cleanup": cleanup,
+		})
 	}
 
 	// Native user: check last admin constraint, then delete user account
@@ -622,6 +651,10 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 		}
 	}
 
+	// Release the work before the row goes: once the user is soft-deleted the
+	// rows pointing at them are still there, just pointing at nothing.
+	cleanup := a.releaseUserWork(orgID, id, currentUserID)
+
 	result := a.DB.Where("id = ?", id).Delete(&models.User{})
 	if result.Error != nil {
 		a.Log.Error("Failed to delete user", "error", result.Error)
@@ -637,7 +670,46 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 	a.logAudit(orgID, currentUserID,
 		"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
-	return r.SendEnvelope(map[string]string{"message": "User deleted successfully"})
+	return r.SendEnvelope(map[string]any{
+		"message": "User deleted successfully",
+		"cleanup": cleanup,
+	})
+}
+
+// releaseUserWork detaches a user from one org's live work and broadcasts the
+// transfers it returned to the queue (plan 10, S8).
+//
+// It never fails the caller: a deactivation that succeeded and a cleanup that
+// did not is recoverable, but refusing the deactivation because a segment could
+// not be reassigned leaves an account that can still sign in.
+func (a *App) releaseUserWork(orgID, userID, actingUserID uuid.UUID) entityrefs.UserCleanup {
+	var cleanup entityrefs.UserCleanup
+	err := a.DB.Transaction(func(tx *gorm.DB) error {
+		var err error
+		cleanup, err = entityrefs.ReleaseUser(tx, orgID, userID, actingUserID)
+		return err
+	})
+	if err != nil {
+		a.Log.Error("Failed to release user work", "error", err, "user_id", userID)
+		return entityrefs.UserCleanup{}
+	}
+
+	for _, transferID := range cleanup.TransferIDs {
+		var transfer models.AgentTransfer
+		if err := a.DB.Preload("Contact").Where("id = ?", transferID).First(&transfer).Error; err == nil {
+			a.broadcastTransferAssigned(&transfer)
+		}
+	}
+
+	if cleanup.TransfersReturned > 0 || cleanup.ConversationsUnassigned > 0 {
+		a.Log.Info("Released user work",
+			"user_id", userID,
+			"transfers_returned", cleanup.TransfersReturned,
+			"conversations_unassigned", cleanup.ConversationsUnassigned,
+		)
+	}
+
+	return cleanup
 }
 
 // GetCurrentUser returns the current authenticated user's details
@@ -690,7 +762,13 @@ func (a *App) GetCurrentUser(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(userToResponse(user))
+	resp := userToResponse(user)
+	if orgID != uuid.Nil {
+		settings := a.getOrgSettingsCached(orgID)
+		resp.OrgTimezone, _ = settings["timezone"].(string)
+		resp.OrgDateFormat, _ = settings["date_format"].(string)
+	}
+	return r.SendEnvelope(resp)
 }
 
 // splitPermission splits a "resource:action" string
@@ -731,6 +809,19 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 	user.Settings["email_notifications"] = req.EmailNotifications
 	user.Settings["new_message_alerts"] = req.NewMessageAlerts
 	user.Settings["campaign_updates"] = req.CampaignUpdates
+
+	if req.Timezone != nil {
+		if tz := strings.TrimSpace(*req.Timezone); tz == "" {
+			delete(user.Settings, "timezone")
+		} else if _, err := time.LoadLocation(tz); err != nil {
+			// A zone the server cannot resolve would be stored and then
+			// silently ignored everywhere it is read.
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+				"Unknown timezone", nil, "")
+		} else {
+			user.Settings["timezone"] = tz
+		}
+	}
 
 	if err := a.DB.Save(&user).Error; err != nil {
 		a.Log.Error("Failed to update user settings", "error", err)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import type { ChatNode } from '@/services/api'
 import { useTeamsStore } from '@/stores/teams'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,9 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Trash2, Plus } from 'lucide-vue-next'
+import { automationsService, contactFieldsService, segmentsService } from '@/services/api'
+import CrmActionList from '@/components/crmactions/CrmActionList.vue'
+import type { CrmActionSpec } from '@/components/crmactions/schema'
 
 const props = defineProps<{
   node: ChatNode
@@ -190,6 +193,33 @@ function updateResponseMappingValue(key: string, value: string) {
   updateConfig('response_mapping', m)
 }
 
+// field_mapping helpers (api_call → contact fields, plan 10 S7)
+function addFieldMapping() {
+  const m = { ...(config.value.field_mapping || {}) }
+  m[''] = ''
+  updateConfig('field_mapping', m)
+}
+
+function removeFieldMapping(key: string) {
+  const m = { ...(config.value.field_mapping || {}) }
+  delete m[key]
+  updateConfig('field_mapping', m)
+}
+
+function updateFieldMappingKey(oldKey: string, newKey: string) {
+  if (oldKey === newKey) return
+  const m = { ...(config.value.field_mapping || {}) }
+  m[newKey] = m[oldKey]
+  delete m[oldKey]
+  updateConfig('field_mapping', m)
+}
+
+function updateFieldMappingValue(key: string, value: string) {
+  const m = { ...(config.value.field_mapping || {}) }
+  m[key] = value
+  updateConfig('field_mapping', m)
+}
+
 // Timing schedule
 const defaultSchedule = [
   { day: 'monday', enabled: true, start_time: '09:00', end_time: '17:00' },
@@ -211,6 +241,78 @@ function updateScheduleEntry(idx: number, field: string, value: any) {
 const gotoFlowTargets = computed(() =>
   (props.availableFlows || []).filter((f) => f.id !== props.currentFlowId),
 )
+
+// --- CRM nodes (plan 10, S7) ---
+
+/**
+ * Action types, contact fields and segments come from the backend so the three
+ * editors that configure actions cannot drift from the library, and a field
+ * added in Settings shows up here without a code change.
+ */
+const availableActionTypes = ref<string[]>([])
+const contactFields = ref<{ key: string; label: string }[]>([])
+const segments = ref<{ id: string; name: string }[]>([])
+
+onMounted(() => {
+  automationsService.catalog()
+    .then(({ data }) => {
+      availableActionTypes.value = ((data as any)?.data ?? data)?.actions || []
+    })
+    .catch(() => { availableActionTypes.value = [] })
+
+  contactFieldsService.list()
+    .then(({ data }) => {
+      const rows = ((data as any)?.data ?? data)?.fields || []
+      contactFields.value = rows.map((f: any) => ({ key: f.key, label: f.label || f.key }))
+    })
+    .catch(() => { contactFields.value = [] })
+
+  segmentsService.list()
+    .then(({ data }) => {
+      const rows = ((data as any)?.data ?? data)?.segments || []
+      segments.value = rows.map((sg: any) => ({ id: sg.id, name: sg.name }))
+    })
+    .catch(() => { segments.value = [] })
+})
+
+/** The node stores a plain array; the shared editor wants ids to key on. */
+const crmActions = computed<CrmActionSpec[]>(() =>
+  ((config.value.actions as any[]) || []).map((a, i) => ({
+    id: a.id || `a${i}`,
+    type: a.type,
+    config: a.config || {}
+  }))
+)
+
+function setCrmActions(next: CrmActionSpec[]) {
+  updateConfig('actions', next.map(a => ({ id: a.id, type: a.type, config: a.config })))
+}
+
+/**
+ * The filter is edited as JSON. Invalid text is kept on screen rather than
+ * discarded — losing what someone typed because it is not yet parseable is
+ * worse than storing it a keystroke later.
+ */
+const filterDraft = ref<string | null>(null)
+
+const filterJSON = computed(() => {
+  if (filterDraft.value !== null) return filterDraft.value
+  const filter = config.value.filter
+  return filter ? JSON.stringify(filter, null, 2) : ''
+})
+
+function setFilterJSON(raw: string) {
+  filterDraft.value = raw
+  if (!raw.trim()) {
+    updateConfig('filter', undefined)
+    return
+  }
+  try {
+    updateConfig('filter', JSON.parse(raw))
+  } catch {
+    // Left as typed; the value is committed once it parses.
+  }
+}
 
 const typeLabel: Record<string, string> = {
   start: 'Start',
@@ -285,6 +387,28 @@ const typeLabel: Record<string, string> = {
             placeholder="variable_name"
             class="h-8 text-sm font-mono"
           />
+          <p class="text-[10px] text-muted-foreground">
+            A session variable — it disappears when the flow ends.
+          </p>
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs">Save to contact field</Label>
+          <Select
+            :model-value="config.save_to_field || '__none__'"
+            @update:model-value="(v: any) => updateConfig('save_to_field', v === '__none__' ? '' : v)"
+          >
+            <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Don't save" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Don't save</SelectItem>
+              <SelectItem v-for="f in contactFields" :key="f.key" :value="f.key">
+                {{ f.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-[10px] text-muted-foreground">
+            Writes the answer onto the contact record, so it survives the
+            conversation and can be filtered, segmented and reported on.
+          </p>
         </div>
         <div class="space-y-1.5">
           <Label class="text-xs">Validation regex (optional)</Label>
@@ -470,6 +594,38 @@ const typeLabel: Record<string, string> = {
         </div>
       </div>
       <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <Label class="text-xs">Save to contact fields</Label>
+          <Button variant="outline" size="sm" class="h-6 text-xs" @click="addFieldMapping">
+            <Plus class="h-3 w-3 mr-1" /> Add
+          </Button>
+        </div>
+        <p class="text-[10px] text-muted-foreground">
+          Writes response values onto the contact record rather than a session
+          variable, so they outlive the conversation (plan 01).
+        </p>
+        <div v-for="(val, key) in (config.field_mapping || {})" :key="String(key)" class="flex items-center gap-1">
+          <Select
+            :model-value="String(key)"
+            @update:model-value="(v: any) => updateFieldMappingKey(String(key), String(v))"
+          >
+            <SelectTrigger class="h-7 flex-1 text-xs"><SelectValue placeholder="Field" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="f in contactFields" :key="f.key" :value="f.key">{{ f.label }}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            :model-value="String(val)"
+            @update:model-value="(v: string) => updateFieldMappingValue(String(key), v)"
+            placeholder="path.to.field"
+            class="h-7 flex-1 text-xs font-mono"
+          />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeFieldMapping(String(key))">
+            <Trash2 class="h-3 w-3 text-destructive" />
+          </Button>
+        </div>
+      </div>
+      <div class="space-y-1.5">
         <Label class="text-xs">Message template (optional)</Label>
         <Textarea
           :model-value="config.message_template || ''"
@@ -625,6 +781,59 @@ const typeLabel: Record<string, string> = {
     </template>
 
     <!-- webhook -->
+    <!-- CRM action (plan 10, S7): the same editor the automation builder and
+         keyword rules use. -->
+    <template v-if="node.type === 'crm_action'">
+      <CrmActionList
+        :model-value="crmActions"
+        :available-types="availableActionTypes"
+        @update:model-value="setCrmActions"
+      />
+      <label class="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Switch
+          :model-value="!!config.show_error_handle"
+          @update:model-value="(v: boolean) => updateConfig('show_error_handle', v)"
+        />
+        Add an error branch
+      </label>
+      <p class="text-[10px] text-muted-foreground">
+        Without one, a failed action still continues down the default edge.
+      </p>
+    </template>
+
+    <!-- CRM condition: branches on the contact, not on what they typed. -->
+    <template v-if="node.type === 'crm_condition'">
+      <div class="space-y-1.5">
+        <Label class="text-xs">Segment</Label>
+        <Select
+          :model-value="config.segment_id || '__filter__'"
+          @update:model-value="(v: any) => updateConfig('segment_id', v === '__filter__' ? '' : v)"
+        >
+          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Use a filter" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__filter__">Use a filter</SelectItem>
+            <SelectItem v-for="seg in segments" :key="seg.id" :value="seg.id">
+              {{ seg.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-[10px] text-muted-foreground">
+          Membership is evaluated the same way the contacts list evaluates it,
+          so the branch and the segment always agree.
+        </p>
+      </div>
+      <div v-if="!config.segment_id" class="space-y-1.5">
+        <Label class="text-xs">Filter (JSON)</Label>
+        <Textarea
+          :model-value="filterJSON"
+          @update:model-value="(v: string) => setFilterJSON(v)"
+          :rows="4"
+          placeholder='{"op":"and","rules":[{"field":"tags","operator":"contains_any","value":["VIP"]}]}'
+          class="text-xs font-mono"
+        />
+      </div>
+    </template>
+
     <template v-if="node.type === 'webhook'">
       <div class="space-y-1.5">
         <Label class="text-xs">URL</Label>

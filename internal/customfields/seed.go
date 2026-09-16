@@ -51,11 +51,11 @@ func BuiltInFields() []models.CustomFieldDefinition {
 			GroupLabel: "Lifecycle", Position: 50,
 			ShowInList: true, ShowInChatPanel: true, IsSystem: true,
 			Options: models.JSONBArray{
-				map[string]any{"value": "new", "label": "New", "color": "gray"},
-				map[string]any{"value": "lead", "label": "Lead", "color": "blue"},
-				map[string]any{"value": "qualified", "label": "Qualified", "color": "purple"},
-				map[string]any{"value": "customer", "label": "Customer", "color": "green"},
-				map[string]any{"value": "churned", "label": "Churned", "color": "red"},
+				map[string]any{"value": models.LifecycleNew, "label": "New", "color": "gray"},
+				map[string]any{"value": models.LifecycleLead, "label": "Lead", "color": "blue"},
+				map[string]any{"value": models.LifecycleQualified, "label": "Qualified", "color": "purple"},
+				map[string]any{"value": models.LifecycleCustomer, "label": "Customer", "color": "green"},
+				map[string]any{"value": models.LifecycleChurned, "label": "Churned", "color": "red"},
 			},
 		},
 	}

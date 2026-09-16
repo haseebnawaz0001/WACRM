@@ -11,6 +11,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/schedule"
+	"github.com/shridarpatil/whatomate/internal/templating"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
@@ -409,13 +410,13 @@ func (m *Manager) executeHTTPCallback(session *CallSession, node *IVRNode, ctx *
 	headers := make(map[string]string, len(headersRaw))
 	for k, v := range headersRaw {
 		if s, ok := v.(string); ok {
-			headers[k] = interpolateTemplate(s, ctx.Variables)
+			headers[k] = interpolateTemplate(s, ctx.Variables, templating.EscapeHeader)
 		}
 	}
 
 	// Interpolate URL and body
-	url = interpolateTemplate(url, ctx.Variables)
-	body := interpolateTemplate(bodyTemplate, ctx.Variables)
+	url = interpolateTemplate(url, ctx.Variables, templating.EscapeQuery)
+	body := interpolateTemplate(bodyTemplate, ctx.Variables, templating.EscapeJSON)
 
 	result, err := executeHTTPCallback(url, method, headers, body, time.Duration(timeoutSecs)*time.Second)
 	if err != nil {

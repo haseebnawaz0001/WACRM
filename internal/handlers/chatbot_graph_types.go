@@ -28,6 +28,16 @@ const (
 	ChatNodeGotoFlow     ChatNodeType = "goto_flow"
 	ChatNodeWhatsAppFlow ChatNodeType = "whatsapp_flow"
 	ChatNodeEnd          ChatNodeType = "end"
+
+	// ChatNodeCRMAction runs actions from the shared CRM action library
+	// (plan 10, S7). Before it, a flow could collect an answer and had no way
+	// to act on it: tagging the contact, creating a task or opening a deal all
+	// meant leaving the chatbot and writing an automation rule against an
+	// event the flow does not emit.
+	ChatNodeCRMAction ChatNodeType = "crm_action"
+	// ChatNodeCRMCondition branches on what is true of the contact — a filter
+	// or membership of a saved segment — rather than on what they just typed.
+	ChatNodeCRMCondition ChatNodeType = "crm_condition"
 )
 
 // ChatNode, ChatEdge and ChatGraph are the chatbot domain's views of the shared

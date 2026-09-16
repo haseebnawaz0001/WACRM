@@ -127,7 +127,7 @@ func (a *App) duplicateSummaries(orgID uuid.UUID, candidates []models.ContactDup
 		out[contact.ID] = DuplicateContactSummary{
 			ID:          contact.ID.String(),
 			ProfileName: contact.ProfileName,
-			PhoneNumber: contact.PhoneNumber,
+			PhoneNumber: a.maskPhone(orgID, contact.PhoneNumber),
 			Tags:        stringsFrom(contact.Tags),
 			Source:      contact.Source,
 			CreatedAt:   contact.CreatedAt,

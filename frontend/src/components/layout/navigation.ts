@@ -34,6 +34,8 @@ export interface NavItem {
   path: string
   icon: Component
   permission?: string
+  /** Optional module this item belongs to; hidden when the module is off. */
+  module?: string
   childPermissions?: string[]
   children?: NavItem[]
 }
@@ -209,3 +211,90 @@ export const navigationSections: NavSection[] = [
 
 // Flat list for backward compatibility (used by AppLayout computed)
 export const navigationItems: NavItem[] = navigationSections.flatMap(s => s.items)
+
+/** One dashboard shortcut: a destination the user can pin to their dashboard. */
+export interface NavShortcut {
+  key: string
+  /** i18n key for the label, e.g. nav.contacts. */
+  name: string
+  path: string
+  icon: Component
+  permission?: string
+  module?: string
+}
+
+// legacyShortcutKeys keeps shortcuts saved before the registry was derived from
+// navigation working. Users have these keys stored against their dashboard; a
+// key that no longer resolves renders as a gap they cannot remove.
+const legacyShortcutKeys: Record<string, string> = {
+  chat: '/chat',
+  campaigns: '/campaigns',
+  templates: '/templates',
+  chatbot: '/chatbot',
+  contacts: '/contacts',
+  flows: '/flows',
+  transfers: '/chatbot/transfers',
+  agentAnalytics: '/analytics/agents',
+  metaInsights: '/analytics/meta-insights',
+  settings: '/settings',
+  accounts: '/settings/accounts',
+  cannedResponses: '/settings/canned-responses',
+  tags: '/settings/tags',
+  teams: '/settings/teams',
+  users: '/settings/users',
+  roles: '/settings/roles',
+  apiKeys: '/settings/api-keys',
+  webhooks: '/settings/webhooks',
+  customActions: '/settings/custom-actions',
+  sso: '/settings/sso',
+}
+
+/** shortcutKeyForPath turns /settings/canned-responses into settingsCannedResponses. */
+function shortcutKeyForPath(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  if (parts.length === 0) return 'dashboard'
+  return parts
+    .map(part => part.split('-'))
+    .flat()
+    .map((word, i) => (i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join('')
+}
+
+/**
+ * navigationShortcuts is the dashboard's shortcut catalog, derived from the
+ * sidebar so the two cannot drift.
+ *
+ * The dashboard kept its own hand-written list. It had never been updated for
+ * anything the CRM added, so Contacts, Tasks, Pipeline, Segments, Automations,
+ * Reports, the Inbox and the audit log could not be pinned at all — and its
+ * "Contacts" entry pointed at the settings page while the sidebar's pointed at
+ * the CRM list, so the same word went to two different screens.
+ */
+export function navigationShortcuts(): NavShortcut[] {
+  const byPath = new Map<string, NavShortcut>()
+
+  const add = (item: NavItem) => {
+    if (byPath.has(item.path)) return
+    byPath.set(item.path, {
+      key: shortcutKeyForPath(item.path),
+      name: item.name,
+      path: item.path,
+      icon: item.icon,
+      permission: item.permission,
+      module: item.module,
+    })
+    item.children?.forEach(add)
+  }
+  navigationSections.forEach(section => section.items.forEach(add))
+
+  // Legacy keys point at the same destinations; give them the derived entry's
+  // label and icon so a saved shortcut still renders.
+  const out = [...byPath.values()]
+  for (const [key, path] of Object.entries(legacyShortcutKeys)) {
+    const derived = byPath.get(path)
+    if (derived && derived.key !== key) {
+      out.push({ ...derived, key })
+    }
+  }
+  return out
+}

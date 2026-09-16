@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageHeader, AuditLogPanel } from '@/components/shared'
+import { PageHeader, AuditLogPanel, TimezoneSelect } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
 import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
@@ -51,6 +51,11 @@ const notificationSettings = ref({
   new_message_alerts: true,
   campaign_updates: true
 })
+
+// A per-user timezone override (plan 10, S11). Empty means "use the
+// organization's", which is what most people want; the exception is the agent
+// who works from another country and needs timestamps in their own day.
+const personalTimezone = ref('')
 
 // Calling Settings
 const callingSettings = ref({
@@ -118,6 +123,7 @@ onMounted(async () => {
         new_message_alerts: user.settings.new_message_alerts ?? true,
         campaign_updates: user.settings.campaign_updates ?? true
       }
+      personalTimezone.value = user.settings.timezone || ''
     }
   } catch (error) {
     console.error('Failed to load settings:', error)
@@ -166,8 +172,10 @@ async function saveNotificationSettings() {
     await usersService.updateSettings({
       email_notifications: notificationSettings.value.email_notifications,
       new_message_alerts: notificationSettings.value.new_message_alerts,
-      campaign_updates: notificationSettings.value.campaign_updates
+      campaign_updates: notificationSettings.value.campaign_updates,
+      timezone: personalTimezone.value
     })
+    await authStore.refreshUserData()
     toast.success(t('settings.notificationsSaved'))
     refreshActivityLog(notificationLogKey)
   } catch (error) {
@@ -281,18 +289,10 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <div class="grid grid-cols-2 gap-4">
                   <div class="space-y-2">
                     <Label for="timezone" class="text-white/70 light:text-gray-700">{{ $t('settings.defaultTimezone') }}</Label>
-                    <Select v-model="generalSettings.default_timezone">
-                      <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
-                        <SelectValue :placeholder="$t('settings.selectTimezone')" />
-                      </SelectTrigger>
-                      <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
-                        <SelectItem value="UTC" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">UTC</SelectItem>
-                        <SelectItem value="America/New_York" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Eastern Time</SelectItem>
-                        <SelectItem value="America/Los_Angeles" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Pacific Time</SelectItem>
-                        <SelectItem value="Europe/London" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">London</SelectItem>
-                        <SelectItem value="Asia/Tokyo" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Tokyo</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <TimezoneSelect
+                      v-model="generalSettings.default_timezone"
+                      :placeholder="$t('settings.selectTimezone')"
+                    />
                   </div>
                   <div class="space-y-2">
                     <Label for="date_format" class="text-white/70 light:text-gray-700">{{ $t('settings.dateFormat') }}</Label>
@@ -421,6 +421,15 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   <Switch
                     :checked="notificationSettings.campaign_updates"
                     @update:checked="notificationSettings.campaign_updates = $event"
+                  />
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+                <div class="space-y-2">
+                  <p class="font-medium text-white light:text-gray-900">{{ $t('settings.myTimezone') }}</p>
+                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.myTimezoneDesc') }}</p>
+                  <TimezoneSelect
+                    v-model="personalTimezone"
+                    :inherit-label="$t('settings.useOrgTimezone')"
                   />
                 </div>
                 <div class="flex justify-end pt-4">

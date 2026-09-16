@@ -532,23 +532,36 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		profileName = utils.MaskIfPhoneNumber(profileName)
 	}
 
+	// The conversation assignee, not just the contact owner: the person who
+	// needs to know a reply landed is whoever is handling the conversation,
+	// and the client had only the owner to go on (plan 10, S10).
+	var conversationAssigneeID string
+	var liveConv models.Conversation
+	if err := a.DB.
+		Where("organization_id = ? AND contact_id = ? AND status <> ? AND deleted_at IS NULL",
+			orgID, contact.ID, models.ConversationResolved).
+		Order("opened_at DESC").First(&liveConv).Error; err == nil && liveConv.AssigneeID != nil {
+		conversationAssigneeID = liveConv.AssigneeID.String()
+	}
+
 	payload := map[string]any{
-		"id":               msg.ID.String(),
-		"contact_id":       contact.ID.String(),
-		"assigned_user_id": assignedUserIDStr,
-		"profile_name":     profileName,
-		"direction":        msg.Direction,
-		"message_type":     msg.MessageType,
-		"content":          map[string]string{"body": msg.Content},
-		"media_url":        messageMediaURL(msg),
-		"media_mime_type":  msg.MediaMimeType,
-		"media_filename":   msg.MediaFilename,
-		"interactive_data": msg.InteractiveData,
-		"status":           msg.Status,
-		"wamid":            msg.WhatsAppMessageID,
-		"created_at":       msg.CreatedAt,
-		"updated_at":       msg.UpdatedAt,
-		"is_reply":         msg.IsReply,
+		"id":                       msg.ID.String(),
+		"contact_id":               contact.ID.String(),
+		"assigned_user_id":         assignedUserIDStr,
+		"conversation_assignee_id": conversationAssigneeID,
+		"profile_name":             profileName,
+		"direction":                msg.Direction,
+		"message_type":             msg.MessageType,
+		"content":                  map[string]string{"body": msg.Content},
+		"media_url":                messageMediaURL(msg),
+		"media_mime_type":          msg.MediaMimeType,
+		"media_filename":           msg.MediaFilename,
+		"interactive_data":         msg.InteractiveData,
+		"status":                   msg.Status,
+		"wamid":                    msg.WhatsAppMessageID,
+		"created_at":               msg.CreatedAt,
+		"updated_at":               msg.UpdatedAt,
+		"is_reply":                 msg.IsReply,
 	}
 
 	// Add interactive data
@@ -572,10 +585,18 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		}
 	}
 
-	a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+	// Targeted, not org-wide (plan 10, S10). This payload carries the
+	// contact's name and the message body; sending it to every connected
+	// client meant every agent received every customer conversation in the
+	// organization, including the ones they cannot open.
+	msgOut := websocket.WSMessage{
 		Type:    websocket.TypeNewMessage,
 		Payload: payload,
-	})
+	}
+	audience := a.FilterUsersWhoCanSeeContact(orgID, contact, a.WSHub.OnlineUserIDs(orgID))
+	if len(audience) > 0 {
+		a.WSHub.BroadcastToUsers(orgID, audience, msgOut)
+	}
 }
 
 // broadcastReactionUpdate broadcasts a reaction update via WebSocket

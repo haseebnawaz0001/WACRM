@@ -17,6 +17,7 @@ const (
 	NotificationAutomation              = "automation"
 	NotificationMergeSuggestions        = "merge_suggestions"
 	NotificationDealRotting             = "deal_rotting"
+	NotificationCampaignPaused          = "campaign_paused"
 )
 
 // Notification is one in-app notification for one user (plan 00, F5).
