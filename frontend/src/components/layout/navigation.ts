@@ -7,6 +7,7 @@ import {
   Settings,
   Users,
   Contact,
+  ListChecks,
   Workflow,
   Sparkles,
   Key,
@@ -21,7 +22,10 @@ import {
   Tags,
   PhoneCall,
   PhoneForwarded,
-  ScrollText
+  ScrollText,
+  KanbanSquare,
+  PieChart,
+  Inbox
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -46,7 +50,7 @@ export interface NavSection {
 export const navigationSections: NavSection[] = [
   {
     label: 'nav.sectionMain',
-    permissions: ['analytics', 'chat'],
+    permissions: ['analytics', 'chat', 'contacts', 'deals', 'automations', 'tasks', 'segments'],
     items: [
       {
         name: 'nav.dashboard',
@@ -59,6 +63,42 @@ export const navigationSections: NavSection[] = [
         path: '/chat',
         icon: MessageSquare,
         permission: 'chat'
+      },
+      {
+        name: 'nav.inbox',
+        path: '/inbox',
+        icon: Inbox,
+        permission: 'chat'
+      },
+      {
+        name: 'nav.contacts',
+        path: '/contacts',
+        icon: Contact,
+        permission: 'contacts'
+      },
+      {
+        name: 'nav.tasks',
+        path: '/tasks',
+        icon: ListChecks,
+        permission: 'tasks'
+      },
+      {
+        name: 'nav.segments',
+        path: '/segments',
+        icon: Users,
+        permission: 'segments'
+      },
+      {
+        name: 'nav.pipeline',
+        path: '/pipeline',
+        icon: KanbanSquare,
+        permission: 'deals'
+      },
+      {
+        name: 'nav.automations',
+        path: '/automations',
+        icon: Zap,
+        permission: 'automations'
       },
     ]
   },
@@ -111,8 +151,14 @@ export const navigationSections: NavSection[] = [
   },
   {
     label: 'nav.sectionAnalytics',
-    permissions: ['analytics.agents', 'analytics'],
+    permissions: ['analytics.agents', 'analytics', 'reports'],
     items: [
+      {
+        name: 'nav.crmReports',
+        path: '/analytics/crm',
+        icon: PieChart,
+        permission: 'reports'
+      },
       {
         name: 'nav.agentAnalytics',
         path: '/analytics/agents',
@@ -137,12 +183,14 @@ export const navigationSections: NavSection[] = [
         path: '/settings',
         icon: Settings,
         permission: 'settings.general',
-        childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'contacts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
+        childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'contacts', 'pipelines', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
         children: [
           { name: 'nav.general', path: '/settings', icon: Settings, permission: 'settings.general' },
           { name: 'nav.chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
           { name: 'nav.accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
           { name: 'nav.contacts', path: '/settings/contacts', icon: Contact, permission: 'contacts' },
+          { name: 'nav.contactFields', path: '/settings/contact-fields', icon: ListChecks, permission: 'contact_fields' },
+          { name: 'nav.pipelines', path: '/settings/pipelines', icon: KanbanSquare, permission: 'pipelines' },
           { name: 'nav.cannedResponses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
           { name: 'nav.tags', path: '/settings/tags', icon: Tags, permission: 'tags' },
           { name: 'nav.teams', path: '/settings/teams', icon: Users, permission: 'teams' },

@@ -12,6 +12,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/schedule"
 )
 
 // maxChatGraphIterations bounds non-blocking node chains within a single
@@ -540,52 +541,29 @@ func evaluateConditionExpression(expression string, data models.JSONB) (bool, er
 //	  ]
 //	}
 //
-// Days not listed in the schedule are treated as out_of_hours, matching
-// IVR's behavior.
+// Days not listed in the schedule are treated as out_of_hours. The schedule is
+// evaluated in the organization's timezone through internal/schedule, so the
+// flow, the IVR and the chatbot's own business hours all agree (plan 10, S11).
 func (a *App) execChatTiming(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	rawSchedule, _ := node.Config["schedule"].([]any)
-	outcome := evaluateTimingSchedule(time.Now(), rawSchedule, a.Log)
-	_ = ctx // ctx unused — included for symmetry with other executors
+	loc := time.UTC
+	if ctx != nil && ctx.account != nil {
+		loc = a.OrgLocation(ctx.account.OrganizationID)
+	}
+	outcome := evaluateTimingSchedule(time.Now(), rawSchedule, loc, a.Log)
 	return nodeOutcome{outcome: outcome}, nil
 }
 
 // evaluateTimingSchedule is the pure decision function, factored out for
 // unit-testing with a fixed clock. Returns "in_hours" or "out_of_hours".
-func evaluateTimingSchedule(now time.Time, schedule []any, log scheduleLogger) string {
-	dayName := strings.ToLower(now.Weekday().String())
-	for _, item := range schedule {
-		entry, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		day, _ := entry["day"].(string)
-		if strings.ToLower(day) != dayName {
-			continue
-		}
-		enabled, _ := entry["enabled"].(bool)
-		if !enabled {
-			return "out_of_hours"
-		}
-		startStr, _ := entry["start_time"].(string)
-		endStr, _ := entry["end_time"].(string)
-		startTime, err1 := time.Parse("15:04", startStr)
-		endTime, err2 := time.Parse("15:04", endStr)
-		if err1 != nil || err2 != nil {
-			if log != nil {
-				log.Warn("timing node has invalid time format",
-					"start", startStr, "end", endStr)
-			}
-			return "out_of_hours"
-		}
-		nowMinutes := now.Hour()*60 + now.Minute()
-		startMinutes := startTime.Hour()*60 + startTime.Minute()
-		endMinutes := endTime.Hour()*60 + endTime.Minute()
-		if nowMinutes >= startMinutes && nowMinutes < endMinutes {
-			return "in_hours"
-		}
-		return "out_of_hours"
+func evaluateTimingSchedule(now time.Time, sched []any, loc *time.Location, log scheduleLogger) string {
+	entries := schedule.Parse(sched)
+	if len(entries) == 0 && len(sched) > 0 && log != nil {
+		log.Warn("timing node schedule could not be read", "entries", len(sched))
 	}
-	// Day not configured — treat as out of hours.
+	if schedule.IsOpen(now, entries, loc) {
+		return "in_hours"
+	}
 	return "out_of_hours"
 }
 

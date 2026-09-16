@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/internal/utils"
@@ -91,6 +92,11 @@ type MessageSendOptions struct {
 	// SentByUserID sets the user who sent the message (for agent messages)
 	SentByUserID *uuid.UUID
 
+	// SenderType records who produced the message. Every preset sets it;
+	// a zero value falls back to system so a message can never be silently
+	// counted as an agent reply it was not.
+	SenderType models.SenderType
+
 	// Async if true, sends in background goroutine and returns immediately
 	// Message is persisted before send, status updated after
 	Async bool
@@ -104,6 +110,7 @@ type MessageSendOptions struct {
 // DefaultSendOptions returns options suitable for agent UI sends
 func DefaultSendOptions() MessageSendOptions {
 	return MessageSendOptions{
+		SenderType:         models.SenderAgent,
 		BroadcastWebSocket: true,
 		DispatchWebhook:    true,
 		TrackSLA:           false,
@@ -114,6 +121,7 @@ func DefaultSendOptions() MessageSendOptions {
 // ChatbotSendOptions returns options suitable for chatbot sends
 func ChatbotSendOptions() MessageSendOptions {
 	return MessageSendOptions{
+		SenderType:         models.SenderBot,
 		BroadcastWebSocket: true,
 		DispatchWebhook:    false,
 		TrackSLA:           true,
@@ -125,6 +133,7 @@ func ChatbotSendOptions() MessageSendOptions {
 // APISendOptions returns options suitable for API/template sends
 func APISendOptions() MessageSendOptions {
 	return MessageSendOptions{
+		SenderType:         models.SenderAPI,
 		BroadcastWebSocket: false,
 		DispatchWebhook:    true,
 		TrackSLA:           false,
@@ -135,6 +144,7 @@ func APISendOptions() MessageSendOptions {
 // SLASendOptions returns options suitable for SLA system notifications
 func SLASendOptions() MessageSendOptions {
 	return MessageSendOptions{
+		SenderType:         models.SenderSystem,
 		BroadcastWebSocket: true,
 		DispatchWebhook:    false,
 		TrackSLA:           false,
@@ -275,6 +285,16 @@ func (a *App) toWhatsAppAccount(account *models.WhatsAppAccount) *whatsapp.Accou
 }
 
 // createOutgoingMessage creates a Message model from the request
+// senderTypeOrSystem defaults an unset sender to system. Defaulting to agent
+// would let an unattributed send inflate response-time metrics, so the safe
+// fallback is the one that counts towards nothing.
+func senderTypeOrSystem(s models.SenderType) models.SenderType {
+	if !s.Valid() {
+		return models.SenderSystem
+	}
+	return s
+}
+
 func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSendOptions) *models.Message {
 	msg := &models.Message{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
@@ -285,6 +305,7 @@ func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSend
 		MessageType:     req.Type,
 		Status:          models.MessageStatusPending,
 		SentByUserID:    opts.SentByUserID,
+		SenderType:      senderTypeOrSystem(opts.SenderType),
 	}
 
 	// Set content based on message type
@@ -458,6 +479,18 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 	})
 	a.Log.Info("Message sent", "message_id", msg.ID, "wa_message_id", wamid, "type", msg.MessageType)
 
+	// Record the outbound message against the conversation (plan 03). This
+	// runs only after a successful send: a message that never left must not
+	// count as the agent having responded.
+	if conv, convErr := a.Conversations().RecordOutbound(context.Background(),
+		req.Account.OrganizationID, req.Contact.ID, msg.SenderType, msg.SentByUserID,
+		time.Now().UTC()); convErr != nil {
+		a.Log.Error("Failed to record outbound conversation", "error", convErr, "message_id", msg.ID)
+	} else if conv != nil {
+		a.DB.Model(&models.Message{}).Where("id = ?", msg.ID).
+			Update("conversation_id", conv.ID.String())
+	}
+
 	// Dispatch webhook for successful send
 	if opts.DispatchWebhook {
 		a.dispatchMessageSentWebhook(req.Account, req.Contact, msg)
@@ -567,20 +600,28 @@ func (a *App) dispatchMessageSentWebhook(account *models.WhatsAppAccount, contac
 		sentByUserID = msg.SentByUserID.String()
 	}
 
-	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageSent, MessageEventData{
-		MessageID:       msg.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		MessageType:     msg.MessageType,
-		Content:         msg.Content,
-		MediaURL:        messageMediaURL(msg),
-		MediaMimeType:   msg.MediaMimeType,
-		MediaFilename:   msg.MediaFilename,
-		WhatsAppAccount: account.Name,
-		Direction:       models.DirectionOutgoing,
-		SentByUserID:    sentByUserID,
-	})
+	// The sender is the acting user when we know one; sends with no user
+	// behind them (chatbot, SLA, out-of-hours) are system. Distinguishing
+	// bot/automation/campaign senders properly is plan 10's S4 sender_type.
+	actor := crmevents.SystemActor()
+	if msg.SentByUserID != nil {
+		actor = crmevents.UserActor(*msg.SentByUserID, "")
+	}
+	a.PublishEvent(crmevents.New(account.OrganizationID, string(models.WebhookEventMessageSent),
+		actor, eventData(MessageEventData{
+			MessageID:       msg.ID.String(),
+			ContactID:       contact.ID.String(),
+			ContactPhone:    contact.PhoneNumber,
+			ContactName:     contact.ProfileName,
+			MessageType:     msg.MessageType,
+			Content:         msg.Content,
+			MediaURL:        messageMediaURL(msg),
+			MediaMimeType:   msg.MediaMimeType,
+			MediaFilename:   msg.MediaFilename,
+			WhatsAppAccount: account.Name,
+			Direction:       models.DirectionOutgoing,
+			SentByUserID:    sentByUserID,
+		})).ForContact(contact.ID).About(crmevents.SubjectMessage, msg.ID))
 }
 
 // updateContactLastMessage updates contact's last_message_at and preview

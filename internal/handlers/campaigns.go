@@ -403,7 +403,7 @@ func (a *App) DeleteCampaign(r *fastglue.Request) error {
 
 // StartCampaign implements starting a campaign
 func (a *App) StartCampaign(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceCampaigns, models.ActionExecute)
+	orgID, userID, err := a.requireAuth(r, models.ResourceCampaigns, models.ActionExecute)
 	if err != nil {
 		return nil
 	}
@@ -421,6 +421,13 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 	// Check if campaign can be started
 	if campaign.Status != models.CampaignStatusDraft && campaign.Status != models.CampaignStatusScheduled && campaign.Status != models.CampaignStatusPaused {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign cannot be started in current state", nil, "")
+	}
+
+	// A segment-targeted campaign builds its recipients now (plan 05), not when
+	// the audience was chosen: the audience is who matched when it went out.
+	if _, err := a.materializeSegmentAudience(orgID, userID, campaign); err != nil {
+		a.Log.Error("Failed to materialise campaign audience", "error", err, "campaign_id", campaign.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// Get all pending recipients

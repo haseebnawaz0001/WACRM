@@ -391,10 +391,13 @@ func (p *SLAProcessor) agentRespondedSince(transfer models.AgentTransfer, since 
 		return false
 	}
 
+	// sender_type, not just sent_by_user_id: API-key sends also carry the
+	// creating user's id, so without this filter an automated template send
+	// would look like the agent replying and silently suppress SLA warnings.
 	var count int64
 	p.app.DB.Model(&models.Message{}).
-		Where("contact_id = ? AND sent_by_user_id = ? AND direction = ? AND created_at > ?",
-			transfer.ContactID, *transfer.AgentID, models.DirectionOutgoing, since,
+		Where("contact_id = ? AND sent_by_user_id = ? AND direction = ? AND sender_type = ? AND created_at > ?",
+			transfer.ContactID, *transfer.AgentID, models.DirectionOutgoing, models.SenderAgent, since,
 		).Count(&count)
 
 	return count > 0

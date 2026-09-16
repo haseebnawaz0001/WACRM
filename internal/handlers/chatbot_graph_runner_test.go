@@ -789,36 +789,36 @@ func TestEvaluateTimingSchedule(t *testing.T) {
 	in := []any{
 		map[string]any{"day": "monday", "enabled": true, "start_time": "09:00", "end_time": "18:00"},
 	}
-	assert.Equal(t, "in_hours", evaluateTimingSchedule(now, in, nil))
+	assert.Equal(t, "in_hours", evaluateTimingSchedule(now, in, time.UTC, nil))
 
 	// Before the window.
 	early := time.Date(2026, 3, 2, 8, 0, 0, 0, time.UTC)
-	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(early, in, nil))
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(early, in, time.UTC, nil))
 
 	// After the window.
 	late := time.Date(2026, 3, 2, 19, 0, 0, 0, time.UTC)
-	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(late, in, nil))
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(late, in, time.UTC, nil))
 
 	// Day disabled.
 	disabled := []any{
 		map[string]any{"day": "monday", "enabled": false},
 	}
-	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, disabled, nil))
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, disabled, time.UTC, nil))
 
 	// Day not in schedule.
 	otherDay := []any{
 		map[string]any{"day": "sunday", "enabled": true, "start_time": "00:00", "end_time": "23:59"},
 	}
-	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, otherDay, nil))
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, otherDay, time.UTC, nil))
 
 	// Malformed time strings — graceful.
 	bad := []any{
 		map[string]any{"day": "monday", "enabled": true, "start_time": "x", "end_time": "y"},
 	}
-	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, bad, nil))
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, bad, time.UTC, nil))
 
 	// Empty schedule.
-	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, nil, nil))
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, nil, time.UTC, nil))
 }
 
 // TestRunChatGraph_Timing_RoutesByCurrentTime exercises the full executor

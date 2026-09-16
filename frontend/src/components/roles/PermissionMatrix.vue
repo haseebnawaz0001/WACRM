@@ -94,8 +94,13 @@ const groupsWithSelections = computed(() => {
     .map(g => g.resource)
 })
 
-// Sort groups: selected groups first, then alphabetically
+// Sort groups: selected groups first, then in the store's area order.
+//
+// The store already orders by area of the product; re-sorting alphabetically
+// here would undo that and put Accounts next to Automations again.
 const sortedPermissionGroups = computed(() => {
+  const order = new Map(props.permissionGroups.map((group, index) => [group.resource, index]))
+
   return [...props.permissionGroups].sort((a, b) => {
     const aHasSelection = a.permissions.some(p => props.selectedPermissions.includes(p.key))
     const bHasSelection = b.permissions.some(p => props.selectedPermissions.includes(p.key))
@@ -104,8 +109,7 @@ const sortedPermissionGroups = computed(() => {
     if (aHasSelection && !bHasSelection) return -1
     if (!aHasSelection && bHasSelection) return 1
 
-    // Within same category, sort alphabetically
-    return a.label.localeCompare(b.label)
+    return (order.get(a.resource) ?? 0) - (order.get(b.resource) ?? 0)
   })
 })
 

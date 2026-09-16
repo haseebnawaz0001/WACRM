@@ -47,21 +47,24 @@ run-migrate:
 # failure summary at the end. Falls back to the built-in `go test -v` so
 # nothing breaks for devs who haven't installed it.
 # Install:  go install gotest.tools/gotestsum@latest
+# -p 1 runs packages sequentially to avoid database conflicts: the DB-backed
+# packages share one TEST_DATABASE_URL, so parallel packages clobber each
+# other's fixtures. CI passes the same flag (.github/workflows/test.yml).
 test:
 	@if command -v gotestsum >/dev/null 2>&1; then \
-		gotestsum --format testname --hide-summary=skipped -- ./...; \
+		gotestsum --format testname --hide-summary=skipped -- -p 1 ./...; \
 	else \
 		echo "(install gotestsum for nicer output: go install gotest.tools/gotestsum@latest)"; \
-		$(GOTEST) -v ./...; \
+		$(GOTEST) -v -p 1 ./...; \
 	fi
 
 # Run tests with coverage. Same gotestsum fallback as `make test`.
 test-coverage:
 	@if command -v gotestsum >/dev/null 2>&1; then \
-		gotestsum --format testname --hide-summary=skipped -- -coverprofile=coverage.out ./...; \
+		gotestsum --format testname --hide-summary=skipped -- -p 1 -coverprofile=coverage.out ./...; \
 	else \
 		echo "(install gotestsum for nicer output: go install gotest.tools/gotestsum@latest)"; \
-		$(GOTEST) -v -coverprofile=coverage.out ./...; \
+		$(GOTEST) -v -p 1 -coverprofile=coverage.out ./...; \
 	fi
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 

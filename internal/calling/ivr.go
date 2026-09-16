@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pion/webrtc/v4"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/schedule"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
@@ -538,45 +539,27 @@ func (m *Manager) executeGotoFlow(session *CallSession, node *IVRNode, ctx *IVRC
 
 // executeTiming branches based on business hours schedule.
 func (m *Manager) executeTiming(session *CallSession, node *IVRNode) string {
-	now := time.Now()
-	dayName := strings.ToLower(now.Weekday().String())
-
 	scheduleRaw, _ := node.Config["schedule"].([]any)
-	for _, item := range scheduleRaw {
-		entry, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		day, _ := entry["day"].(string)
-		if strings.ToLower(day) != dayName {
-			continue
-		}
-		enabled, _ := entry["enabled"].(bool)
-		if !enabled {
-			return "out_of_hours"
-		}
-		startStr, _ := entry["start_time"].(string)
-		endStr, _ := entry["end_time"].(string)
 
-		startTime, err1 := time.Parse("15:04", startStr)
-		endTime, err2 := time.Parse("15:04", endStr)
-		if err1 != nil || err2 != nil {
-			m.log.Error("Invalid schedule time format", "call_id", session.ID, "start", startStr, "end", endStr)
-			return "out_of_hours"
-		}
-
-		nowMinutes := now.Hour()*60 + now.Minute()
-		startMinutes := startTime.Hour()*60 + startTime.Minute()
-		endMinutes := endTime.Hour()*60 + endTime.Minute()
-
-		if nowMinutes >= startMinutes && nowMinutes < endMinutes {
-			return "in_hours"
-		}
-		return "out_of_hours"
+	// Evaluated through internal/schedule in the organization's timezone, so
+	// the IVR, chat flows and the chatbot's business hours agree (plan 10,
+	// S11). These were three separate implementations that disagreed on the
+	// day format and the closing-time boundary.
+	loc := m.orgLocation(session.OrganizationID)
+	if schedule.IsOpen(time.Now(), schedule.Parse(scheduleRaw), loc) {
+		return "in_hours"
 	}
-
-	// Day not found in schedule — treat as out of hours
 	return "out_of_hours"
+}
+
+// orgLocation resolves the organization's timezone, falling back to UTC.
+func (m *Manager) orgLocation(orgID uuid.UUID) *time.Location {
+	var org models.Organization
+	if err := m.db.Select("settings").Where("id = ?", orgID).First(&org).Error; err != nil {
+		return time.UTC
+	}
+	name, _ := org.Settings["timezone"].(string)
+	return schedule.Location(name)
 }
 
 // executeHangup plays optional goodbye audio and terminates the call. Terminal.

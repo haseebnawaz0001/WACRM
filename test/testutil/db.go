@@ -6,7 +6,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/shridarpatil/whatomate/internal/database"
+	"github.com/shridarpatil/whatomate/internal/migrations"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/zerodha/logf"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -44,6 +47,30 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		// Run migrations once
 		if err := runMigrations(testDB); err != nil {
 			testDBInitErr = fmt.Errorf("failed to run migrations: %w", err)
+			return
+		}
+
+		// Create the same indexes production has. Without them a test can
+		// insert rows the real database would reject, so constraints like
+		// "one active transfer per contact" would pass in tests and fail in
+		// production.
+		if err := database.CreateIndexes(testDB); err != nil {
+			testDBInitErr = fmt.Errorf("failed to create indexes: %w", err)
+			return
+		}
+
+		// Seed the permission catalog before the data migrations, matching
+		// the order the application uses. Migrations that grant permissions
+		// resolve them by name, so the catalog has to exist first.
+		if err := database.SeedPermissionsAndRoles(testDB); err != nil {
+			testDBInitErr = fmt.Errorf("failed to seed permissions: %w", err)
+			return
+		}
+
+		// Apply versioned data migrations so tests see the same seeded and
+		// backfilled state the application runs against (plan 00, F1).
+		if err := migrations.RunPending(testDB, logf.New(logf.Opts{Level: logf.ErrorLevel})); err != nil {
+			testDBInitErr = fmt.Errorf("failed to run data migrations: %w", err)
 			return
 		}
 
@@ -128,6 +155,27 @@ func runMigrations(db *gorm.DB) error {
 		&models.CallPermission{},
 		// Audit
 		&models.AuditLog{},
+		// CRM event outbox and webhook delivery log
+		&models.CRMEventOutbox{},
+		&models.WebhookDelivery{},
+		&models.ContactActivity{},
+		&models.Notification{},
+		&models.CustomFieldDefinition{},
+		&models.CustomFieldValue{},
+		&models.Conversation{},
+		&models.TaskType{},
+		&models.Task{},
+		&models.Segment{},
+		&models.ContactIdentity{},
+		&models.ContactDuplicateCandidate{},
+		&models.ContactMerge{},
+		&models.Pipeline{},
+		&models.PipelineStage{},
+		&models.Deal{},
+		&models.DealStageHistory{},
+		&models.AutomationRule{},
+		&models.AutomationRun{},
+		&models.AutomationContactState{},
 	)
 }
 
@@ -135,6 +183,27 @@ func runMigrations(db *gorm.DB) error {
 // Uses TRUNCATE CASCADE to handle foreign key constraints properly.
 func cleanupTables(db *gorm.DB) {
 	tables := []string{
+		// CRM event outbox and webhook delivery log
+		"crm_event_outbox",
+		"webhook_deliveries",
+		"contact_activities",
+		"notifications",
+		"automation_runs",
+		"automation_contact_state",
+		"automation_rules",
+		"deal_stage_history",
+		"deals",
+		"pipeline_stages",
+		"pipelines",
+		"contact_merges",
+		"contact_duplicate_candidates",
+		"contact_identities",
+		"segments",
+		"tasks",
+		"task_types",
+		"conversations",
+		"custom_field_values",
+		"custom_field_definitions",
 		// Dashboard tables
 		"widgets",
 		// Catalog tables
@@ -187,6 +256,27 @@ func cleanupTables(db *gorm.DB) {
 // TruncateTables truncates all tables (PostgreSQL only, faster than DELETE).
 func TruncateTables(db *gorm.DB) {
 	tables := []string{
+		// CRM event outbox and webhook delivery log
+		"crm_event_outbox",
+		"webhook_deliveries",
+		"contact_activities",
+		"notifications",
+		"automation_runs",
+		"automation_contact_state",
+		"automation_rules",
+		"deal_stage_history",
+		"deals",
+		"pipeline_stages",
+		"pipelines",
+		"contact_merges",
+		"contact_duplicate_candidates",
+		"contact_identities",
+		"segments",
+		"tasks",
+		"task_types",
+		"conversations",
+		"custom_field_values",
+		"custom_field_definitions",
 		"widgets",
 		"catalog_products",
 		"catalogs",

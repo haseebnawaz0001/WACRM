@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
@@ -212,13 +214,29 @@ func (a *App) ExportData(r *fastglue.Request) error {
 		columns = config.DefaultColumns
 	}
 
+	// Custom field columns are namespaced, so a field called "tags" cannot
+	// shadow the built-in column of the same name.
+	fieldLabels := map[string]string{}
+	for _, def := range a.exportableContactFields(req.Table, orgID) {
+		fieldLabels[def.Key] = def.Label
+	}
+
 	// Validate columns against allowed set
 	allowedSet := make(map[string]bool)
 	for _, col := range config.AllowedColumns {
 		allowedSet[col] = true
 	}
 	requestedCols := make(map[string]bool, len(columns))
+	fieldCols := make([]string, 0, len(columns))
 	for _, col := range columns {
+		if key, isField := strings.CutPrefix(col, customfields.FieldKeyPrefix); isField {
+			if _, known := fieldLabels[key]; !known {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					fmt.Sprintf("Field '%s' is not a field on this organization's contacts", key), nil, "")
+			}
+			fieldCols = append(fieldCols, key)
+			continue
+		}
 		if !allowedSet[col] {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, fmt.Sprintf("Column '%s' is not allowed for export", col), nil, "")
 		}
@@ -291,7 +309,15 @@ func (a *App) ExportData(r *fastglue.Request) error {
 			header[i] = col
 		}
 	}
+	for _, key := range fieldCols {
+		header = append(header, fieldLabels[key])
+	}
 	_ = writer.Write(header)
+
+	// Field values are fetched once for the whole export rather than per row,
+	// so adding fields to an export does not turn it into an N+1.
+	exportedIDs := make([]uuid.UUID, 0)
+	buffered := make([][]string, 0)
 
 	// Write rows
 	for rows.Next() {
@@ -338,7 +364,35 @@ func (a *App) ExportData(r *fastglue.Request) error {
 				csvRow[j] = "'" + cell
 			}
 		}
-		_ = writer.Write(csvRow)
+		if len(fieldCols) == 0 {
+			_ = writer.Write(csvRow)
+			continue
+		}
+		// The driver hands a uuid column back as a value, bytes or a string
+		// depending on the column type, so all three are read. A row whose id
+		// cannot be read still exports — without its field values rather than
+		// not at all.
+		exportedIDs = append(exportedIDs, scanUUID(values[0]))
+		buffered = append(buffered, csvRow)
+	}
+
+	if len(fieldCols) > 0 {
+		byContact, err := customfields.New(a.DB).ValuesFor(context.Background(), orgID,
+			exportedIDs, models.FieldEntityContact)
+		if err != nil {
+			a.Log.Error("Failed to load field values for export", "error", err, "org_id", orgID)
+			byContact = nil
+		}
+		for i, csvRow := range buffered {
+			var values map[string]any
+			if i < len(exportedIDs) {
+				values = byContact[exportedIDs[i]]
+			}
+			for _, key := range fieldCols {
+				csvRow = append(csvRow, formatExportValue(values[key]))
+			}
+			_ = writer.Write(csvRow)
+		}
 	}
 
 	writer.Flush()
@@ -664,11 +718,61 @@ func (a *App) GetExportConfig(r *fastglue.Request) error {
 		}
 	}
 
+	// Custom fields are exportable too (plan 01): an export that silently drops
+	// the fields an organization added is an export of somebody else's record.
+	for _, field := range a.exportableContactFields(tableName, orgID) {
+		columns = append(columns, map[string]string{
+			"key":   customfields.FieldKeyPrefix + field.Key,
+			"label": field.Label,
+		})
+	}
+
 	return r.SendEnvelope(map[string]any{
 		"table":           tableName,
 		"columns":         columns,
 		"default_columns": config.DefaultColumns,
 	})
+}
+
+// exportableContactFields lists the organization's live custom fields, for the
+// contacts export only. Archived fields are left out: their values are still
+// readable on a record, but offering them as an export column would suggest
+// they are still part of the shape of a contact.
+func (a *App) exportableContactFields(tableName string, orgID uuid.UUID) []models.CustomFieldDefinition {
+	if tableName != "contacts" {
+		return nil
+	}
+	defs, err := customfields.New(a.DB).Definitions(context.Background(), orgID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("Failed to load contact fields for export", "error", err, "org_id", orgID)
+		return nil
+	}
+
+	out := make([]models.CustomFieldDefinition, 0, len(defs))
+	for _, def := range defs {
+		if def.IsArchived() {
+			continue
+		}
+		out = append(out, def)
+	}
+	return out
+}
+
+// scanUUID reads an id out of a raw scanned value.
+func scanUUID(value any) uuid.UUID {
+	switch v := value.(type) {
+	case uuid.UUID:
+		return v
+	case []byte:
+		if parsed, err := uuid.ParseBytes(v); err == nil {
+			return parsed
+		}
+	case string:
+		if parsed, err := uuid.Parse(v); err == nil {
+			return parsed
+		}
+	}
+	return uuid.Nil
 }
 
 // GetImportConfig returns the import configuration for a table

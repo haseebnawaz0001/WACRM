@@ -10,8 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/assignment"
+	"github.com/shridarpatil/whatomate/internal/automation"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/database"
@@ -19,6 +21,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/scheduler"
 	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/websocket"
@@ -28,6 +31,15 @@ import (
 	"github.com/zerodha/fastglue"
 	"github.com/zerodha/logf"
 )
+
+// consumerName identifies this process in the automation consumer group.
+func consumerName() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "server"
+	}
+	return host + ":" + uuid.NewString()[:8]
+}
 
 var (
 	Version   = "dev"
@@ -282,6 +294,42 @@ func runServer(args []string) {
 	go slaProcessor.Start(slaCtx)
 	lo.Info("SLA processor started")
 
+	// Start periodic jobs behind a cluster-wide leader lock (plan 00, F4), so
+	// adding a replica does not run every job several times over.
+	sched := scheduler.New(rdb, lo)
+	app.RegisterJobs(sched)
+	schedCtx, schedCancel := context.WithCancel(context.Background())
+	sched.Start(schedCtx)
+
+	// Start the CRM event outbox relay and the fan-out subscriber that
+	// delivers relayed events to this replica's WebSocket clients. The relay
+	// claims rows with FOR UPDATE SKIP LOCKED, so running it on every replica
+	// is safe.
+	relayCtx, relayCancel := context.WithCancel(context.Background())
+	if err := app.StartCRMEventSubscriber(relayCtx); err != nil {
+		lo.Error("Failed to start CRM event subscriber", "error", err)
+	}
+	go app.NewEventRelay().Run(relayCtx)
+	lo.Info("CRM event relay started")
+
+	// Start the automation engine's stream consumer (plan 08). Every replica
+	// joins the same consumer group, so each event is acted on once however
+	// many servers are running.
+	automationConsumer := &automation.Consumer{
+		Redis:  rdb,
+		Engine: app.AutomationEngine(),
+		Log:    lo,
+		// The name identifies this replica inside the group; two replicas
+		// sharing one would steal each other's pending entries.
+		Name: consumerName(),
+	}
+	go func() {
+		if err := automationConsumer.Run(relayCtx); err != nil {
+			lo.Error("Automation consumer stopped", "error", err)
+		}
+	}()
+	lo.Info("Automation engine started")
+
 	// Start embedded workers
 	var workers []*worker.Worker
 	var workerCancel context.CancelFunc
@@ -326,6 +374,18 @@ func runServer(args []string) {
 	slaCancel()
 	slaProcessor.Stop()
 	lo.Info("SLA processor stopped")
+
+	// Stop the CRM event relay. Events still unpublished stay in the outbox
+	// and are picked up by whichever relay runs next.
+	lo.Info("Stopping CRM event relay...")
+	relayCancel()
+	lo.Info("CRM event relay stopped")
+
+	// Stop periodic jobs. Each job is idempotent and safe to skip a tick, so
+	// stopping mid-schedule loses nothing.
+	lo.Info("Stopping scheduler...")
+	schedCancel()
+	lo.Info("Scheduler stopped")
 
 	// Stop workers first
 	if workerCancel != nil {
@@ -578,6 +638,102 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		return r
 	})
 
+	// Contact timeline (plan 02)
+	g.GET("/api/contacts/{id}/timeline", app.GetContactTimeline)
+
+	// Tasks (plan 04)
+	g.GET("/api/tasks", app.ListTasks)
+	g.POST("/api/tasks", app.CreateTask)
+	g.GET("/api/task-types", app.ListTaskTypes)
+	g.POST("/api/tasks/{id}/complete", app.CompleteTask)
+	g.POST("/api/tasks/{id}/cancel", app.CancelTask)
+	g.POST("/api/tasks/{id}/reassign", app.ReassignTask)
+
+	// Pipelines and deals (plan 07)
+	g.GET("/api/pipelines", app.ListPipelines)
+	g.POST("/api/pipelines", app.CreatePipeline)
+	g.GET("/api/pipelines/{id}", app.GetPipeline)
+	g.PUT("/api/pipelines/{id}", app.UpdatePipeline)
+	g.DELETE("/api/pipelines/{id}", app.DeletePipeline)
+	g.GET("/api/pipelines/{id}/board", app.Board)
+	g.GET("/api/pipelines/{id}/stages/{stageId}/deals", app.StageDeals)
+	g.POST("/api/pipelines/{id}/stages", app.CreateStage)
+	g.PUT("/api/pipelines/{id}/stages/reorder", app.ReorderStages)
+	g.PUT("/api/pipeline-stages/{id}", app.UpdateStage)
+	g.DELETE("/api/pipeline-stages/{id}", app.DeleteStage)
+	g.GET("/api/deals", app.ListDeals)
+	g.POST("/api/deals", app.CreateDeal)
+	g.GET("/api/deals/{id}", app.GetDeal)
+	g.PUT("/api/deals/{id}", app.UpdateDeal)
+	g.DELETE("/api/deals/{id}", app.DeleteDeal)
+	g.POST("/api/deals/{id}/move", app.MoveDeal)
+	g.GET("/api/deals/{id}/history", app.DealHistory)
+	g.GET("/api/contacts/{id}/deals", app.ContactDeals)
+
+	// Duplicate detection and merge (plan 06)
+	g.GET("/api/contacts/duplicates", app.ListDuplicates)
+	g.POST("/api/contacts/duplicates/scan", app.ScanDuplicates)
+	g.POST("/api/contacts/duplicates/{id}/dismiss", app.DismissDuplicate)
+	g.POST("/api/contacts/merge", app.MergeContacts)
+	g.GET("/api/contacts/{id}/merges", app.ContactMergeHistory)
+
+	// Segments (plan 05)
+	g.GET("/api/segments", app.ListSegments)
+	g.POST("/api/segments", app.CreateSegment)
+	g.POST("/api/segments/preview-count", app.PreviewSegmentCount)
+	g.GET("/api/segments/{id}", app.GetSegment)
+	g.PUT("/api/segments/{id}", app.UpdateSegment)
+	g.DELETE("/api/segments/{id}", app.DeleteSegment)
+	g.POST("/api/segments/{id}/count", app.CountSegment)
+	g.POST("/api/segments/{id}/contacts", app.SegmentContacts)
+
+	// CRM reports (plan 09)
+	g.GET("/api/reports/contacts-by-source", app.ContactsBySourceReport)
+	g.GET("/api/reports/lifecycle-funnel", app.LifecycleFunnelReport)
+	g.GET("/api/reports/pipeline-funnel", app.PipelineFunnelReport)
+	g.GET("/api/reports/pipeline-forecast", app.PipelineForecastReport)
+	g.GET("/api/reports/tasks-by-agent", app.TasksByAgentReport)
+	g.GET("/api/reports/agent-performance", app.AgentPerformanceReport)
+	g.GET("/api/reports/{key}/export.csv", app.ExportReport)
+
+	// Automations (plan 08)
+	g.GET("/api/automations", app.ListAutomations)
+	g.POST("/api/automations", app.CreateAutomation)
+	g.GET("/api/automations/catalog", app.AutomationCatalog)
+	g.GET("/api/automations/{id}", app.GetAutomation)
+	g.PUT("/api/automations/{id}", app.UpdateAutomation)
+	g.DELETE("/api/automations/{id}", app.DeleteAutomation)
+	g.POST("/api/automations/{id}/enable", app.EnableAutomation)
+	g.POST("/api/automations/{id}/disable", app.DisableAutomation)
+	g.POST("/api/automations/{id}/test", app.TestAutomation)
+	g.GET("/api/automations/{id}/runs", app.AutomationRuns)
+	g.GET("/api/contacts/{id}/automation-runs", app.ContactAutomationRuns)
+
+	// Inbox and conversations (plan 03)
+	g.GET("/api/inbox", app.ListInbox)
+	g.GET("/api/inbox/counts", app.GetInboxCounts)
+	g.GET("/api/contacts/{id}/conversation", app.GetConversation)
+	g.POST("/api/conversations/resolve", app.ResolveConversation)
+	g.POST("/api/conversations/snooze", app.SnoozeConversation)
+	g.POST("/api/conversations/assign", app.AssignConversation)
+
+	// Contacts list v2 (plan 01 + plan 00 F6)
+	g.POST("/api/contacts/search", app.SearchContacts)
+	g.GET("/api/contacts/filter-fields", app.GetContactFilterFields)
+
+	// Contact fields (plan 01)
+	g.GET("/api/contact-fields", app.ListContactFields)
+	g.POST("/api/contact-fields", app.CreateContactField)
+	g.PUT("/api/contact-fields/{id}", app.UpdateContactField)
+	g.DELETE("/api/contact-fields/{id}", app.DeleteContactField)
+
+	// Notifications (self-service: a notification belongs to one user and
+	// every query is scoped to the caller, so there is no permission resource)
+	g.GET("/api/notifications", app.ListNotifications)
+	g.GET("/api/notifications/unread-count", app.GetUnreadNotificationCount)
+	g.POST("/api/notifications/{id}/read", app.MarkNotificationRead)
+	g.POST("/api/notifications/read-all", app.MarkAllNotificationsRead)
+
 	// Current User (all authenticated users)
 	g.GET("/api/me", app.GetCurrentUser)
 	g.PUT("/api/me/settings", app.UpdateCurrentUserSettings)
@@ -697,6 +853,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/campaigns/{id}/progress", app.GetCampaign)
 	g.POST("/api/campaigns/{id}/recipients/import", app.ImportRecipients)
 	g.GET("/api/campaigns/{id}/recipients", app.GetCampaignRecipients)
+	// Audience: point a campaign at a saved segment (plan 05).
+	g.PUT("/api/campaigns/{id}/audience", app.SetCampaignAudience)
+	g.POST("/api/campaigns/{id}/audience/preview", app.PreviewCampaignAudience)
 	g.DELETE("/api/campaigns/{id}/recipients/{recipientId}", app.DeleteCampaignRecipient)
 	g.POST("/api/campaigns/{id}/media", app.UploadCampaignMedia)
 	g.GET("/api/campaigns/{id}/media", app.ServeCampaignMedia)

@@ -8,7 +8,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/assignment"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/transfers"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
@@ -542,17 +544,18 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 		idStr := transfer.AgentID.String()
 		agentIDStr = &idStr
 	}
-	a.DispatchWebhook(orgID, models.WebhookEventTransferCreated, TransferEventData{
-		TransferID:      transfer.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		Source:          transfer.Source,
-		Reason:          transfer.Notes,
-		AgentID:         agentIDStr,
-		AgentName:       agentName,
-		WhatsAppAccount: transfer.WhatsAppAccount,
-	})
+	a.PublishEvent(crmevents.New(orgID, string(models.WebhookEventTransferCreated),
+		crmevents.SystemActor(), eventData(TransferEventData{
+			TransferID:      transfer.ID.String(),
+			ContactID:       contact.ID.String(),
+			ContactPhone:    contact.PhoneNumber,
+			ContactName:     contact.ProfileName,
+			Source:          transfer.Source,
+			Reason:          transfer.Notes,
+			AgentID:         agentIDStr,
+			AgentName:       agentName,
+			WhatsAppAccount: transfer.WhatsAppAccount,
+		})).ForContact(contact.ID).About(crmevents.SubjectTransfer, transfer.ID))
 
 	// Load relations for response
 	a.DB.Preload("Agent").Preload("Team").Preload("TransferredByUser").First(&transfer, transfer.ID)
@@ -665,14 +668,15 @@ func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
 	a.DB.Where("id = ?", transfer.ContactID).First(&contact)
 
 	// Dispatch webhook for transfer resumed
-	a.DispatchWebhook(orgID, models.WebhookEventTransferResumed, TransferEventData{
-		TransferID:      transfer.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		Source:          transfer.Source,
-		WhatsAppAccount: transfer.WhatsAppAccount,
-	})
+	a.PublishEvent(crmevents.New(orgID, string(models.WebhookEventTransferResumed),
+		crmevents.SystemActor(), eventData(TransferEventData{
+			TransferID:      transfer.ID.String(),
+			ContactID:       contact.ID.String(),
+			ContactPhone:    contact.PhoneNumber,
+			ContactName:     contact.ProfileName,
+			Source:          transfer.Source,
+			WhatsAppAccount: transfer.WhatsAppAccount,
+		})).ForContact(contact.ID).About(crmevents.SubjectTransfer, transfer.ID))
 
 	return r.SendEnvelope(map[string]any{
 		"message": "Transfer resumed, chatbot is now active for this contact",
@@ -761,11 +765,6 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		}
 	}
 
-	// Capture the previous agent before we overwrite — the unassign branch
-	// below needs it to decide whether the contact's relationship-manager
-	// pointer was pointing at the agent we're removing.
-	previousAgentID := transfer.AgentID
-
 	// Update transfer
 	transfer.AgentID = targetAgentID
 
@@ -788,14 +787,13 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		if settings != nil && settings.AgentAssignment.AssignToSameAgent && transfer.Contact.AssignedUserID == nil {
 			a.DB.Model(transfer.Contact).Update("assigned_user_id", targetAgentID)
 		}
-	} else if targetAgentID == nil && transfer.Contact != nil {
-		// Unassigning (returning to queue) — clear the relationship-manager
-		// pointer iff it was pointing at the agent we just removed. Don't
-		// blow away a manually set manager that wasn't this transfer's agent.
-		if previousAgentID != nil && transfer.Contact.AssignedUserID != nil && *transfer.Contact.AssignedUserID == *previousAgentID {
-			a.DB.Model(transfer.Contact).Update("assigned_user_id", nil)
-		}
 	}
+	// Returning a transfer to the queue deliberately leaves the contact owner
+	// alone (plan 10, S5). The owner is the relationship manager, not the
+	// current conversation assignee: clearing it here detached contacts from
+	// their owner every time an agent stepped away, and broke IVR calls that
+	// route to the owner first. Ownership changes only through an explicit
+	// owner action.
 
 	// Broadcast WebSocket notification
 	a.broadcastTransferAssigned(&transfer)
@@ -818,16 +816,17 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		contactPhone = transfer.Contact.PhoneNumber
 		contactName = transfer.Contact.ProfileName
 	}
-	a.DispatchWebhook(orgID, models.WebhookEventTransferAssigned, TransferEventData{
-		TransferID:      transfer.ID.String(),
-		ContactID:       transfer.ContactID.String(),
-		ContactPhone:    contactPhone,
-		ContactName:     contactName,
-		Source:          transfer.Source,
-		AgentID:         agentIDStr,
-		AgentName:       agentName,
-		WhatsAppAccount: transfer.WhatsAppAccount,
-	})
+	a.PublishEvent(crmevents.New(orgID, string(models.WebhookEventTransferAssigned),
+		crmevents.SystemActor(), eventData(TransferEventData{
+			TransferID:      transfer.ID.String(),
+			ContactID:       transfer.ContactID.String(),
+			ContactPhone:    contactPhone,
+			ContactName:     contactName,
+			Source:          transfer.Source,
+			AgentID:         agentIDStr,
+			AgentName:       agentName,
+			WhatsAppAccount: transfer.WhatsAppAccount,
+		})).ForContact(transfer.ContactID).About(crmevents.SubjectTransfer, transfer.ID))
 
 	return r.SendEnvelope(map[string]any{
 		"message":  "Transfer assigned successfully",
@@ -1229,7 +1228,7 @@ func (a *App) createTransferToQueue(account *models.WhatsAppAccount, contact *mo
 	// chatbot-disabled fallback would otherwise hand off to a human at
 	// 11pm. createTransferFromKeyword already does this; mirror it here.
 	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
-		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+		if !a.isWithinBusinessHours(account.OrganizationID, settings.BusinessHours.Hours) {
 			a.Log.Info("Outside business hours, sending out-of-hours message instead of queue transfer", "contact_id", contact.ID, "source", source)
 			if settings.BusinessHours.OutOfHoursMessage != "" {
 				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
@@ -1268,7 +1267,7 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 
 	// Check business hours - if outside hours, send out of hours message instead of transfer
 	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
-		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+		if !a.isWithinBusinessHours(account.OrganizationID, settings.BusinessHours.Hours) {
 			a.Log.Info("Outside business hours, sending out of hours message instead of transfer", "contact_id", contact.ID)
 			if settings.BusinessHours.OutOfHoursMessage != "" {
 				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
@@ -1315,10 +1314,16 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 }
 
 // createTransferToTeam creates an agent transfer to a specific team with appropriate assignment
-func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *models.Contact, teamID uuid.UUID, notes string, source models.TransferSource) {
+// createTransferToTeam hands a conversation to a team.
+//
+// It returns what actually happened (plan 10, S5). Handing over is not a single
+// thing — it may queue, land on an agent, be suppressed because the office is
+// shut, or do nothing because somebody is already handling it — and a caller
+// that cannot tell those apart reports success either way.
+func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *models.Contact, teamID uuid.UUID, notes string, source models.TransferSource) transfers.Outcome {
 	if a.hasActiveAgentTransfer(account.OrganizationID, contact.ID) {
 		a.Log.Debug("Contact already has active transfer, skipping team transfer", "contact_id", contact.ID, "team_id", teamID)
-		return
+		return transfers.AlreadyActive
 	}
 
 	settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
@@ -1326,12 +1331,12 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 	// Suppress transfers outside business hours (same reason as
 	// createTransferToQueue / createTransferFromKeyword).
 	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
-		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+		if !a.isWithinBusinessHours(account.OrganizationID, settings.BusinessHours.Hours) {
 			a.Log.Info("Outside business hours, sending out-of-hours message instead of team transfer", "contact_id", contact.ID, "team_id", teamID, "source", source)
 			if settings.BusinessHours.OutOfHoursMessage != "" {
 				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
 			}
-			return
+			return transfers.SuppressedOutOfHours
 		}
 	}
 
@@ -1356,7 +1361,7 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 
 	if err := a.saveAndFinalizeTransfer(&transfer, account, contact, settings, true); err != nil {
 		a.Log.Error("Failed to create team transfer", "error", err, "contact_id", contact.ID, "team_id", teamID)
-		return
+		return transfers.Failed
 	}
 
 	var agentIDStrLog string
@@ -1370,6 +1375,11 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 		"agent_id", agentIDStrLog,
 		"source", source,
 	)
+
+	if agentID != nil {
+		return transfers.Assigned
+	}
+	return transfers.Queued
 }
 
 // ReturnAgentTransfersToQueue returns all active transfers assigned to an agent back to their team queues
@@ -1389,7 +1399,6 @@ func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
 	// Return each transfer to its team queue (or general queue)
 	for i := range transfers {
 		transfer := &transfers[i]
-		previousAgentID := transfer.AgentID
 		transfer.AgentID = nil
 
 		if err := a.DB.Save(transfer).Error; err != nil {
@@ -1397,13 +1406,9 @@ func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
 			continue
 		}
 
-		// Clear the contact's relationship-manager pointer only if it was
-		// pointing at the agent we just removed. Don't blow away a manually
-		// set manager assigned via /api/contacts/<id>/assign.
-		if transfer.ContactID != uuid.Nil && previousAgentID != nil && transfer.Contact != nil &&
-			transfer.Contact.AssignedUserID != nil && *transfer.Contact.AssignedUserID == *previousAgentID {
-			a.DB.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", nil)
-		}
+		// The contact owner is intentionally left untouched here (plan 10,
+		// S5): an agent going unavailable returns their conversations to the
+		// queue, but does not stop being the contact's relationship manager.
 
 		// Broadcast the unassignment
 		a.broadcastTransferAssigned(transfer)

@@ -29,6 +29,21 @@ type BulkMessageCampaign struct {
 	CreatedBy            uuid.UUID      `gorm:"type:uuid;not null" json:"created_by"`
 	UpdatedByID          *uuid.UUID     `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
+	// Audience (plan 05). A campaign used to be aimed at whatever list somebody
+	// pasted in, and the list was gone the moment it was sent. Pointing it at a
+	// segment makes the audience reproducible and keeps it right as contacts
+	// change — but the recipients are still materialised at start, because who
+	// was messaged must not change after the fact.
+	AudienceType string     `gorm:"size:10;not null;default:'list'" json:"audience_type"` // list | segment
+	SegmentID    *uuid.UUID `gorm:"type:uuid;index" json:"segment_id,omitempty"`
+	// AudienceFilter is the filter as it stood when recipients were built, so
+	// "who did this go to and why" is answerable later even if the segment has
+	// since been edited.
+	AudienceFilter JSONB      `gorm:"type:jsonb" json:"audience_filter,omitempty"`
+	AudienceCount  *int       `json:"audience_count,omitempty"`
+	ExcludedCount  *int       `json:"excluded_count,omitempty"`
+	MaterializedAt *time.Time `json:"materialized_at,omitempty"`
+
 	// Relations
 	Organization *Organization          `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
 	Template     *Template              `gorm:"foreignKey:TemplateID" json:"template,omitempty"`
@@ -44,10 +59,14 @@ func (BulkMessageCampaign) TableName() string {
 // BulkMessageRecipient represents a recipient in a bulk message campaign
 type BulkMessageRecipient struct {
 	BaseModel
-	CampaignID     uuid.UUID `gorm:"type:uuid;index;not null" json:"campaign_id"`
-	PhoneNumber    string    `gorm:"size:50;not null" json:"phone_number"`
-	RecipientName  string    `gorm:"size:255" json:"recipient_name"`
-	TemplateParams JSONB     `gorm:"type:jsonb;default:'{}'" json:"template_params"`
+	CampaignID uuid.UUID `gorm:"type:uuid;index;not null" json:"campaign_id"`
+	// ContactID links a recipient to the record it came from (plan 05), so a
+	// campaign's results can be read back as "what happened to these contacts"
+	// rather than as a list of phone numbers.
+	ContactID      *uuid.UUID `gorm:"type:uuid;index" json:"contact_id,omitempty"`
+	PhoneNumber    string     `gorm:"size:50;not null" json:"phone_number"`
+	RecipientName  string     `gorm:"size:255" json:"recipient_name"`
+	TemplateParams JSONB      `gorm:"type:jsonb;default:'{}'" json:"template_params"`
 	// Header parameter values for TEXT-header templates with a {{var}}. Meta
 	// indexes positional vars per component, so header {{1}} and body {{1}}
 	// are separate values — keeping them in a dedicated map avoids that

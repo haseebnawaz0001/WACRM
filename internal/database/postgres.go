@@ -7,7 +7,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/migrations"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/orgseed"
+	"github.com/zerodha/logf"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -115,6 +118,28 @@ func GetMigrationModels() []MigrationModel {
 		{"CallTransfer", &models.CallTransfer{}},
 		{"CallPermission", &models.CallPermission{}},
 		{"AuditLog", &models.AuditLog{}},
+
+		// CRM event outbox, webhook delivery log and contact timeline
+		{"CRMEventOutbox", &models.CRMEventOutbox{}},
+		{"WebhookDelivery", &models.WebhookDelivery{}},
+		{"ContactActivity", &models.ContactActivity{}},
+		{"Notification", &models.Notification{}},
+		{"CustomFieldDefinition", &models.CustomFieldDefinition{}},
+		{"CustomFieldValue", &models.CustomFieldValue{}},
+		{"Conversation", &models.Conversation{}},
+		{"TaskType", &models.TaskType{}},
+		{"Task", &models.Task{}},
+		{"Segment", &models.Segment{}},
+		{"ContactIdentity", &models.ContactIdentity{}},
+		{"ContactDuplicateCandidate", &models.ContactDuplicateCandidate{}},
+		{"ContactMerge", &models.ContactMerge{}},
+		{"Pipeline", &models.Pipeline{}},
+		{"PipelineStage", &models.PipelineStage{}},
+		{"Deal", &models.Deal{}},
+		{"DealStageHistory", &models.DealStageHistory{}},
+		{"AutomationRule", &models.AutomationRule{}},
+		{"AutomationRun", &models.AutomationRun{}},
+		{"AutomationContactState", &models.AutomationContactState{}},
 	}
 }
 
@@ -214,10 +239,23 @@ func RunMigrationWithProgress(db *gorm.DB, adminCfg *config.DefaultAdminConfig) 
 		return err
 	}
 
+	// Versioned run-once data migrations (plan 00, F1). These run last, after
+	// the schema and the seeds they may depend on are in place.
+	if err := migrations.RunPending(silentDB, migrationLogger()); err != nil {
+		fmt.Printf("\n  \033[31m✗ Data migration failed\033[0m\n\n")
+		return err
+	}
+
 	printProgress(currentStep, totalSteps)
 	fmt.Printf("\n  \033[32m✓ Migration completed\033[0m\n\n")
 
 	return nil
+}
+
+// migrationLogger returns a quiet logger for data migrations so their output
+// does not break the progress bar; failures are reported by the caller.
+func migrationLogger() logf.Logger {
+	return logf.New(logf.Opts{Level: logf.InfoLevel, TimestampFormat: "2006-01-02 15:04:05"})
 }
 
 // repeatChar repeats a character n times
@@ -240,7 +278,15 @@ func getIndexes() []string {
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_messages_contact_created ON messages(contact_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_org_phone ON contacts(organization_id, phone_number)`,
+		// One live contact per phone number. The index deliberately excludes
+		// soft-deleted rows: a deleted contact used to keep ownership of its
+		// number, so the number could never be used again — an import or an
+		// inbound message from it failed with a unique-constraint error, and
+		// the contact lifecycle's "create a fresh record" path was impossible.
+		// Deleted rows may now share a number with the live contact that
+		// replaced them.
+		`DROP INDEX IF EXISTS idx_contacts_org_phone`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_org_phone_live ON contacts(organization_id, phone_number) WHERE deleted_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_contacts_assigned_read ON contacts(assigned_user_id, is_read)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_phone_status ON chatbot_sessions(organization_id, phone_number, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_keyword_rules_priority ON keyword_rules(organization_id, is_enabled, priority DESC)`,
@@ -285,6 +331,87 @@ func getIndexes() []string {
 		// IVR flows
 		`CREATE INDEX IF NOT EXISTS idx_ivr_flows_org_active ON ivr_flows(organization_id, whatsapp_account, is_active)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ivr_flows_org_call_start ON ivr_flows(organization_id, whatsapp_account) WHERE is_call_start = true AND is_active = true AND deleted_at IS NULL`,
+		// One active transfer per contact (plan 10, S5 / X7). This was checked
+		// by counting rows and then inserting, which two concurrent inbound
+		// webhooks — each running in its own goroutine — could both pass,
+		// leaving a contact with two active transfers and an ambiguous
+		// assignee. The index makes the rule the database's job.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_transfers_one_active ON agent_transfers(organization_id, contact_id) WHERE status = 'active' AND deleted_at IS NULL`,
+		// CRM event outbox. The relay only ever scans unpublished rows, so a
+		// partial index keeps the claim query off the published backlog.
+		`CREATE INDEX IF NOT EXISTS idx_crm_event_outbox_unpublished ON crm_event_outbox(occurred_at) WHERE published_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_crm_event_outbox_prune ON crm_event_outbox(published_at) WHERE published_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_crm_event_outbox_org_contact ON crm_event_outbox(organization_id, contact_id, occurred_at DESC)`,
+		// Contact timeline. The composite ordering matches the keyset the
+		// timeline pages with, so scrolling never falls back to a sort.
+		`CREATE INDEX IF NOT EXISTS idx_contact_activities_timeline ON contact_activities(organization_id, contact_id, occurred_at DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_activities_type ON contact_activities(organization_id, type, occurred_at DESC)`,
+		// Notification bell: the unread count and the list both filter by
+		// user and read state, so they share one index.
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, organization_id, read_at, created_at DESC)`,
+		// Custom fields. The key is unique per org and entity so filters and
+		// templates can refer to a field by name unambiguously.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfd_org_entity_key ON custom_field_definitions(organization_id, entity_type, key) WHERE deleted_at IS NULL`,
+		// One value row per (entity, field): this is what the upsert in
+		// SetValues conflicts on, so concurrent edits converge instead of
+		// creating a second value for the same field.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cfv_entity_field ON custom_field_values(entity_type, entity_id, field_id)`,
+		// Typed partial indexes: a filter on one field only ever scans the
+		// column that field actually uses.
+		`CREATE INDEX IF NOT EXISTS idx_cfv_text ON custom_field_values(organization_id, field_id, lower(value_text)) WHERE value_text IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_cfv_number ON custom_field_values(organization_id, field_id, value_number) WHERE value_number IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_cfv_date ON custom_field_values(organization_id, field_id, value_date) WHERE value_date IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_cfv_option ON custom_field_values(organization_id, field_id, value_option) WHERE value_option IS NOT NULL`,
+		// Exactly one active conversation per contact. Two inbound webhooks
+		// for the same contact run in separate goroutines, so without this the
+		// service's advisory lock would be the only thing preventing a
+		// duplicate — and a code path that forgot to take it would create one.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_one_active ON conversations(organization_id, contact_id) WHERE status <> 'resolved' AND deleted_at IS NULL`,
+		// Inbox views: status plus assignee or team, newest first.
+		`CREATE INDEX IF NOT EXISTS idx_conversations_inbox ON conversations(organization_id, status, assignee_id, last_message_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversations_team ON conversations(organization_id, status, team_id, last_message_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversations_snoozed ON conversations(snoozed_until) WHERE status = 'snoozed'`,
+		`CREATE INDEX IF NOT EXISTS idx_conversations_contact ON conversations(contact_id, opened_at DESC)`,
+		// Tasks. The partial indexes match the queries that run constantly:
+		// one agent's open list, and the two notifier scans.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_types_org_key ON task_types(organization_id, key) WHERE deleted_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_owner_open ON tasks(organization_id, owner_id, due_at) WHERE status = 'open' AND deleted_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_contact ON tasks(contact_id, status, due_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_reminder_due ON tasks(remind_at) WHERE status = 'open' AND reminder_sent_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_overdue_scan ON tasks(due_at) WHERE status = 'open' AND overdue_notified_at IS NULL`,
+		// Segments. Names are unique case-insensitively so "VIP" and "vip"
+		// cannot both exist and be picked from a list by mistake.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_segments_org_name ON segments(organization_id, lower(name)) WHERE deleted_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_segments_org ON segments(organization_id, visibility, created_by_id)`,
+		// Merge and duplicate detection (plan 06).
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_identities_unique ON contact_identities(organization_id, type, normalized)`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_identities_contact ON contact_identities(contact_id)`,
+		// The pair is stored lowest-id-first, so this index actually prevents
+		// the same pair being recorded twice in opposite orders.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_dup_pair ON contact_duplicate_candidates(organization_id, contact_a_id, contact_b_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_dup_pending ON contact_duplicate_candidates(organization_id, status, score DESC)`,
+		// Pipelines and deals (plan 07).
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pipelines_org_name ON pipelines(organization_id, lower(name)) WHERE deleted_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_pipeline_stages_pipeline ON pipeline_stages(pipeline_id, position)`,
+		`CREATE INDEX IF NOT EXISTS idx_deals_board ON deals(organization_id, pipeline_id, stage_id, board_position) WHERE deleted_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_deals_owner ON deals(organization_id, owner_id, status, expected_close_date)`,
+		`CREATE INDEX IF NOT EXISTS idx_deals_contact ON deals(contact_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_deal_stage_history_deal ON deal_stage_history(deal_id, created_at)`,
+
+		// Automation (plan 08). The unique run index is what makes a redelivered
+		// event a no-op instead of a second message to the customer.
+		`CREATE INDEX IF NOT EXISTS idx_automation_rules_trigger ON automation_rules(organization_id, trigger_type) WHERE enabled AND deleted_at IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_idem ON automation_runs(rule_id, event_id) WHERE dry_run = false`,
+		`CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, started_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_automation_runs_contact ON automation_runs(contact_id, started_at DESC)`,
+
+		// CRM reports (plan 09). Every report is a live aggregate rather than a
+		// rollup, so the columns they filter and bucket on have to be indexed.
+		`CREATE INDEX IF NOT EXISTS idx_conversations_first_response ON conversations(organization_id, first_response_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversations_resolved ON conversations(organization_id, resolved_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_owner_due ON tasks(organization_id, owner_id, status, due_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_contact_activities_type_time ON contact_activities(organization_id, type, occurred_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_deal_stage_history_org_time ON deal_stage_history(organization_id, created_at)`,
 	}
 }
 
@@ -336,6 +463,11 @@ func CreateDefaultAdmin(db *gorm.DB, cfg *config.DefaultAdminConfig) error {
 	// Seed system roles for this organization if not exist
 	if err := SeedSystemRolesForOrg(db, org.ID); err != nil {
 		return fmt.Errorf("failed to seed system roles: %w", err)
+	}
+
+	// The CRM defaults a first-run organization needs (plan 10, S8).
+	if err := orgseed.Seed(db, org.ID); err != nil {
+		return fmt.Errorf("failed to seed organization defaults: %w", err)
 	}
 
 	// Get admin system role for the organization
@@ -410,12 +542,27 @@ func SeedPermissionsAndRoles(db *gorm.DB) error {
 
 	// Add any missing permissions
 	for _, perm := range defaultPerms {
+		// The group is derived rather than listed, so a permission added to
+		// the catalog cannot silently arrive ungrouped (plan 10, S1).
+		perm.Group = models.PermissionGroupFor(perm.Resource)
+
 		var existing models.Permission
 		if err := db.Where("resource = ? AND action = ?", perm.Resource, perm.Action).First(&existing).Error; err != nil {
 			// Permission doesn't exist, create it
 			perm.ID = uuid.New()
 			if err := db.Create(&perm).Error; err != nil {
 				return fmt.Errorf("failed to create permission %s:%s: %w", perm.Resource, perm.Action, err)
+			}
+			continue
+		}
+
+		// Existing rows are regrouped in place. Grouping is presentation, not
+		// authorisation, so correcting it on an installed system is safe and
+		// is the only way a regrouping ever reaches one.
+		if existing.Group != perm.Group {
+			if err := db.Model(&models.Permission{}).Where("id = ?", existing.ID).
+				Update("group", perm.Group).Error; err != nil {
+				return fmt.Errorf("failed to group permission %s:%s: %w", perm.Resource, perm.Action, err)
 			}
 		}
 	}

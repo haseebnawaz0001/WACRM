@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/contacts"
 	"github.com/shridarpatil/whatomate/internal/contactutil"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
@@ -644,7 +646,13 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 		contactPhone = msg.From
 	}
 
-	contact, _, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, contactPhone, "")
+	// An echo is an outgoing message; it must not restore a deleted contact.
+	contact, _, err := a.Contacts().Resolve(context.Background(), account.OrganizationID,
+		contacts.Identity{Phone: contactPhone}, contacts.ResolveOpts{
+			CreateIfMissing: true,
+			AllowRestore:    false,
+			Source:          contacts.SourceInbound,
+		})
 	if err != nil {
 		a.Log.Error("Failed to get or create contact for echo", "phone", contactPhone, "error", err)
 		return
@@ -671,9 +679,12 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 		ContactID:         contact.ID,
 		WhatsAppMessageID: msg.ID,
 		Direction:         models.DirectionOutgoing,
-		MessageType:       models.MessageType(messageType),
-		Content:           messageText,
-		Status:            models.MessageStatusSent,
+		// Sent from the WhatsApp Business app, not by this product, so it
+		// must never count as an agent reply in response-time metrics.
+		SenderType:  models.SenderEcho,
+		MessageType: models.MessageType(messageType),
+		Content:     messageText,
+		Status:      models.MessageStatusSent,
 	}
 
 	// Reply context
@@ -717,19 +728,20 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 	a.broadcastNewMessage(account.OrganizationID, &message, contact)
 
 	// Dispatch webhook for outgoing message
-	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageOutgoing, MessageEventData{
-		MessageID:       message.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		MessageType:     models.MessageType(messageType),
-		Content:         messageText,
-		MediaURL:        messageMediaURL(&message),
-		MediaMimeType:   message.MediaMimeType,
-		MediaFilename:   message.MediaFilename,
-		WhatsAppAccount: account.Name,
-		Direction:       models.DirectionOutgoing,
-	})
+	a.PublishEvent(crmevents.New(account.OrganizationID, string(models.WebhookEventMessageOutgoing),
+		crmevents.SystemActor(), eventData(MessageEventData{
+			MessageID:       message.ID.String(),
+			ContactID:       contact.ID.String(),
+			ContactPhone:    contact.PhoneNumber,
+			ContactName:     contact.ProfileName,
+			MessageType:     models.MessageType(messageType),
+			Content:         messageText,
+			MediaURL:        messageMediaURL(&message),
+			MediaMimeType:   message.MediaMimeType,
+			MediaFilename:   message.MediaFilename,
+			WhatsAppAccount: account.Name,
+			Direction:       models.DirectionOutgoing,
+		})).ForContact(contact.ID).About(crmevents.SubjectMessage, message.ID))
 }
 
 // processContactSync handles contact additions and deletions from the mobile app address book.
@@ -749,7 +761,17 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 
 	switch action {
 	case "add":
-		contact, isNewContact, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, contactPhone, contactName)
+		// Re-adding a number in the mobile address book is exactly the case
+		// where an earlier sync removal should be undone.
+		contact, outcome, err := a.Contacts().Resolve(context.Background(), account.OrganizationID,
+			contacts.Identity{Phone: contactPhone}, contacts.ResolveOpts{
+				CreateIfMissing: true,
+				AllowRestore:    true,
+				UpdateName:      true,
+				Source:          contacts.SourceAddressBookSync,
+				ProfileName:     contactName,
+			})
+		isNewContact := outcome == contacts.OutcomeCreated
 		if err != nil {
 			a.Log.Error("Failed to sync new contact from app state sync", "phone", contactPhone, "error", err)
 			return
@@ -758,12 +780,13 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 		a.Log.Info("Synced contact (add) from mobile app", "contact_id", contact.ID, "is_new", isNewContact)
 
 		if isNewContact {
-			a.DispatchWebhook(account.OrganizationID, models.WebhookEventContactCreated, ContactEventData{
-				ContactID:       contact.ID.String(),
-				ContactPhone:    contact.PhoneNumber,
-				ContactName:     contact.ProfileName,
-				WhatsAppAccount: account.Name,
-			})
+			a.PublishEvent(crmevents.New(account.OrganizationID, string(models.WebhookEventContactCreated),
+				crmevents.SystemActor(), eventData(ContactEventData{
+					ContactID:       contact.ID.String(),
+					ContactPhone:    contact.PhoneNumber,
+					ContactName:     contact.ProfileName,
+					WhatsAppAccount: account.Name,
+				})).ForContact(contact.ID))
 		}
 	case "remove":
 		// Try to find the contact first using the FindContact helper

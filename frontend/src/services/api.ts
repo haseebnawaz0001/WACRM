@@ -200,7 +200,620 @@ export const contactsService = {
   updateTags: (id: string, tags: string[]) =>
     api.put(`/contacts/${id}/tags`, { tags }),
   getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
-  markRead: (id: string) => api.post(`/contacts/${encodeURIComponent(id)}/mark-read`)
+  markRead: (id: string) => api.post(`/contacts/${encodeURIComponent(id)}/mark-read`),
+
+  // Contacts list v2 (plan 01). The filter is sent in the body because a
+  // filter tree does not fit sensibly in a query string.
+  search: (body: ContactSearchRequest) =>
+    api.post('/contacts/search', body),
+  filterFields: () => api.get('/contacts/filter-fields')
+}
+
+// --- Contact custom fields (plan 01) ---
+
+export type ContactFieldType = 'text' | 'number' | 'date' | 'dropdown' | 'email' | 'phone'
+
+export interface ContactFieldOption {
+  value: string
+  label?: string
+  color?: string
+}
+
+export interface ContactField {
+  id: string
+  key: string
+  label: string
+  description: string
+  type: ContactFieldType
+  options: ContactFieldOption[]
+  validation: Record<string, unknown>
+  is_system: boolean
+  is_required: boolean
+  show_in_list: boolean
+  show_in_chat_panel: boolean
+  group_label: string
+  position: number
+  archived_at?: string
+  created_at: string
+  updated_at: string
+}
+
+/** One condition or nested group in a contact filter. */
+export interface FilterNode {
+  op?: 'and' | 'or'
+  rules?: FilterNode[]
+  field?: string
+  operator?: string
+  value?: unknown
+}
+
+/** A filterable field as the backend describes it, used to build the UI. */
+export interface FilterFieldInfo {
+  key: string
+  label: string
+  type: string
+  operators: string[]
+  options?: ContactFieldOption[]
+  sortable: boolean
+}
+
+export interface ContactSearchRequest {
+  filter?: FilterNode
+  search?: string
+  sort?: Array<{ field: string; dir: 'asc' | 'desc' }>
+  page?: number
+  limit?: number
+  include?: Array<'fields' | 'unread'>
+}
+
+export interface ContactSearchRow {
+  id: string
+  phone_number: string
+  profile_name: string
+  whatsapp_account: string
+  tags: string[]
+  assigned_user_id?: string
+  source?: string
+  last_message_at?: string
+  last_message_preview?: string
+  marketing_opt_out: boolean
+  fields?: Record<string, unknown>
+  unread_count?: number
+  created_at: string
+}
+
+export const contactFieldsService = {
+  list: () => api.get('/contact-fields'),
+  create: (data: Partial<ContactField>) => api.post('/contact-fields', data),
+  update: (id: string, data: Partial<ContactField> & { archived?: boolean }) =>
+    api.put(`/contact-fields/${id}`, data),
+  delete: (id: string) => api.delete(`/contact-fields/${id}`)
+}
+
+// --- Tasks (plan 04) ---
+
+export interface Task {
+  id: string
+  contact_id: string
+  contact_name?: string
+  conversation_id?: string
+  type_id: string
+  type_key?: string
+  type_label?: string
+  title: string
+  description: string
+  owner_id: string
+  priority: string
+  status: string
+  due_at: string
+  all_day: boolean
+  remind_at?: string
+  overdue: boolean
+  completed_at?: string
+  source: string
+  created_at: string
+}
+
+export interface TaskType {
+  id: string
+  key: string
+  label: string
+  icon: string
+  color: string
+  default_due_offset_minutes: number
+  position: number
+}
+
+export const tasksService = {
+  list: (params: { view?: string; status?: string; contact_id?: string; limit?: number; offset?: number } = {}) =>
+    api.get<{ tasks: Task[]; total: number; view: string }>(`/tasks${toQuery(params)}`),
+  create: (data: Record<string, any>) => api.post<{ task: Task }>('/tasks', data),
+  complete: (id: string) => api.post<{ task: Task }>(`/tasks/${id}/complete`, {}),
+  cancel: (id: string) => api.post<{ task: Task }>(`/tasks/${id}/cancel`, {}),
+  reassign: (id: string, ownerId: string) =>
+    api.post<{ task: Task }>(`/tasks/${id}/reassign`, { owner_id: ownerId }),
+  types: () => api.get<{ task_types: TaskType[] }>('/task-types')
+}
+
+// --- Inbox and conversations (plan 03) ---
+
+export interface InboxRow {
+  id: string
+  contact_id: string
+  contact_name?: string
+  contact_phone?: string
+  status: string
+  assignee_id?: string
+  team_id?: string
+  bot_active: boolean
+  whatsapp_account?: string
+  snoozed_until?: string | null
+  opened_at: string
+  last_message_at?: string | null
+  last_message_preview?: string
+  /** When the oldest unanswered customer message arrived, shown as "waiting 2h". */
+  waiting_since?: string | null
+  first_response_at?: string | null
+  message_count: number
+  reopened_count: number
+}
+
+export interface InboxCounts {
+  mine: number
+  unassigned: number
+  bot: number
+  all: number
+}
+
+export const inboxService = {
+  list: (params: { view?: string; status?: string; limit?: number; offset?: number } = {}) =>
+    api.get<{ conversations: InboxRow[]; total: number }>(`/inbox${toQuery(params)}`),
+  counts: () => api.get<InboxCounts>('/inbox/counts'),
+  resolve: (contactId: string, reason?: string) =>
+    api.post('/conversations/resolve', { contact_id: contactId, reason }),
+  snooze: (contactId: string, until: string) =>
+    api.post('/conversations/snooze', { contact_id: contactId, until }),
+  assign: (contactId: string, assigneeId?: string, teamId?: string) =>
+    api.post('/conversations/assign', { contact_id: contactId, assignee_id: assigneeId, team_id: teamId }),
+  forContact: (contactId: string) => api.get(`/contacts/${contactId}/conversation`)
+}
+
+// --- Timeline (plan 02) ---
+
+export interface TimelineItem {
+  id: string
+  type: string
+  occurred_at: string
+  actor: { type: string; id?: string; name?: string }
+  summary: string
+  data?: Record<string, any>
+  group?: { count: number; from_customer: number; from: string; to: string }
+}
+
+export const timelineService = {
+  forContact: (contactId: string, params: { types?: string; limit?: number; before?: string } = {}) =>
+    api.get<{ items: TimelineItem[]; next_before?: string }>(
+      `/contacts/${contactId}/timeline${toQuery(params)}`
+    )
+}
+
+// --- Segments (plan 05) ---
+
+export interface Segment {
+  id: string
+  name: string
+  description: string
+  filter: FilterNode
+  visibility: 'shared' | 'private'
+  created_by_id?: string
+  contact_count?: number
+  counted_at?: string
+  last_used_at?: string
+  created_at: string
+}
+
+export const segmentsService = {
+  list: (params: { search?: string; visibility?: string } = {}) =>
+    api.get<{ segments: Segment[] }>(`/segments${toQuery(params)}`),
+  get: (id: string) => api.get<{ segment: Segment }>(`/segments/${id}`),
+  create: (data: Partial<Segment>) => api.post<{ segment: Segment }>('/segments', data),
+  update: (id: string, data: Partial<Segment>) =>
+    api.put<{ segment: Segment }>(`/segments/${id}`, data),
+  delete: (id: string) => api.delete(`/segments/${id}`),
+  count: (id: string) => api.post<{ count: number }>(`/segments/${id}/count`, {}),
+  previewCount: (filter: FilterNode) =>
+    api.post<{ count: number }>('/segments/preview-count', { filter }),
+  contacts: (id: string, body: Record<string, any> = {}) =>
+    api.post<{ contacts: ContactSearchRow[]; total: number; segment: Segment }>(
+      `/segments/${id}/contacts`, body
+    )
+}
+
+// --- Campaign audience (plan 05) ---
+
+export interface AudiencePreview {
+  count: number
+  /** Who is being left out and why, keyed by reason. */
+  excluded: Record<string, number>
+  sample: Array<{
+    contact_id: string
+    name: string
+    phone_number: string
+    preview: string
+  }>
+}
+
+export const campaignAudienceService = {
+  set: (campaignId: string, segmentId: string | null) =>
+    api.put(`/campaigns/${campaignId}/audience`, {
+      audience_type: segmentId ? 'segment' : 'list',
+      segment_id: segmentId || undefined
+    }),
+  preview: (campaignId: string) =>
+    api.post<AudiencePreview>(`/campaigns/${campaignId}/audience/preview`, {})
+}
+
+// --- Duplicates and merge (plan 06) ---
+
+export interface DuplicateContactSummary {
+  id: string
+  profile_name: string
+  phone_number: string
+  tags: string[]
+  source?: string
+  created_at: string
+  last_message_at?: string
+  message_count: number
+}
+
+export interface DuplicateCandidate {
+  id: string
+  score: number
+  reasons: string[]
+  status: string
+  detected_at: string
+  contact_a: DuplicateContactSummary
+  contact_b: DuplicateContactSummary
+}
+
+export const duplicatesService = {
+  list: (limit = 50) => api.get<{ candidates: DuplicateCandidate[] }>(`/contacts/duplicates?limit=${limit}`),
+  scan: () => api.post<{ found: number }>('/contacts/duplicates/scan', {}),
+  dismiss: (id: string) => api.post(`/contacts/duplicates/${id}/dismiss`, {}),
+  merge: (primaryId: string, secondaryId: string) =>
+    api.post('/contacts/merge', { primary_id: primaryId, secondary_id: secondaryId }),
+  forContact: (contactId: string) => api.get(`/contacts/${contactId}/merges`)
+}
+
+// --- Pipelines and deals (plan 07) ---
+
+export interface PipelineStage {
+  id: string
+  pipeline_id: string
+  name: string
+  position: number
+  stage_type: 'open' | 'won' | 'lost'
+  probability: number
+  color: string
+  rotting_days: number
+}
+
+export interface Pipeline {
+  id: string
+  name: string
+  object_label_singular: string
+  object_label_plural: string
+  currency: string
+  is_default: boolean
+  position: number
+  archived_at?: string | null
+  stages: PipelineStage[]
+}
+
+export interface Deal {
+  id: string
+  pipeline_id: string
+  stage_id: string
+  stage_name?: string
+  contact_id: string
+  contact_name?: string
+  contact_phone?: string
+  conversation_id?: string
+  title: string
+  value: number
+  currency: string
+  owner_id?: string
+  expected_close_date?: string | null
+  status: 'open' | 'won' | 'lost'
+  lost_reason?: string
+  stage_entered_at: string
+  board_position: string
+  closed_at?: string | null
+  rotting: boolean
+  created_at: string
+}
+
+export interface BoardColumn {
+  stage: PipelineStage
+  count: number
+  total_value: number
+  weighted_value: number
+  deals: Deal[]
+  has_more: boolean
+}
+
+export interface DealHistoryEntry {
+  id: string
+  deal_id: string
+  from_stage_id?: string
+  to_stage_id: string
+  from_stage_name?: string
+  to_stage_name: string
+  moved_by_id?: string
+  duration_seconds: number
+  created_at: string
+}
+
+export interface BoardFilters {
+  owner_id?: string
+  close_from?: string
+  close_to?: string
+  search?: string
+  status?: string
+  limit?: number
+}
+
+export const pipelinesService = {
+  list: () => api.get<{ pipelines: Pipeline[] }>('/pipelines'),
+  get: (id: string) => api.get<{ pipeline: Pipeline }>(`/pipelines/${id}`),
+  create: (data: Partial<Pipeline>) => api.post<{ pipeline: Pipeline }>('/pipelines', data),
+  update: (id: string, data: Partial<Pipeline>) =>
+    api.put<{ pipeline: Pipeline }>(`/pipelines/${id}`, data),
+  delete: (id: string) => api.delete(`/pipelines/${id}`),
+  archive: (id: string) => api.delete(`/pipelines/${id}?archive=true`),
+
+  board: (id: string, filters: BoardFilters = {}) =>
+    api.get<{ pipeline: Pipeline; columns: BoardColumn[] }>(
+      `/pipelines/${id}/board${toQuery(filters)}`
+    ),
+  stageDeals: (id: string, stageId: string, cursor: string, filters: BoardFilters = {}) =>
+    api.get<{ deals: Deal[]; has_more: boolean; next_cursor: string }>(
+      `/pipelines/${id}/stages/${stageId}/deals${toQuery({ ...filters, cursor })}`
+    ),
+
+  createStage: (pipelineId: string, data: Partial<PipelineStage>) =>
+    api.post<{ stage: PipelineStage }>(`/pipelines/${pipelineId}/stages`, data),
+  updateStage: (stageId: string, data: Partial<PipelineStage>) =>
+    api.put<{ stage: PipelineStage }>(`/pipeline-stages/${stageId}`, data),
+  reorderStages: (pipelineId: string, stageIds: string[]) =>
+    api.put<{ pipeline: Pipeline }>(`/pipelines/${pipelineId}/stages/reorder`, { stage_ids: stageIds }),
+  deleteStage: (stageId: string, moveDealsTo?: string) =>
+    api.delete(`/pipeline-stages/${stageId}${moveDealsTo ? `?move_deals_to=${moveDealsTo}` : ''}`)
+}
+
+export const dealsService = {
+  list: (params: { pipeline_id?: string; contact_id?: string; owner_id?: string; status?: string } = {}) =>
+    api.get<{ deals: Deal[]; total: number }>(`/deals${toQuery(params)}`),
+  get: (id: string) => api.get<{ deal: Deal }>(`/deals/${id}`),
+  create: (data: Partial<Deal>) => api.post<{ deal: Deal }>('/deals', data),
+  update: (id: string, data: Partial<Deal> & { clear_close_date?: boolean }) =>
+    api.put<{ deal: Deal }>(`/deals/${id}`, data),
+  delete: (id: string) => api.delete(`/deals/${id}`),
+  move: (id: string, data: { stage_id: string; before_id?: string; after_id?: string; lost_reason?: string }) =>
+    api.post<{ deal: Deal }>(`/deals/${id}/move`, data),
+  history: (id: string) => api.get<{ history: DealHistoryEntry[] }>(`/deals/${id}/history`),
+  forContact: (contactId: string, status = 'all') =>
+    api.get<{ deals: Deal[] }>(`/contacts/${contactId}/deals?status=${status}`)
+}
+
+/** toQuery drops empty values so the URL only carries filters that are set. */
+function toQuery(params: object): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue
+    search.set(key, String(value))
+  }
+  const query = search.toString()
+  return query ? `?${query}` : ''
+}
+
+// --- Automations (plan 08) ---
+
+export interface AutomationActionSpec {
+  id: string
+  type: string
+  config: Record<string, any>
+  continue_on_error?: boolean
+}
+
+export interface AutomationRunPolicy {
+  once_per_contact: boolean
+  cooldown_minutes: number
+  max_runs_per_hour: number
+}
+
+export interface Automation {
+  id: string
+  name: string
+  description: string
+  enabled: boolean
+  trigger_type: string
+  trigger_config: Record<string, any>
+  contact_filter?: FilterNode | null
+  actions: AutomationActionSpec[]
+  run_policy: AutomationRunPolicy
+  last_run_at?: string | null
+  run_count: number
+  error_count: number
+  created_at: string
+  stats?: { runs_24h: number; failures_24h: number }
+}
+
+export interface AutomationActionResult {
+  id: string
+  type: string
+  status: 'succeeded' | 'failed' | 'skipped'
+  error?: string
+  output?: Record<string, any>
+}
+
+export interface AutomationRun {
+  id: string
+  rule_id: string
+  event_id: string
+  event_type: string
+  contact_id?: string
+  status: 'succeeded' | 'partially_failed' | 'failed' | 'skipped'
+  skip_reason?: string
+  depth: number
+  action_results: { list?: AutomationActionResult[] }
+  dry_run: boolean
+  started_at: string
+  finished_at?: string
+}
+
+export interface AutomationTrigger {
+  type: string
+  kind: 'event' | 'time'
+  group: string
+  config_keys: string[]
+}
+
+export interface AutomationCatalog {
+  triggers: AutomationTrigger[]
+  actions: string[]
+  limits: {
+    max_actions_per_rule: number
+    max_rules_per_org: number
+    max_depth: number
+  }
+}
+
+export const automationsService = {
+  list: () => api.get<{ automations: Automation[] }>('/automations'),
+  get: (id: string) => api.get<{ automation: Automation }>(`/automations/${id}`),
+  create: (data: Partial<Automation>) =>
+    api.post<{ automation: Automation }>('/automations', data),
+  update: (id: string, data: Partial<Automation>) =>
+    api.put<{ automation: Automation }>(`/automations/${id}`, data),
+  delete: (id: string) => api.delete(`/automations/${id}`),
+  enable: (id: string) => api.post<{ automation: Automation }>(`/automations/${id}/enable`, {}),
+  disable: (id: string) => api.post<{ automation: Automation }>(`/automations/${id}/disable`, {}),
+  test: (id: string, contactId: string, eventData: Record<string, any> = {}) =>
+    api.post<{ run: AutomationRun }>(`/automations/${id}/test`, {
+      contact_id: contactId,
+      event_data: eventData
+    }),
+  runs: (id: string, params: { status?: string; contact_id?: string; limit?: number } = {}) =>
+    api.get<{ runs: AutomationRun[] }>(`/automations/${id}/runs${toQuery(params)}`),
+  catalog: () => api.get<AutomationCatalog>('/automations/catalog'),
+  forContact: (contactId: string) =>
+    api.get<{ runs: AutomationRun[] }>(`/contacts/${contactId}/automation-runs`)
+}
+
+// --- CRM reports (plan 09) ---
+
+export interface ReportBucket {
+  period: string
+  series: string
+  count: number
+}
+
+export interface SourceRow {
+  source: string
+  contacts: number
+  share: number
+  became_customer: number
+}
+
+export interface ContactsBySourceReport {
+  buckets: ReportBucket[]
+  totals: SourceRow[]
+  total: number
+}
+
+export interface FunnelStep {
+  key: string
+  label: string
+  reached: number
+  conversion: number
+  median_days_from_previous?: number
+}
+
+export interface LifecycleFunnelReport {
+  steps: FunnelStep[]
+  note: string
+}
+
+export interface PipelineFunnelReport {
+  steps: FunnelStep[]
+  win_rate: number
+  won: number
+  lost: number
+  lost_reasons: Array<{ reason: string; count: number; value: number }>
+}
+
+export interface PipelineForecastReport {
+  months: Array<{ month: string; deals: number; value: number; weighted_value: number }>
+  overdue: number
+  overdue_value: number
+  undated: number
+  undated_value: number
+}
+
+export interface AgentPerformanceRow {
+  user_id: string
+  name: string
+  handled: number
+  first_response_median_seconds?: number
+  first_response_p90_seconds?: number
+  resolution_median_seconds?: number
+  resolution_p90_seconds?: number
+  resolved: number
+  reopened_rate: number
+}
+
+export interface AgentPerformanceReport {
+  rows: AgentPerformanceRow[]
+  note: string
+}
+
+export interface TaskAgentRow {
+  user_id: string
+  name: string
+  open: number
+  overdue: number
+  due_today: number
+  completed: number
+  on_time_rate: number
+  median_late_seconds?: number
+}
+
+export interface ReportRange {
+  from?: string
+  to?: string
+  interval?: string
+  team_id?: string
+  pipeline_id?: string
+}
+
+export const reportsService = {
+  contactsBySource: (params: ReportRange = {}) =>
+    api.get<ContactsBySourceReport>(`/reports/contacts-by-source${toQuery(params)}`),
+  lifecycleFunnel: (params: ReportRange = {}) =>
+    api.get<LifecycleFunnelReport>(`/reports/lifecycle-funnel${toQuery(params)}`),
+  pipelineFunnel: (params: ReportRange = {}) =>
+    api.get<PipelineFunnelReport>(`/reports/pipeline-funnel${toQuery(params)}`),
+  pipelineForecast: (params: ReportRange & { months?: number } = {}) =>
+    api.get<PipelineForecastReport>(`/reports/pipeline-forecast${toQuery(params)}`),
+  tasksByAgent: (params: ReportRange = {}) =>
+    api.get<{ rows: TaskAgentRow[] }>(`/reports/tasks-by-agent${toQuery(params)}`),
+  agentPerformance: (params: ReportRange = {}) =>
+    api.get<AgentPerformanceReport>(`/reports/agent-performance${toQuery(params)}`),
+
+  /** The CSV URL, so the browser downloads it rather than the app buffering it. */
+  exportUrl: (key: string, params: ReportRange = {}) =>
+    `/api/reports/${key}/export.csv${toQuery(params)}`
 }
 
 // Generic Import/Export Service
@@ -947,6 +1560,8 @@ export interface Permission {
   resource: string
   action: string
   description: string
+  /** The area of the product this permission belongs to (inbox, crm, admin…). */
+  group: string
   key: string // "resource:action"
 }
 

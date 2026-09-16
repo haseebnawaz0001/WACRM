@@ -228,17 +228,32 @@ func (a *App) calculateSummaryStats(orgID uuid.UUID, start, end time.Time, summa
 		Where("organization_id = ? AND status = ?", orgID, models.TransferStatusActive).
 		Count(&summary.ActiveTransfers)
 
-	// Average queue time (time from transfer to assignment for assigned transfers)
+	// Average queue time: how long a customer waited before an agent actually
+	// picked the transfer up. This used to measure updated_at - transferred_at,
+	// which moves on every later edit to the row and so reported the age of
+	// the record rather than the wait.
 	type AvgResult struct {
 		Avg float64
 	}
 	var queueTimeResult AvgResult
 	a.DB.Model(&models.AgentTransfer{}).
-		Select("AVG(EXTRACT(EPOCH FROM (updated_at - transferred_at))/60) as avg").
-		Where("organization_id = ? AND agent_id IS NOT NULL AND transferred_at >= ? AND transferred_at <= ?",
+		Select("AVG(EXTRACT(EPOCH FROM (picked_up_at - transferred_at))/60) as avg").
+		Where("organization_id = ? AND picked_up_at IS NOT NULL AND transferred_at >= ? AND transferred_at <= ?",
 			orgID, start, end).
 		Scan(&queueTimeResult)
 	summary.AvgQueueTimeMins = queueTimeResult.Avg
+
+	// Average first response: from the customer's first message to the first
+	// human agent reply, read from conversations (plan 03). The field existed
+	// but nothing ever filled it, so every dashboard showed a confident zero.
+	var firstResponseResult AvgResult
+	a.DB.Model(&models.Conversation{}).
+		Select("AVG(EXTRACT(EPOCH FROM (first_response_at - first_customer_message_at))/60) as avg").
+		Where("organization_id = ? AND first_response_at IS NOT NULL AND first_customer_message_at IS NOT NULL",
+			orgID).
+		Where("opened_at >= ? AND opened_at <= ?", start, end).
+		Scan(&firstResponseResult)
+	summary.AvgFirstResponseMins = firstResponseResult.Avg
 
 	// Average resolution time (time from transfer to resume)
 	var resolutionTimeResult AvgResult
@@ -351,6 +366,18 @@ func (a *App) calculateAgentStats(orgID, agentID uuid.UUID, start, end time.Time
 			orgID, agentID, models.TransferStatusResumed, start, end).
 		Scan(&resolutionTimeResult)
 	stats.AvgResolutionMins = resolutionTimeResult.Avg
+
+	// Average first response for this agent, from the conversations they
+	// answered first. Only sender_type=agent sets first_response_at, so a bot
+	// greeting cannot make anybody's response time look better than it was.
+	var firstResponseResult AvgResult
+	a.DB.Model(&models.Conversation{}).
+		Select("AVG(EXTRACT(EPOCH FROM (first_response_at - first_customer_message_at))/60) as avg").
+		Where("organization_id = ? AND first_responder_id = ?", orgID, agentID).
+		Where("first_response_at IS NOT NULL AND first_customer_message_at IS NOT NULL").
+		Where("opened_at >= ? AND opened_at <= ?", start, end).
+		Scan(&firstResponseResult)
+	stats.AvgFirstResponseMins = firstResponseResult.Avg
 
 	// Calculate break time from availability logs
 	stats.TotalBreakTimeMins, stats.BreakCount = a.calculateBreakTime(agentID, start, end)

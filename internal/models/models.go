@@ -362,6 +362,26 @@ type Contact struct {
 	// Business-Scoped User ID (from Meta BSUID rollout)
 	BSUID string `gorm:"size:150;index" json:"bsuid,omitempty"`
 
+	// PhoneNormalized is the digits-only form of PhoneNumber, used for
+	// duplicate detection and import matching (plan 00, F7). PhoneNumber
+	// keeps whatever shape the number arrived in, because that is what is
+	// sent back to Meta.
+	PhoneNormalized string `gorm:"size:50;index" json:"phone_normalized,omitempty"`
+
+	// Source records how the contact first reached us: inbound, import,
+	// campaign, api, manual, call, address_book_sync.
+	Source string `gorm:"size:32;index" json:"source,omitempty"`
+
+	// MergedIntoID points at the surviving contact when this one was merged
+	// away (plan 06). Lookups follow it, and a merged contact is never
+	// resurrected by an inbound message.
+	MergedIntoID *uuid.UUID `gorm:"type:uuid;index" json:"merged_into_id,omitempty"`
+
+	// DeletedReason distinguishes a deletion a user performed from one the
+	// mobile address-book sync performed. Only the latter may be undone
+	// automatically when the number writes in again.
+	DeletedReason string `gorm:"size:32" json:"deleted_reason,omitempty"`
+
 	// Chatbot SLA tracking
 	ChatbotLastMessageAt *time.Time `json:"chatbot_last_message_at,omitempty"` // When chatbot last sent a message
 	ChatbotReminderSent  bool       `gorm:"default:false" json:"chatbot_reminder_sent"`
@@ -385,6 +405,7 @@ type Message struct {
 	WhatsAppMessageID string        `gorm:"column:whats_app_message_id;size:255;index" json:"whatsapp_message_id"`
 	ConversationID    string        `gorm:"size:255;index" json:"conversation_id"`
 	Direction         Direction     `gorm:"size:10;not null" json:"direction"`
+	SenderType        SenderType    `gorm:"size:20;index" json:"sender_type"`
 	MessageType       MessageType   `gorm:"size:20;not null" json:"message_type"`
 	Content           string        `gorm:"type:text" json:"content"`
 	MediaURL          string        `gorm:"type:text" json:"media_url"`

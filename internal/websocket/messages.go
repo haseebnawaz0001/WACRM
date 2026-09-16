@@ -32,6 +32,20 @@ const (
 	// Permission types
 	TypePermissionsUpdated = "permissions_updated"
 
+	// TypeCRMEvent carries a domain event relayed from the CRM event outbox.
+	// The payload is ids and the event type only — never event content — so
+	// it is safe to broadcast org-wide. Clients refetch the affected record
+	// with their own permissions.
+	TypeCRMEvent = "crm_event"
+
+	// TypeNotificationCreated pushes a stored notification to its owner.
+	TypeNotificationCreated = "notification_created"
+
+	// TypeDealUpdated tells open boards that a card moved. The payload carries
+	// ids and positions only: a board the viewer may not see refetches with
+	// their own permissions rather than trusting the broadcast.
+	TypeDealUpdated = "deal_updated"
+
 	// Conversation note types
 	TypeConversationNoteCreated = "conversation_note_created"
 	TypeConversationNoteUpdated = "conversation_note_updated"

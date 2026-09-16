@@ -63,6 +63,8 @@ interface SessionData {
   panel_config: PanelConfig
 }
 
+import ContactFieldsSection from '@/components/chat/ContactFieldsSection.vue'
+
 const props = defineProps<{
   contact: Contact
   sessionData?: SessionData | null
@@ -278,6 +280,11 @@ async function updateContactTags(tags: string[]) {
             <span>{{ contact.phone_number }}</span>
           </div>
         </div>
+
+        <!-- Details: the organization's own fields, editable in place (plan 01).
+             An agent mid-conversation is the person most likely to learn a
+             customer's company, and the least likely to leave the thread. -->
+        <ContactFieldsSection :contact-id="contact.id" :values="contact.fields" />
 
         <!-- Tags Section (always shown) -->
         <div class="pb-4">

@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/contactutil"
+	"github.com/shridarpatil/whatomate/internal/contacts"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/schedule"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
@@ -156,7 +158,17 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	}
 
 	// Get or create contact (always do this for all incoming messages)
-	contact, isNewContact, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, msg.From, profileName)
+	// An inbound customer message may undo an address-book-sync removal, but
+	// not a deletion a person performed.
+	contact, outcome, err := a.Contacts().Resolve(context.Background(), account.OrganizationID,
+		contacts.Identity{Phone: msg.From, BSUID: msg.FromUserID}, contacts.ResolveOpts{
+			CreateIfMissing: true,
+			AllowRestore:    true,
+			UpdateName:      true,
+			Source:          contacts.SourceInbound,
+			ProfileName:     profileName,
+		})
+	isNewContact := outcome == contacts.OutcomeCreated
 	if err != nil {
 		a.Log.Error("Failed to get or create contact", "from", msg.From, "error", err)
 		return
@@ -170,12 +182,13 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Dispatch webhook if new contact was created
 	if isNewContact {
-		a.DispatchWebhook(account.OrganizationID, models.WebhookEventContactCreated, ContactEventData{
-			ContactID:       contact.ID.String(),
-			ContactPhone:    contact.PhoneNumber,
-			ContactName:     contact.ProfileName,
-			WhatsAppAccount: account.Name,
-		})
+		a.PublishEvent(crmevents.New(account.OrganizationID, string(models.WebhookEventContactCreated),
+			crmevents.ContactActor(contact.ID, contact.ProfileName), eventData(ContactEventData{
+				ContactID:       contact.ID.String(),
+				ContactPhone:    contact.PhoneNumber,
+				ContactName:     contact.ProfileName,
+				WhatsAppAccount: account.Name,
+			})).ForContact(contact.ID))
 	}
 
 	// Get message content - handle text, button replies, list replies, and media
@@ -220,7 +233,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Check business hours if enabled
 	if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
-		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+		if !a.isWithinBusinessHours(account.OrganizationID, settings.BusinessHours.Hours) {
 			// If automated responses are not allowed outside hours, send out-of-hours message and stop
 			if !settings.BusinessHours.AllowAutomatedOutside {
 				a.Log.Info("Outside business hours, sending out of hours message")
@@ -256,7 +269,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		a.Log.Info("Transfer keyword matched", "response", keywordResponse.Body)
 		// Check business hours - if outside hours, send out of hours message instead
 		if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
-			if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+			if !a.isWithinBusinessHours(account.OrganizationID, settings.BusinessHours.Hours) {
 				a.Log.Info("Outside business hours, sending out of hours message instead of transfer")
 				if settings.BusinessHours.OutOfHoursMessage != "" {
 					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
@@ -1313,7 +1326,15 @@ func (a *App) handleIncomingReaction(account *models.WhatsAppAccount, fromPhone,
 	}
 
 	// Get or create contact
-	contact, _, _ := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, fromPhone, profileName)
+	// A reaction is not a reason to bring a deleted contact back.
+	contact, _, _ := a.Contacts().Resolve(context.Background(), account.OrganizationID,
+		contacts.Identity{Phone: fromPhone}, contacts.ResolveOpts{
+			CreateIfMissing: true,
+			AllowRestore:    false,
+			UpdateName:      true,
+			Source:          contacts.SourceInbound,
+			ProfileName:     profileName,
+		})
 
 	// Parse existing reactions from Metadata
 	var metadata map[string]any
@@ -1553,6 +1574,7 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		ContactID:         contact.ID,
 		WhatsAppMessageID: whatsappMsgID,
 		Direction:         models.DirectionIncoming,
+		SenderType:        models.SenderContact,
 		MessageType:       models.MessageType(msgType),
 		Content:           content,
 		Status:            models.MessageStatusReceived,
@@ -1579,6 +1601,19 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 	if err := a.DB.Create(&message).Error; err != nil {
 		a.Log.Error("Failed to save incoming message", "error", err)
 		return
+	}
+
+	// Open or reopen the conversation this message belongs to (plan 03), and
+	// point the message at it. A failure here must not lose the message, which
+	// is already saved, so it is logged rather than returned.
+	if conv, err := a.Conversations().TouchInbound(context.Background(),
+		account.OrganizationID, contact.ID, account.Name, now,
+		a.willChatbotHandle(account, contact)); err != nil {
+		a.Log.Error("Failed to record inbound conversation", "error", err, "contact_id", contact.ID)
+	} else if conv != nil {
+		a.DB.Model(&models.Message{}).Where("id = ?", message.ID).
+			Update("conversation_id", conv.ID.String())
+		message.ConversationID = conv.ID.String()
 	}
 
 	// If the chatbot will handle this conversation (enabled + no active
@@ -1614,66 +1649,31 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 	a.broadcastNewMessage(account.OrganizationID, &message, contact)
 
 	// Dispatch webhook for incoming message
-	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageIncoming, MessageEventData{
-		MessageID:       message.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		MessageType:     models.MessageType(msgType),
-		Content:         content,
-		MediaURL:        messageMediaURL(&message),
-		MediaMimeType:   message.MediaMimeType,
-		MediaFilename:   message.MediaFilename,
-		WhatsAppAccount: account.Name,
-		Direction:       models.DirectionIncoming,
-	})
+	a.PublishEvent(crmevents.New(account.OrganizationID, string(models.WebhookEventMessageIncoming),
+		crmevents.ContactActor(contact.ID, contact.ProfileName), eventData(MessageEventData{
+			MessageID:       message.ID.String(),
+			ContactID:       contact.ID.String(),
+			ContactPhone:    contact.PhoneNumber,
+			ContactName:     contact.ProfileName,
+			MessageType:     models.MessageType(msgType),
+			Content:         content,
+			MediaURL:        messageMediaURL(&message),
+			MediaMimeType:   message.MediaMimeType,
+			MediaFilename:   message.MediaFilename,
+			WhatsAppAccount: account.Name,
+			Direction:       models.DirectionIncoming,
+		})).ForContact(contact.ID).About(crmevents.SubjectMessage, message.ID))
 }
 
 // isWithinBusinessHours checks if current time is within configured business hours
-func (a *App) isWithinBusinessHours(businessHours models.JSONBArray) bool {
-	now := time.Now()
-	currentDay := int(now.Weekday()) // 0 = Sunday, 1 = Monday, etc.
-	currentTime := now.Format("15:04")
-
-	for _, bh := range businessHours {
-		bhMap, ok := bh.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		// Get day (0-6, Sunday-Saturday)
-		day, ok := bhMap["day"].(float64)
-		if !ok {
-			continue
-		}
-
-		if int(day) != currentDay {
-			continue
-		}
-
-		// Check if enabled for this day
-		enabled, ok := bhMap["enabled"].(bool)
-		if !ok || !enabled {
-			return false // Day exists but is disabled
-		}
-
-		// Get start and end times
-		startTime, ok := bhMap["start_time"].(string)
-		if !ok {
-			continue
-		}
-		endTime, ok := bhMap["end_time"].(string)
-		if !ok {
-			continue
-		}
-
-		// Compare times (simple string comparison works for HH:MM format)
-		if currentTime >= startTime && currentTime <= endTime {
-			return true
-		}
-		return false // Found the day but outside hours
-	}
-
-	// If no matching day found, assume outside business hours
-	return false
+// isWithinBusinessHours reports whether now falls inside the configured
+// opening hours, evaluated in the organization's timezone.
+//
+// The evaluation itself lives in internal/schedule so the chatbot, the flow
+// timing node, the IVR timing node and the transfer helpers all apply the same
+// rule. They previously disagreed on both the day format and whether the
+// closing time was inclusive, so the same customer could be routed differently
+// depending on which path handled the message (plan 10, S11 / X13).
+func (a *App) isWithinBusinessHours(orgID uuid.UUID, businessHours models.JSONBArray) bool {
+	return schedule.IsOpen(time.Now(), schedule.Parse(businessHours), a.OrgLocation(orgID))
 }

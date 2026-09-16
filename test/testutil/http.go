@@ -37,6 +37,16 @@ func NewGETRequest(t *testing.T) *fastglue.Request {
 	return &fastglue.Request{RequestCtx: ctx}
 }
 
+// NewDELETERequest creates a fastglue DELETE request for testing.
+func NewDELETERequest(t *testing.T) *fastglue.Request {
+	t.Helper()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod("DELETE")
+
+	return &fastglue.Request{RequestCtx: ctx}
+}
+
 // NewRequest creates an empty fastglue request for testing.
 func NewRequest(t *testing.T) *fastglue.Request {
 	t.Helper()

@@ -198,6 +198,72 @@ const router = createRouter({
           meta: { permission: 'canned_responses', stableKey: true }
         },
         {
+          path: 'contacts',
+          name: 'contacts-module',
+          component: () => import('@/views/contacts/ContactsModuleView.vue'),
+          meta: { permission: 'contacts' }
+        },
+        {
+          path: 'pipeline',
+          name: 'pipeline-board',
+          component: () => import('@/views/pipeline/PipelineBoardView.vue'),
+          meta: { permission: 'deals' }
+        },
+        {
+          path: 'inbox',
+          name: 'inbox',
+          component: () => import('@/views/inbox/InboxView.vue'),
+          meta: { permission: 'chat' }
+        },
+        {
+          path: 'tasks',
+          name: 'tasks',
+          component: () => import('@/views/tasks/TasksView.vue'),
+          meta: { permission: 'tasks' }
+        },
+        {
+          path: 'segments',
+          name: 'segments',
+          component: () => import('@/views/segments/SegmentsView.vue'),
+          meta: { permission: 'segments' }
+        },
+        {
+          path: 'contacts/duplicates',
+          name: 'contact-duplicates',
+          component: () => import('@/views/contacts/DuplicatesView.vue'),
+          meta: { permission: 'contacts' }
+        },
+        {
+          path: 'contacts/:id',
+          name: 'contact-profile',
+          component: () => import('@/views/contacts/ContactProfileView.vue'),
+          meta: { permission: 'contacts' }
+        },
+        {
+          path: 'analytics/crm',
+          name: 'crm-reports',
+          component: () => import('@/views/analytics/CrmReportsView.vue'),
+          meta: { permission: 'reports' }
+        },
+        {
+          path: 'automations',
+          name: 'automations',
+          component: () => import('@/views/automations/AutomationsView.vue'),
+          meta: { permission: 'automations' }
+        },
+        {
+          path: 'automations/:id',
+          name: 'automation-detail',
+          component: () => import('@/views/automations/AutomationDetailView.vue'),
+          meta: { permission: 'automations' }
+        },
+        {
+          path: 'settings/pipelines',
+          name: 'pipelines',
+          component: () => import('@/views/settings/PipelinesView.vue'),
+          meta: { permission: 'pipelines' }
+        },
+        {
           path: 'settings/contacts',
           name: 'contacts',
           component: () => import('@/views/settings/ContactsView.vue'),
@@ -208,6 +274,12 @@ const router = createRouter({
           name: 'contact-detail',
           component: () => import('@/views/settings/ContactDetailView.vue'),
           meta: { permission: 'contacts' }
+        },
+        {
+          path: 'settings/contact-fields',
+          name: 'contact-fields',
+          component: () => import('@/views/settings/ContactFieldsView.vue'),
+          meta: { permission: 'contact_fields' }
         },
         {
           path: 'settings/tags',
@@ -359,12 +431,21 @@ const navigationOrder = [
     { path: '/calling/ivr-flows', permission: 'ivr_flows' },
     { path: '/calling/transfers', permission: 'call_transfers' }
   ]},
+  { path: '/contacts', permission: 'contacts' },
+  { path: '/pipeline', permission: 'deals' },
+  { path: '/inbox', permission: 'chat' },
+  { path: '/tasks', permission: 'tasks' },
+  { path: '/segments', permission: 'segments' },
+  { path: '/automations', permission: 'automations' },
+  { path: '/analytics/crm', permission: 'reports' },
   { path: '/settings', permission: 'settings.general', childPaths: [
     { path: '/settings', permission: 'settings.general' },
     { path: '/settings/chatbot', permission: 'settings.chatbot' },
     { path: '/settings/accounts', permission: 'accounts' },
     { path: '/settings/canned-responses', permission: 'canned_responses' },
     { path: '/settings/contacts', permission: 'contacts' },
+    { path: '/settings/pipelines', permission: 'pipelines' },
+    { path: '/settings/contact-fields', permission: 'contact_fields' },
     { path: '/settings/tags', permission: 'tags' },
     { path: '/settings/teams', permission: 'teams' },
     { path: '/settings/users', permission: 'users' },

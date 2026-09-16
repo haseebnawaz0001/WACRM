@@ -369,32 +369,28 @@ func TestChatLoadCounter_CountsActiveTransfersPerAgent(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, db)
 	a1 := testutil.CreateTestUser(t, db, org.ID)
 	a2 := testutil.CreateTestUser(t, db, org.ID)
-	contact := testutil.CreateTestContact(t, db, org.ID)
 
-	// 2 active transfers for a1, 1 for a2, 1 completed for a1 (must not count).
-	for range 2 {
+	// Each active transfer needs its own contact: a contact can only have one
+	// active transfer at a time (plan 10, S5), so reusing one here would build
+	// a state the database rejects.
+	newContact := func(phone string) uuid.UUID {
+		return testutil.CreateTestContactWith(t, db, org.ID, testutil.WithPhoneNumber(phone)).ID
+	}
+	active := func(contactID uuid.UUID, agentID uuid.UUID, status models.TransferStatus) {
 		require.NoError(t, db.Create(&models.AgentTransfer{
 			BaseModel:      models.BaseModel{ID: uuid.New()},
 			OrganizationID: org.ID,
-			ContactID:      contact.ID,
-			AgentID:        &a1.ID,
-			Status:         models.TransferStatusActive,
+			ContactID:      contactID,
+			AgentID:        &agentID,
+			Status:         status,
 		}).Error)
 	}
-	require.NoError(t, db.Create(&models.AgentTransfer{
-		BaseModel:      models.BaseModel{ID: uuid.New()},
-		OrganizationID: org.ID,
-		ContactID:      contact.ID,
-		AgentID:        &a2.ID,
-		Status:         models.TransferStatusActive,
-	}).Error)
-	require.NoError(t, db.Create(&models.AgentTransfer{
-		BaseModel:      models.BaseModel{ID: uuid.New()},
-		OrganizationID: org.ID,
-		ContactID:      contact.ID,
-		AgentID:        &a1.ID,
-		Status:         models.TransferStatusResumed, // not "active" → must NOT count
-	}).Error)
+
+	// 2 active transfers for a1, 1 for a2, 1 resumed for a1 (must not count).
+	active(newContact("15551110001"), a1.ID, models.TransferStatusActive)
+	active(newContact("15551110002"), a1.ID, models.TransferStatusActive)
+	active(newContact("15551110003"), a2.ID, models.TransferStatusActive)
+	active(newContact("15551110004"), a1.ID, models.TransferStatusResumed)
 
 	loads := assignment.ChatLoadCounter(db, org.ID, []uuid.UUID{a1.ID, a2.ID})
 	assert.Equal(t, int64(2), loads[a1.ID])

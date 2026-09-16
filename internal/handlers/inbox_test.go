@@ -1,0 +1,290 @@
+package handlers_test
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
+	"github.com/shridarpatil/whatomate/internal/handlers"
+	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/test/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
+)
+
+type inboxPage struct {
+	Data struct {
+		Conversations []handlers.ConversationResponse `json:"conversations"`
+		Total         int64                           `json:"total"`
+		View          string                          `json:"view"`
+	} `json:"data"`
+}
+
+// openConversation creates a contact with a live conversation.
+func openConversation(t *testing.T, app *handlers.App, orgID uuid.UUID, phone string) *models.Contact {
+	t.Helper()
+	contact := testutil.CreateTestContactWith(t, app.DB, orgID, testutil.WithPhoneNumber(phone))
+	_, err := app.Conversations().TouchInbound(context.Background(), orgID, contact.ID,
+		"acct", time.Now().UTC(), true)
+	require.NoError(t, err)
+	return contact
+}
+
+func listInbox(t *testing.T, app *handlers.App, orgID, userID uuid.UUID, view string) inboxPage {
+	t.Helper()
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, orgID, userID)
+	if view != "" {
+		testutil.SetQueryParam(req, "view", view)
+	}
+
+	require.NoError(t, app.ListInbox(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var page inboxPage
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &page))
+	return page
+}
+
+func inboxIDs(page inboxPage) map[string]bool {
+	out := map[string]bool{}
+	for _, c := range page.Data.Conversations {
+		out[c.ContactID] = true
+	}
+	return out
+}
+
+// "What is mine and still open?" is the question the contact list could never
+// answer, because there was no conversation state to filter on.
+func TestListInbox_MineShowsOnlyMyConversations(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	me := adminFor(t, app, org)
+	someoneElse := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	mine := openConversation(t, app, org.ID, "15553100001")
+	theirs := openConversation(t, app, org.ID, "15553100002")
+
+	svc := app.Conversations()
+	_, err := svc.Assign(context.Background(), org.ID, mine.ID, &me.ID, nil, crmevents.SystemActor())
+	require.NoError(t, err)
+	_, err = svc.Assign(context.Background(), org.ID, theirs.ID, &someoneElse.ID, nil, crmevents.SystemActor())
+	require.NoError(t, err)
+
+	got := inboxIDs(listInbox(t, app, org.ID, me.ID, "mine"))
+	assert.True(t, got[mine.ID.String()])
+	assert.False(t, got[theirs.ID.String()])
+}
+
+// The queue is what a human should pick up. A bot-handled conversation is not
+// waiting on a person, so listing it there would pad the queue with work
+// nobody needs to do.
+func TestListInbox_UnassignedExcludesBotHandled(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+
+	botHandled := openConversation(t, app, org.ID, "15553110001")
+	needsAgent := openConversation(t, app, org.ID, "15553110002")
+	require.NoError(t, app.DB.Model(&models.Conversation{}).
+		Where("contact_id = ?", needsAgent.ID).Update("bot_active", false).Error)
+
+	queue := inboxIDs(listInbox(t, app, org.ID, admin.ID, "unassigned"))
+	assert.True(t, queue[needsAgent.ID.String()])
+	assert.False(t, queue[botHandled.ID.String()])
+
+	bot := inboxIDs(listInbox(t, app, org.ID, admin.ID, "bot"))
+	assert.True(t, bot[botHandled.ID.String()])
+	assert.False(t, bot[needsAgent.ID.String()])
+}
+
+// Resolved conversations are history. Showing them by default would make the
+// inbox grow without limit and never look finished.
+func TestListInbox_HidesResolvedByDefault(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+
+	done := openConversation(t, app, org.ID, "15553120001")
+	_, err := app.Conversations().Resolve(context.Background(), org.ID, done.ID,
+		models.ResolutionAgent, crmevents.SystemActor())
+	require.NoError(t, err)
+
+	got := inboxIDs(listInbox(t, app, org.ID, admin.ID, "all"))
+	assert.False(t, got[done.ID.String()])
+
+	// Asking for them explicitly still works.
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetQueryParam(req, "view", "all")
+	testutil.SetQueryParam(req, "status", "resolved")
+	require.NoError(t, app.ListInbox(req))
+
+	var page inboxPage
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &page))
+	assert.True(t, inboxIDs(page)[done.ID.String()])
+}
+
+func TestListInbox_RejectsUnknownView(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetQueryParam(req, "view", "everything")
+
+	require.NoError(t, app.ListInbox(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+// The inbox must not become a way around contact visibility.
+func TestListInbox_RespectsContactVisibility(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "chat-only-inbox",
+		[]string{"chat:read", "chat:write"})
+	agent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	mine := openConversation(t, app, org.ID, "15553130001")
+	hidden := openConversation(t, app, org.ID, "15553130002")
+	require.NoError(t, app.DB.Model(&models.Contact{}).Where("id = ?", mine.ID).
+		Update("assigned_user_id", agent.ID).Error)
+
+	got := inboxIDs(listInbox(t, app, org.ID, agent.ID, "all"))
+	assert.True(t, got[mine.ID.String()])
+	assert.False(t, got[hidden.ID.String()], "a chat-only agent must not see unrelated conversations")
+}
+
+func TestInboxCounts(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+
+	mine := openConversation(t, app, org.ID, "15553140001")
+	_, err := app.Conversations().Assign(context.Background(), org.ID, mine.ID,
+		&admin.ID, nil, crmevents.SystemActor())
+	require.NoError(t, err)
+
+	queued := openConversation(t, app, org.ID, "15553140002")
+	require.NoError(t, app.DB.Model(&models.Conversation{}).
+		Where("contact_id = ?", queued.ID).Update("bot_active", false).Error)
+
+	openConversation(t, app, org.ID, "15553140003") // bot-handled
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	require.NoError(t, app.GetInboxCounts(req))
+
+	var result struct {
+		Data struct {
+			Mine, Unassigned, Bot, All int64
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
+
+	assert.EqualValues(t, 1, result.Data.Mine)
+	assert.EqualValues(t, 1, result.Data.Unassigned)
+	assert.EqualValues(t, 1, result.Data.Bot)
+	assert.EqualValues(t, 3, result.Data.All)
+}
+
+// --- Actions ---
+
+func TestResolveConversation(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	contact := openConversation(t, app, org.ID, "15553150001")
+
+	req := testutil.NewJSONRequest(t, map[string]any{"contact_id": contact.ID.String()})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.ResolveConversation(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	_, err := app.Conversations().Active(context.Background(), org.ID, contact.ID)
+	assert.Error(t, err, "the conversation is no longer active")
+}
+
+// A snooze in the past would be woken on the very next tick, which is not what
+// anyone means by snoozing.
+func TestSnoozeConversation_RejectsPastTimes(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	contact := openConversation(t, app, org.ID, "15553160001")
+
+	past := time.Now().Add(-time.Hour)
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "until": past,
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.SnoozeConversation(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+func TestSnoozeConversation(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	contact := openConversation(t, app, org.ID, "15553170001")
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "until": time.Now().Add(2 * time.Hour),
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.SnoozeConversation(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	conv, err := app.Conversations().Active(context.Background(), org.ID, contact.ID)
+	require.NoError(t, err)
+	assert.Equal(t, models.ConversationSnoozed, conv.Status)
+}
+
+func TestAssignConversation_RejectsOutsiders(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	contact := openConversation(t, app, org.ID, "15553180001")
+
+	stranger := uuid.New().String()
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "assignee_id": stranger,
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.AssignConversation(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+// A contact who has never written has no conversation; that is a normal state,
+// not an error the UI should have to special-case.
+func TestGetConversation_ReturnsNullWhenNoneActive(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID,
+		testutil.WithPhoneNumber("15553190001"))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	req.RequestCtx.SetUserValue("id", contact.ID.String())
+
+	require.NoError(t, app.GetConversation(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var result struct {
+		Data struct {
+			Conversation *handlers.ConversationResponse `json:"conversation"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
+	assert.Nil(t, result.Data.Conversation)
+}

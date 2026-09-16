@@ -2,6 +2,8 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -149,21 +151,33 @@ func TestApp_ListAgentTransfers_FilterByStatus(t *testing.T) {
 	assert.Equal(t, models.TransferStatusActive, result.Data.Transfers[0].Status)
 }
 
+// nextContact creates a contact with a unique phone number.
+//
+// Each active transfer needs its own contact: a contact can only have one
+// active transfer at a time (plan 10, S5), so tests that give one contact
+// several active transfers build a state the database now rejects.
+var contactSeq atomic.Int64
+
+func nextContact(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.Contact {
+	t.Helper()
+	return testutil.CreateTestContactWith(t, app.DB, orgID,
+		testutil.WithPhoneNumber(fmt.Sprintf("1555%07d", contactSeq.Add(1))))
+}
+
 func TestApp_ListAgentTransfers_AgentRoleFiltering(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 	agent := createTestAgent(t, app, org.ID)
 
 	// Create another agent
 	otherAgent := createTestAgent(t, app, org.ID)
 
 	// Create transfers: one assigned to agent, one to other agent, one unassigned
-	_ = createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
-	_ = createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &otherAgent.ID)
-	_ = createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, nil) // Unassigned (general queue)
+	_ = createTestTransfer(t, app, org.ID, nextContact(t, app, org.ID).ID, account.Name, models.TransferStatusActive, &agent.ID)
+	_ = createTestTransfer(t, app, org.ID, nextContact(t, app, org.ID).ID, account.Name, models.TransferStatusActive, &otherAgent.ID)
+	_ = createTestTransfer(t, app, org.ID, nextContact(t, app, org.ID).ID, account.Name, models.TransferStatusActive, nil) // Unassigned (general queue)
 
 	// Agent should only see their assigned transfers + general queue
 	req := testutil.NewGETRequest(t)
@@ -193,11 +207,9 @@ func TestApp_ListAgentTransfers_Pagination(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
-
-	// Create multiple transfers
+	// Create multiple transfers, each for its own contact
 	for i := 0; i < 5; i++ {
-		createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, nil)
+		createTestTransfer(t, app, org.ID, nextContact(t, app, org.ID).ID, account.Name, models.TransferStatusActive, nil)
 	}
 
 	// Request with limit and offset
@@ -673,13 +685,12 @@ func TestApp_PickNextTransfer_FIFO(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 	agent := createTestAgent(t, app, org.ID)
 
-	// Create multiple transfers with different times
+	// Create multiple transfers with different times, each for its own contact
 	transfer1 := &models.AgentTransfer{
 		OrganizationID:  org.ID,
-		ContactID:       contact.ID,
+		ContactID:       nextContact(t, app, org.ID).ID,
 		WhatsAppAccount: account.Name,
 		PhoneNumber:     "1111111111",
 		Status:          models.TransferStatusActive,
@@ -690,7 +701,7 @@ func TestApp_PickNextTransfer_FIFO(t *testing.T) {
 
 	transfer2 := &models.AgentTransfer{
 		OrganizationID:  org.ID,
-		ContactID:       contact.ID,
+		ContactID:       nextContact(t, app, org.ID).ID,
 		WhatsAppAccount: account.Name,
 		PhoneNumber:     "2222222222",
 		Status:          models.TransferStatusActive,
@@ -723,7 +734,6 @@ func TestApp_PickNextTransfer_TeamFiltering(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 	agent := createTestAgent(t, app, org.ID)
 
 	// Create a team and add agent as member
@@ -732,7 +742,7 @@ func TestApp_PickNextTransfer_TeamFiltering(t *testing.T) {
 	// Create transfer in team queue
 	teamTransfer := &models.AgentTransfer{
 		OrganizationID:  org.ID,
-		ContactID:       contact.ID,
+		ContactID:       nextContact(t, app, org.ID).ID,
 		WhatsAppAccount: account.Name,
 		PhoneNumber:     "1111111111",
 		Status:          models.TransferStatusActive,
@@ -743,7 +753,7 @@ func TestApp_PickNextTransfer_TeamFiltering(t *testing.T) {
 	require.NoError(t, app.DB.Create(teamTransfer).Error)
 
 	// Create transfer in general queue
-	generalTransfer := createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, nil)
+	generalTransfer := createTestTransfer(t, app, org.ID, nextContact(t, app, org.ID).ID, account.Name, models.TransferStatusActive, nil)
 
 	// Pick from team queue specifically
 	req := testutil.NewJSONRequest(t, nil)
@@ -844,12 +854,18 @@ func TestApp_ReturnAgentTransfersToQueue(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 	agent := createTestAgent(t, app, org.ID)
 
+	// Two different contacts: a contact can only ever have one active
+	// transfer, so handing the same one two active transfers would be an
+	// invalid state the database now rejects (plan 10, S5).
+	firstContact := testutil.CreateTestContact(t, app.DB, org.ID)
+	secondContact := testutil.CreateTestContactWith(t, app.DB, org.ID,
+		testutil.WithPhoneNumber("15559990001"))
+
 	// Create transfers assigned to the agent
-	transfer1 := createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
-	transfer2 := createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
+	transfer1 := createTestTransfer(t, app, org.ID, firstContact.ID, account.Name, models.TransferStatusActive, &agent.ID)
+	transfer2 := createTestTransfer(t, app, org.ID, secondContact.ID, account.Name, models.TransferStatusActive, &agent.ID)
 
 	// Return transfers to queue
 	count := app.ReturnAgentTransfersToQueue(agent.ID, org.ID)
@@ -997,7 +1013,7 @@ func TestApp_ReturnAgentTransfersToQueue_DoesNotClearManualAssignment(t *testing
 	assert.Equal(t, manager.ID, *got)
 }
 
-func TestApp_ReturnAgentTransfersToQueue_ClearsAssignmentWhenItPointsAtAgent(t *testing.T) {
+func TestApp_ReturnAgentTransfersToQueue_KeepsContactOwner(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
@@ -1005,17 +1021,27 @@ func TestApp_ReturnAgentTransfersToQueue_ClearsAssignmentWhenItPointsAtAgent(t *
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 	agent := createTestAgent(t, app, org.ID)
 
-	// Agent is both the transfer's owner and the contact's stale RM (e.g.
-	// from an earlier pickup with AssignToSameAgent=true). When they go
-	// offline the contact must return to "no manager" so the queue is the
-	// authoritative routing path.
+	// The agent is both the transfer's assignee and the contact's owner.
+	// Returning the conversation to the queue used to clear the owner too,
+	// which conflated two different things: the owner is the relationship
+	// manager, the transfer assignee is who is handling this conversation
+	// right now. Clearing the owner detached contacts from their manager
+	// every time an agent went offline and broke IVR calls that ring the
+	// owner first, so ownership now changes only through an explicit owner
+	// action (plan 10, S5).
 	require.NoError(t, app.DB.Model(&models.Contact{}).Where("id = ?", contact.ID).
 		Update("assigned_user_id", agent.ID).Error)
-	createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
+	transfer := createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
 
 	count := app.ReturnAgentTransfersToQueue(agent.ID, org.ID)
 	assert.Equal(t, 1, count)
 
-	assert.Nil(t, readContactAssignedUser(t, app, contact.ID),
-		"assignment pointing at the offline agent must be cleared")
+	owner := readContactAssignedUser(t, app, contact.ID)
+	require.NotNil(t, owner, "going offline does not stop an agent owning the contact")
+	assert.Equal(t, agent.ID, *owner)
+
+	// The conversation itself does go back to the queue.
+	var updated models.AgentTransfer
+	require.NoError(t, app.DB.First(&updated, "id = ?", transfer.ID).Error)
+	assert.Nil(t, updated.AgentID)
 }

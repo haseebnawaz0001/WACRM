@@ -758,3 +758,49 @@ func (a *App) InvalidateTagsCache(orgID uuid.UUID) {
 	cacheKey := fmt.Sprintf("%s%s", tagsCachePrefix, orgID.String())
 	a.Redis.Del(ctx, cacheKey)
 }
+
+// --- Organization settings (plan 10, S9) ---
+
+const (
+	orgSettingsCachePrefix = "org:settings:"
+	// Organization settings change rarely and are invalidated on write, so the
+	// TTL only bounds how long a stale value could survive a missed
+	// invalidation.
+	orgSettingsCacheTTL = 6 * time.Hour
+)
+
+// getOrgSettingsCached reads an organization's settings blob.
+//
+// Masking and timezone are consulted on every serialised contact and every
+// broadcast, so reading them straight from the database meant a query per
+// message — which is the cost that made org-wide broadcasts expensive.
+func (a *App) getOrgSettingsCached(orgID uuid.UUID) models.JSONB {
+	ctx := context.Background()
+	cacheKey := orgSettingsCachePrefix + orgID.String()
+
+	if cached, err := a.Redis.Get(ctx, cacheKey).Result(); err == nil && cached != "" {
+		var settings models.JSONB
+		if err := json.Unmarshal([]byte(cached), &settings); err == nil {
+			return settings
+		}
+	}
+
+	var org models.Organization
+	if err := a.DB.Select("settings").Where("id = ?", orgID).First(&org).Error; err != nil {
+		return models.JSONB{}
+	}
+	settings := org.Settings
+	if settings == nil {
+		settings = models.JSONB{}
+	}
+
+	if encoded, err := json.Marshal(settings); err == nil {
+		a.Redis.Set(ctx, cacheKey, encoded, orgSettingsCacheTTL)
+	}
+	return settings
+}
+
+// InvalidateOrgSettingsCache drops the cached settings for an organization.
+func (a *App) InvalidateOrgSettingsCache(orgID uuid.UUID) {
+	a.Redis.Del(context.Background(), orgSettingsCachePrefix+orgID.String())
+}

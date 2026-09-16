@@ -420,91 +420,105 @@ func TestGetOrCreateSession_ExpiredSession(t *testing.T) {
 // =============================================================================
 // isWithinBusinessHours
 // =============================================================================
+//
+// With no organization row these resolve to UTC, so the expected weekday and
+// time of day are computed in UTC too. Using the server's local clock here
+// would make the tests pass or fail depending on where they run — exactly the
+// bug internal/schedule exists to remove.
 
 func TestIsWithinBusinessHours_WithinHours(t *testing.T) {
 	app := newProcessorTestApp(t)
-	now := time.Now()
-	dayOfWeek := float64(now.Weekday())
+	now := time.Now().UTC()
 
 	hours := models.JSONBArray{
 		map[string]any{
-			"day":        dayOfWeek,
+			"day":        float64(now.Weekday()),
 			"enabled":    true,
 			"start_time": "00:00",
 			"end_time":   "23:59",
 		},
 	}
 
-	result := app.isWithinBusinessHours(hours)
-	assert.True(t, result)
+	assert.True(t, app.isWithinBusinessHours(uuid.Nil, hours))
 }
 
 func TestIsWithinBusinessHours_OutsideHours(t *testing.T) {
 	app := newProcessorTestApp(t)
-	now := time.Now()
-	dayOfWeek := float64(now.Weekday())
+	now := time.Now().UTC()
 
-	// Set hours to a time window that has definitely passed
-	// Use a very narrow window in the past
+	// A window that has already closed today. Skipped in the first minute
+	// after midnight UTC, when the window is still open.
+	if now.Hour() == 0 && now.Minute() <= 1 {
+		t.Skip("running inside the test window")
+	}
+
 	hours := models.JSONBArray{
 		map[string]any{
-			"day":        dayOfWeek,
+			"day":        float64(now.Weekday()),
 			"enabled":    true,
 			"start_time": "00:00",
 			"end_time":   "00:01",
 		},
 	}
 
-	// This will only be true if running at midnight; for all practical purposes it tests false
-	currentTime := now.Format("15:04")
-	if currentTime > "00:01" {
-		result := app.isWithinBusinessHours(hours)
-		assert.False(t, result)
+	assert.False(t, app.isWithinBusinessHours(uuid.Nil, hours))
+}
+
+// The closing time is exclusive, so a message at exactly the end time is out
+// of hours. The chatbot used to treat it as inclusive while flows and IVR did
+// not, which routed the same customer differently depending on the path.
+func TestIsWithinBusinessHours_ClosingMinuteIsOutside(t *testing.T) {
+	app := newProcessorTestApp(t)
+	now := time.Now().UTC()
+	closing := now.Format("15:04")
+
+	hours := models.JSONBArray{
+		map[string]any{
+			"day":        float64(now.Weekday()),
+			"enabled":    true,
+			"start_time": "00:00",
+			"end_time":   closing,
+		},
 	}
+
+	assert.False(t, app.isWithinBusinessHours(uuid.Nil, hours))
 }
 
 func TestIsWithinBusinessHours_DayDisabled(t *testing.T) {
 	app := newProcessorTestApp(t)
-	now := time.Now()
-	dayOfWeek := float64(now.Weekday())
+	now := time.Now().UTC()
 
 	hours := models.JSONBArray{
 		map[string]any{
-			"day":        dayOfWeek,
+			"day":        float64(now.Weekday()),
 			"enabled":    false,
 			"start_time": "00:00",
 			"end_time":   "23:59",
 		},
 	}
 
-	result := app.isWithinBusinessHours(hours)
-	assert.False(t, result)
+	assert.False(t, app.isWithinBusinessHours(uuid.Nil, hours))
 }
 
 func TestIsWithinBusinessHours_NoMatchingDay(t *testing.T) {
 	app := newProcessorTestApp(t)
-	now := time.Now()
-	// Use a different day of the week
-	otherDay := float64((int(now.Weekday()) + 1) % 7)
+	now := time.Now().UTC()
 
 	hours := models.JSONBArray{
 		map[string]any{
-			"day":        otherDay,
+			"day":        float64((int(now.Weekday()) + 1) % 7),
 			"enabled":    true,
 			"start_time": "00:00",
 			"end_time":   "23:59",
 		},
 	}
 
-	result := app.isWithinBusinessHours(hours)
-	assert.False(t, result)
+	assert.False(t, app.isWithinBusinessHours(uuid.Nil, hours))
 }
 
 func TestIsWithinBusinessHours_EmptyHours(t *testing.T) {
 	app := newProcessorTestApp(t)
-
-	result := app.isWithinBusinessHours(models.JSONBArray{})
-	assert.False(t, result)
+	assert.False(t, app.isWithinBusinessHours(uuid.Nil, models.JSONBArray{}))
 }
 
 // =============================================================================

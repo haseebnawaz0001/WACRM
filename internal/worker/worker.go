@@ -9,7 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
-	"github.com/shridarpatil/whatomate/internal/contactutil"
+	"github.com/shridarpatil/whatomate/internal/contacts"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -91,7 +92,18 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	w.decryptAccountSecrets(&account)
 
 	// Get or create contact for this recipient
-	contact, _, err := contactutil.GetOrCreateContact(w.DB, job.OrganizationID, job.PhoneNumber, job.RecipientName)
+	// A campaign send must never resurrect a deleted contact, and the
+	// recipient name from the CSV must never overwrite the name WhatsApp
+	// reported for that person.
+	contact, _, err := contacts.New(w.DB).Resolve(ctx, job.OrganizationID,
+		contacts.Identity{Phone: job.PhoneNumber}, contacts.ResolveOpts{
+			CreateIfMissing: true,
+			AllowRestore:    false,
+			UpdateName:      false,
+			Source:          contacts.SourceCampaign,
+			ProfileName:     job.RecipientName,
+			Actor:           crmevents.SystemActor(),
+		})
 	if err != nil || contact == nil {
 		w.Log.Error("Failed to get or create contact", "error", err, "phone", job.PhoneNumber)
 		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Failed to create contact")
@@ -115,18 +127,18 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		HeaderParams:   job.HeaderParams,
 	}
 
-	// Send template message
-	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID, campaign.HeaderMediaFilename)
-
-	// Create Message record
+	// Build the message record. sender_type marks this as a campaign send so
+	// it never counts towards first-response or agent analytics.
 	message := models.Message{
-		OrganizationID:    job.OrganizationID,
-		WhatsAppAccount:   campaign.WhatsAppAccount,
-		ContactID:         contact.ID,
-		WhatsAppMessageID: waMessageID,
-		Direction:         models.DirectionOutgoing,
-		MessageType:       models.MessageTypeTemplate,
-		TemplateParams:    job.TemplateParams,
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  job.OrganizationID,
+		WhatsAppAccount: campaign.WhatsAppAccount,
+		ContactID:       contact.ID,
+		Direction:       models.DirectionOutgoing,
+		SenderType:      models.SenderCampaign,
+		MessageType:     models.MessageTypeTemplate,
+		TemplateParams:  job.TemplateParams,
+		Status:          models.MessageStatusPending,
 		Metadata: models.JSONB{
 			"campaign_id":    job.CampaignID.String(),
 			"recipient_name": job.RecipientName,
@@ -144,6 +156,17 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		}
 	}
 
+	// Persist before calling Meta, the same order SendOutgoingMessage uses.
+	// Creating the row afterwards left a window where a delivery status
+	// webhook could arrive for a message that did not exist yet and be
+	// dropped.
+	if err := w.DB.Create(&message).Error; err != nil {
+		w.Log.Error("Failed to save message", "error", err, "recipient", job.PhoneNumber)
+	}
+
+	// Send template message
+	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID, campaign.HeaderMediaFilename)
+
 	if err != nil {
 		w.Log.Error("Failed to send message", "error", err, "recipient", job.PhoneNumber)
 		message.Status = models.MessageStatusFailed
@@ -153,13 +176,24 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	} else {
 		w.Log.Info("Message sent", "recipient", job.PhoneNumber, "message_id", waMessageID)
 		message.Status = models.MessageStatusSent
+		message.WhatsAppMessageID = waMessageID
 		w.updateRecipientStatus(job.RecipientID, models.MessageStatusSent, waMessageID, "")
 		w.incrementCampaignCount(job.CampaignID, "sent_count")
 	}
 
-	// Save message record
-	if err := w.DB.Create(&message).Error; err != nil {
-		w.Log.Error("Failed to save message", "error", err, "recipient", job.PhoneNumber)
+	if err := w.DB.Model(&models.Message{}).Where("id = ?", message.ID).
+		Updates(map[string]any{
+			"status":               message.Status,
+			"whats_app_message_id": message.WhatsAppMessageID,
+			"error_message":        message.ErrorMessage,
+		}).Error; err != nil {
+		w.Log.Error("Failed to update message status", "error", err, "message_id", message.ID)
+	}
+
+	// Side effects the worker used to skip entirely by writing the row
+	// directly: the contact's last-message state and the outgoing event.
+	if message.Status == models.MessageStatusSent {
+		w.recordCampaignSend(contact, &message)
 	}
 
 	// Check if campaign is complete (all recipients processed)
@@ -317,4 +351,49 @@ func (w *Worker) Close() error {
 		return w.Consumer.Close()
 	}
 	return nil
+}
+
+// recordCampaignSend applies the side effects a campaign send used to skip.
+//
+// The worker wrote Message rows directly, so a campaign never updated the
+// contact's last-message state (the inbox showed nothing) and never produced a
+// message.outgoing event (no webhook, no realtime update). It has no *App and
+// cannot reach the WebSocket hub, but it does not need to: writing an outbox
+// row is enough, and the relay fans the event out to every replica.
+func (w *Worker) recordCampaignSend(contact *models.Contact, message *models.Message) {
+	now := time.Now()
+	if err := w.DB.Model(&models.Contact{}).Where("id = ?", contact.ID).
+		Updates(map[string]any{
+			"last_message_at":      now,
+			"last_message_preview": campaignPreview(message),
+		}).Error; err != nil {
+		w.Log.Error("Failed to update contact after campaign send", "error", err, "contact_id", contact.ID)
+	}
+
+	event := crmevents.New(message.OrganizationID, string(models.WebhookEventMessageOutgoing),
+		crmevents.SystemActor(), map[string]any{
+			"message_id":       message.ID.String(),
+			"contact_id":       contact.ID.String(),
+			"contact_phone":    contact.PhoneNumber,
+			"contact_name":     contact.ProfileName,
+			"message_type":     string(message.MessageType),
+			"content":          message.Content,
+			"whatsapp_account": message.WhatsAppAccount,
+			"direction":        string(models.DirectionOutgoing),
+		}).ForContact(contact.ID).About(crmevents.SubjectMessage, message.ID)
+
+	if err := crmevents.Publish(w.DB, event); err != nil {
+		w.Log.Error("Failed to publish campaign send event", "error", err, "message_id", message.ID)
+	}
+}
+
+// campaignPreview builds the inbox preview line for a campaign message.
+func campaignPreview(message *models.Message) string {
+	if message.Content != "" {
+		return message.Content
+	}
+	if message.TemplateName != "" {
+		return "Template: " + message.TemplateName
+	}
+	return "Template message"
 }

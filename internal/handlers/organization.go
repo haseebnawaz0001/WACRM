@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,6 +10,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/orgseed"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -227,6 +229,10 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 	}
 
+	// Masking and timezone are read from a cache on every serialised contact
+	// and every broadcast, so a settings change has to drop it immediately.
+	a.InvalidateOrgSettingsCache(orgID)
+
 	if a.CallManager != nil {
 		a.CallManager.InvalidateOrgCallingSettingsCache(orgID)
 	}
@@ -315,17 +321,19 @@ func (a *App) MaskContactFields(orgID any, profileName, phoneNumber string) (str
 
 // ShouldMaskPhoneNumbers checks if phone masking is enabled for the organization
 func (a *App) ShouldMaskPhoneNumbers(orgID any) bool {
-	var org models.Organization
-	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
-		return false
+	id, ok := orgID.(uuid.UUID)
+	if !ok {
+		parsed, err := uuid.Parse(fmt.Sprint(orgID))
+		if err != nil {
+			return false
+		}
+		id = parsed
 	}
 
-	if org.Settings != nil {
-		if v, ok := org.Settings["mask_phone_numbers"].(bool); ok {
-			return v
-		}
-	}
-	return false
+	// Cached: this is consulted for every serialised contact and every
+	// broadcast, so reading it from the database meant a query per message.
+	masked, _ := a.getOrgSettingsCached(id)["mask_phone_numbers"].(bool)
+	return masked
 }
 
 // OrganizationResponse represents an organization in API responses
@@ -433,6 +441,16 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 	if err := database.SeedSystemRolesForOrg(tx, org.ID); err != nil {
 		tx.Rollback()
 		a.Log.Error("Failed to seed system roles", "error", err, "org_id", org.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
+	}
+
+	// Everything a new organization needs to be usable: contact fields, task
+	// types and a default pipeline (plan 10, S8). Without this an organization
+	// created here had roles but no CRM defaults, and only became whole the
+	// next time a migration happened to run.
+	if err := orgseed.Seed(tx, org.ID); err != nil {
+		tx.Rollback()
+		a.Log.Error("Failed to seed organization defaults", "error", err, "org_id", org.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
 	}
 

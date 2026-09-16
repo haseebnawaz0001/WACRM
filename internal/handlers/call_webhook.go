@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/contactutil"
+	"github.com/shridarpatil/whatomate/internal/contacts"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"gorm.io/gorm"
@@ -100,7 +100,13 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 	}
 
 	// Get or create the contact
-	contact, _, _ := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, ce.From, "")
+	// A call does not restore a deleted contact.
+	contact, _, _ := a.Contacts().Resolve(context.Background(), account.OrganizationID,
+		contacts.Identity{Phone: ce.From, BSUID: ce.FromUserID}, contacts.ResolveOpts{
+			CreateIfMissing: true,
+			AllowRestore:    false,
+			Source:          contacts.SourceCall,
+		})
 
 	if contact == nil {
 		a.Log.Error("Failed to get or create contact for call", "phone", ce.From)

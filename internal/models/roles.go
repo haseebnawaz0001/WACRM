@@ -10,6 +10,61 @@ type Permission struct {
 	Resource    string `gorm:"size:50;not null;uniqueIndex:idx_permission_resource_action" json:"resource"`
 	Action      string `gorm:"size:20;not null;uniqueIndex:idx_permission_resource_action" json:"action"`
 	Description string `gorm:"size:200" json:"description"`
+
+	// Group is the area of the product this permission belongs to (plan 10,
+	// S1). The role editor used to render a flat alphabetical list of raw
+	// resource names, which became unreadable as the CRM added a dozen more;
+	// grouping is what keeps it a page somebody can actually configure.
+	Group string `gorm:"size:40;not null;default:'other'" json:"group"`
+}
+
+// Permission groups. The value is stored, so renaming one changes what the
+// role editor shows; the strings are deliberately plain.
+const (
+	PermissionGroupInbox     = "inbox"
+	PermissionGroupCRM       = "crm"
+	PermissionGroupMessaging = "messaging"
+	PermissionGroupCalling   = "calling"
+	PermissionGroupInsights  = "insights"
+	PermissionGroupAdmin     = "admin"
+	PermissionGroupOther     = "other"
+)
+
+// PermissionGroupFor buckets a resource into an area of the product.
+//
+// It is a function rather than a column on every catalog entry so that adding a
+// permission cannot silently leave it ungrouped: anything unrecognised lands in
+// "other", which is visible in the UI and obviously wrong.
+func PermissionGroupFor(resource string) string {
+	switch resource {
+	case ResourceChat, ResourceChatAssign, ResourceTransfers, ResourceCannedResponses:
+		return PermissionGroupInbox
+
+	case ResourceContacts, ResourceContactFields, ResourceTags, ResourceTasks,
+		ResourceSegments, ResourcePipelines, ResourceDeals, ResourceAutomations:
+		return PermissionGroupCRM
+
+	case ResourceAccounts, ResourceTemplates, ResourceCampaigns,
+		ResourceFlowsWhatsApp, ResourceFlowsChatbot,
+		ResourceChatbotKeywords, ResourceChatbotAI,
+		ResourceSettingsChatbot, ResourceSettingsChatbotAgents,
+		ResourceSettingsChatbotHours, ResourceSettingsChatbotSLA,
+		ResourceSettingsChatbotAI:
+		return PermissionGroupMessaging
+
+	case ResourceCallLogs, ResourceIVRFlows, ResourceCallTransfers,
+		ResourceOutgoingCalls, ResourceSettingsCalling:
+		return PermissionGroupCalling
+
+	case ResourceAnalytics, ResourceAnalyticsAgents, ResourceReports:
+		return PermissionGroupInsights
+
+	case ResourceUsers, ResourceRoles, ResourceTeams, ResourceAPIKeys,
+		ResourceWebhooks, ResourceCustomActions, ResourceOrganizations,
+		ResourceAuditLogs, ResourceSettingsGeneral, ResourceSettingsSSO:
+		return PermissionGroupAdmin
+	}
+	return PermissionGroupOther
 }
 
 func (Permission) TableName() string {
@@ -71,6 +126,13 @@ const (
 	ResourceChat                    = "chat"
 	ResourceChatAssign              = "chat.assign"
 	ResourceContacts                = "contacts"
+	ResourceContactFields           = "contact_fields"
+	ResourceTasks                   = "tasks"
+	ResourcePipelines               = "pipelines"
+	ResourceDeals                   = "deals"
+	ResourceAutomations             = "automations"
+	ResourceReports                 = "reports"
+	ResourceSegments                = "segments"
 	ResourceTags                    = "tags"
 	ResourceAnalytics               = "analytics"
 	ResourceAnalyticsAgents         = "analytics.agents"
@@ -175,6 +237,45 @@ func DefaultPermissions() []Permission {
 		{Resource: ResourceContacts, Action: ActionImport, Description: "Import contacts"},
 		{Resource: ResourceContacts, Action: ActionExport, Description: "Export contacts"},
 
+		// Contact fields (plan 01). Defining a field changes what every
+		// contact record can hold, so it is a separate permission from
+		// editing a contact.
+		{Resource: ResourceContactFields, Action: ActionRead, Description: "View contact fields"},
+		{Resource: ResourceContactFields, Action: ActionWrite, Description: "Create and edit contact fields"},
+		{Resource: ResourceContactFields, Action: ActionDelete, Description: "Delete contact fields"},
+
+		// Tasks (plan 04)
+		{Resource: ResourceTasks, Action: ActionRead, Description: "View tasks"},
+		{Resource: ResourceTasks, Action: ActionWrite, Description: "Create and edit tasks"},
+		{Resource: ResourceTasks, Action: ActionDelete, Description: "Delete tasks"},
+
+		// Pipelines and deals (plan 07). Shaping the board is a separate
+		// permission from working it: an agent moves cards, a manager decides
+		// what the columns mean.
+		{Resource: ResourcePipelines, Action: ActionRead, Description: "View pipelines"},
+		{Resource: ResourcePipelines, Action: ActionWrite, Description: "Create and edit pipelines and stages"},
+		{Resource: ResourcePipelines, Action: ActionDelete, Description: "Delete pipelines and stages"},
+		{Resource: ResourceDeals, Action: ActionRead, Description: "View deals"},
+		{Resource: ResourceDeals, Action: ActionWrite, Description: "Create, edit and move deals"},
+		{Resource: ResourceDeals, Action: ActionDelete, Description: "Delete deals"},
+
+		// Automations (plan 08). A rule can message customers, so writing one
+		// is a larger permission than any single action it performs.
+		{Resource: ResourceAutomations, Action: ActionRead, Description: "View automations and their run history"},
+		{Resource: ResourceAutomations, Action: ActionWrite, Description: "Create, edit, enable and test automations"},
+		{Resource: ResourceAutomations, Action: ActionDelete, Description: "Delete automations"},
+
+		// CRM reports (plan 09). Reading these means reading the whole team's
+		// numbers, which is a different question from reading the dashboard.
+		{Resource: ResourceReports, Action: ActionRead, Description: "View CRM reports"},
+		{Resource: ResourceReports, Action: ActionExport, Description: "Export CRM reports"},
+
+		// Segments (plan 05). A saved audience is what a campaign is aimed at,
+		// so editing one changes who gets messaged.
+		{Resource: ResourceSegments, Action: ActionRead, Description: "View segments"},
+		{Resource: ResourceSegments, Action: ActionWrite, Description: "Create and edit segments"},
+		{Resource: ResourceSegments, Action: ActionDelete, Description: "Delete segments"},
+
 		// Tags
 		{Resource: ResourceTags, Action: ActionRead, Description: "View tags"},
 		{Resource: ResourceTags, Action: ActionWrite, Description: "Create and edit tags"},
@@ -268,6 +369,20 @@ func SystemRolePermissions() map[string][]string {
 		"chat:read", "chat:write", "chat.assign:write",
 		// Contacts
 		"contacts:read", "contacts:write", "contacts:delete", "contacts:import", "contacts:export",
+		// Contact fields: a manager shapes the record, an admin can remove
+		// fields entirely (which discards their values).
+		"contact_fields:read", "contact_fields:write",
+		// Tasks
+		"tasks:read", "tasks:write", "tasks:delete",
+		// Pipelines and deals
+		"pipelines:read", "pipelines:write", "pipelines:delete",
+		"deals:read", "deals:write", "deals:delete",
+		// Automations: a manager shapes how the team's work is chased
+		"automations:read", "automations:write",
+		// CRM reports
+		"reports:read", "reports:export",
+		// Segments
+		"segments:read", "segments:write", "segments:delete",
 		// Tags
 		"tags:read", "tags:write", "tags:delete",
 		// Analytics
@@ -296,6 +411,16 @@ func SystemRolePermissions() map[string][]string {
 		"chat:read", "chat:write",
 		// Contacts (read only)
 		"contacts:read",
+		// Contact fields: agents see field values, they do not shape the record
+		"contact_fields:read",
+		// Tasks: agents own and complete their own follow-ups
+		"tasks:read", "tasks:write",
+		// Deals: agents work the board, they do not redesign it
+		"pipelines:read",
+		"deals:read", "deals:write",
+		// Segments: an agent can filter a list; saving an audience that a
+		// campaign will message is a supervisor's decision.
+		"segments:read",
 		// Tags (read only - agents can see tags on contacts)
 		"tags:read",
 		// Analytics (own)

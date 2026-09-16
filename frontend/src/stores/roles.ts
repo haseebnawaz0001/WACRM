@@ -34,7 +34,22 @@ export interface FetchRolesResponse {
 export interface PermissionGroup {
   resource: string
   label: string
+  /** The area of the product this resource belongs to, from the backend. */
+  area: string
   permissions: Permission[]
+}
+
+/**
+ * The order areas appear in the role editor: the day-to-day work first,
+ * administration last, because that is the order somebody configuring a role
+ * thinks about them. Anything the backend adds that is not listed here sorts
+ * to the end rather than disappearing.
+ */
+const AREA_ORDER = ['inbox', 'crm', 'messaging', 'calling', 'insights', 'admin', 'other']
+
+function areaRank(area: string): number {
+  const index = AREA_ORDER.indexOf(area)
+  return index === -1 ? AREA_ORDER.length : index
 }
 
 export const useRolesStore = defineStore('roles', () => {
@@ -58,9 +73,12 @@ export const useRolesStore = defineStore('roles', () => {
       .map(([resource, perms]) => ({
         resource,
         label: RESOURCE_LABELS[resource] || resource.charAt(0).toUpperCase() + resource.slice(1),
+        area: perms[0]?.group || 'other',
         permissions: perms.sort((a, b) => a.action.localeCompare(b.action))
       }))
-      .sort((a, b) => a.label.localeCompare(b.label))
+      // By area first: a flat alphabetical list of thirty raw resource names
+      // is not a page anybody can configure a role on.
+      .sort((a, b) => areaRank(a.area) - areaRank(b.area) || a.label.localeCompare(b.label))
   })
 
   async function fetchRoles(params?: FetchRolesParams): Promise<FetchRolesResponse> {

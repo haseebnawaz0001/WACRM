@@ -87,6 +87,7 @@ const WS_TYPE_OUTGOING_CALL_ENDED = 'outgoing_call_ended'
 const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
 const WS_TYPE_CONVERSATION_NOTE_UPDATED = 'conversation_note_updated'
 const WS_TYPE_CONVERSATION_NOTE_DELETED = 'conversation_note_deleted'
+const WS_TYPE_DEAL_UPDATED = 'deal_updated'
 
 interface WSMessage {
   type: string
@@ -106,6 +107,11 @@ class WebSocketService {
   private isConnected = false
   private hasConnectedBefore = false
   private campaignStatsCallbacks: ((payload: any) => void)[] = []
+
+  // Generic per-type subscribers. Views that only need to know "something
+  // changed, refetch" should not each require their own handler method and
+  // their own case in the switch below.
+  private listeners = new Map<string, Set<(payload: any) => void>>()
   private getTokenFn: (() => Promise<string | null>) | null = null
 
   async connect(getToken?: () => Promise<string | null>) {
@@ -219,6 +225,10 @@ class WebSocketService {
       const message: WSMessage = JSON.parse(data)
       const store = useContactsStore()
 
+      // Generic subscribers first, so a view can watch any type without the
+      // service needing to know that view exists.
+      this.listeners.get(message.type)?.forEach(callback => callback(message.payload))
+
       switch (message.type) {
         case WS_TYPE_NEW_MESSAGE:
           this.handleNewMessage(store, message.payload)
@@ -281,6 +291,9 @@ class WebSocketService {
           break
         case WS_TYPE_CONVERSATION_NOTE_DELETED:
           useNotesStore().onNoteDeleted(message.payload.id)
+          break
+        case WS_TYPE_DEAL_UPDATED:
+          // Handled by whichever board is open, through subscribe().
           break
         default:
           // Unknown message type, ignore
@@ -561,6 +574,26 @@ class WebSocketService {
       setTimeout(() => {
         window.location.reload()
       }, 1500)
+    }
+  }
+
+  /**
+   * subscribe listens for one message type and returns its own unsubscribe,
+   * so a component can drop the listener in onUnmounted without bookkeeping.
+   */
+  subscribe(type: string, callback: (payload: any) => void): () => void {
+    let set = this.listeners.get(type)
+    if (!set) {
+      set = new Set()
+      this.listeners.set(type, set)
+    }
+    set.add(callback)
+
+    return () => {
+      const current = this.listeners.get(type)
+      if (!current) return
+      current.delete(callback)
+      if (current.size === 0) this.listeners.delete(type)
     }
   }
 

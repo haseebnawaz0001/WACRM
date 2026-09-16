@@ -152,7 +152,7 @@ func (a *App) sendWebhook(ctx context.Context, webhook models.Webhook, eventType
 			}
 		}
 
-		if err := a.sendWebhookRequest(ctx, webhook, jsonData); err != nil {
+		if _, err := a.sendWebhookRequest(ctx, webhook, jsonData); err != nil {
 			a.Log.Warn("webhook delivery failed",
 				"error", err,
 				"webhook_id", webhook.ID,
@@ -178,10 +178,13 @@ func (a *App) sendWebhook(ctx context.Context, webhook models.Webhook, eventType
 	)
 }
 
-func (a *App) sendWebhookRequest(ctx context.Context, webhook models.Webhook, jsonData []byte) error {
+// sendWebhookRequest performs one delivery attempt. It returns the response
+// status code alongside the error so callers can record the real code rather
+// than assuming one; the code is 0 when the request never reached a response.
+func (a *App) sendWebhookRequest(ctx context.Context, webhook models.Webhook, jsonData []byte) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", webhook.URL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Set headers
@@ -206,16 +209,16 @@ func (a *App) sendWebhookRequest(ctx context.Context, webhook models.Webhook, js
 	// Send request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// Check for successful status code (2xx)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &WebhookError{StatusCode: resp.StatusCode}
+		return resp.StatusCode, &WebhookError{StatusCode: resp.StatusCode}
 	}
 
-	return nil
+	return resp.StatusCode, nil
 }
 
 func computeHMACSignature(data []byte, secret string) string {

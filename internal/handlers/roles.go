@@ -56,7 +56,19 @@ type PermissionResponse struct {
 	Resource    string    `json:"resource"`
 	Action      string    `json:"action"`
 	Description string    `json:"description"`
-	Key         string    `json:"key"` // "resource:action"
+	// Group is the area of the product this permission belongs to, so the role
+	// editor can render sections instead of one long alphabetical list.
+	Group string `json:"group"`
+	Key   string `json:"key"` // "resource:action"
+}
+
+// groupOrOther keeps a permission that predates grouping out of a blank
+// section: an unlabelled bucket in the UI is worse than an obviously wrong one.
+func groupOrOther(group string) string {
+	if group == "" {
+		return models.PermissionGroupOther
+	}
+	return group
 }
 
 // ListRoles returns all roles for the organization
@@ -385,7 +397,9 @@ func (a *App) ListPermissions(r *fastglue.Request) error {
 		return nil
 	}
 	var permissions []models.Permission
-	if err := a.DB.Order("resource ASC, action ASC").Find(&permissions).Error; err != nil {
+	// Grouped first, so the role editor reads as areas of the product rather
+	// than a flat alphabetical list of raw resource names.
+	if err := a.DB.Order(`"group" ASC, resource ASC, action ASC`).Find(&permissions).Error; err != nil {
 		a.Log.Error("Failed to list permissions", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list permissions", nil, "")
 	}
@@ -397,6 +411,7 @@ func (a *App) ListPermissions(r *fastglue.Request) error {
 			Resource:    p.Resource,
 			Action:      p.Action,
 			Description: p.Description,
+			Group:       groupOrOther(p.Group),
 			Key:         p.Resource + ":" + p.Action,
 		}
 	}

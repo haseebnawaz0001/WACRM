@@ -30,12 +30,16 @@ var routesWithoutPermissionCheck = map[string]string{
 	"WebSocketHandler":      "authenticates with a websocket token frame",
 
 	// Self-service endpoints that only touch the caller's own data.
-	"GetCurrentUser":            "self",
-	"UpdateCurrentUserSettings": "self",
-	"ChangePassword":            "self",
-	"UpdateAvailability":        "self",
-	"ListMyOrganizations":       "self: organizations the caller belongs to",
-	"SwitchOrg":                 "self: validates membership of the target org",
+	"GetCurrentUser":             "self",
+	"UpdateCurrentUserSettings":  "self",
+	"ChangePassword":             "self",
+	"UpdateAvailability":         "self",
+	"ListNotifications":          "self: the caller's own notifications",
+	"GetUnreadNotificationCount": "self: the caller's own unread count",
+	"MarkNotificationRead":       "self: scoped to the caller's own notification",
+	"MarkAllNotificationsRead":   "self: the caller's own notifications",
+	"ListMyOrganizations":        "self: organizations the caller belongs to",
+	"SwitchOrg":                  "self: validates membership of the target org",
 
 	// Organization-wide, non-sensitive data every member needs to use the app.
 	"GetOrganizationSettings": "timezone, date format, masking and calling flags; no secrets",

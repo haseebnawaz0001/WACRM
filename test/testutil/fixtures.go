@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/phoneutil"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/fastglue"
 	"golang.org/x/crypto/bcrypt"
@@ -243,6 +244,24 @@ func WithPhoneNumber(phone string) ContactOption {
 	}
 }
 
+// WithProfileName sets the display name on the contact.
+func WithProfileName(name string) ContactOption {
+	return func(c *models.Contact) {
+		c.ProfileName = name
+	}
+}
+
+// WithTags sets the contact's tags.
+func WithTags(tags ...string) ContactOption {
+	return func(c *models.Contact) {
+		values := make(models.JSONBArray, 0, len(tags))
+		for _, tag := range tags {
+			values = append(values, tag)
+		}
+		c.Tags = values
+	}
+}
+
 // CreateTestContactWith creates a test contact with options.
 func CreateTestContactWith(t *testing.T, db *gorm.DB, orgID uuid.UUID, opts ...ContactOption) *models.Contact {
 	t.Helper()
@@ -257,6 +276,14 @@ func CreateTestContactWith(t *testing.T, db *gorm.DB, orgID uuid.UUID, opts ...C
 
 	for _, opt := range opts {
 		opt(contact)
+	}
+
+	// Normalise after the options, so a fixture that sets its own number still
+	// gets the derived column the production create path fills in. Without it,
+	// anything keyed on phone_normalized — duplicate detection, identity
+	// lookup — silently finds nothing in tests and works in production.
+	if contact.PhoneNormalized == "" {
+		contact.PhoneNormalized = phoneutil.Normalize(contact.PhoneNumber)
 	}
 
 	require.NoError(t, db.Create(contact).Error)

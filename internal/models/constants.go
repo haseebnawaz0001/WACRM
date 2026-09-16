@@ -25,6 +25,54 @@ const (
 	DirectionOutgoing Direction = "outgoing"
 )
 
+// SenderType records who produced a message (plan 10, S4).
+//
+// Direction alone cannot answer the questions the product needs to ask. An
+// outgoing message may come from an agent, the chatbot, an automation, a
+// campaign, an SLA notice or the public API, and response-time metrics,
+// "no agent reply" triggers and agent analytics must count only real agent
+// replies. SentByUserID cannot stand in for this: it is also set for API-key
+// sends, so today those paths are indistinguishable.
+type SenderType string
+
+const (
+	// SenderContact is an inbound message from the customer.
+	SenderContact SenderType = "contact"
+	// SenderAgent is a human agent replying from the inbox. Only this type
+	// counts towards first-response and agent analytics.
+	SenderAgent SenderType = "agent"
+	// SenderBot is the chatbot or a flow.
+	SenderBot SenderType = "bot"
+	// SenderAutomation is an automation rule action.
+	SenderAutomation SenderType = "automation"
+	// SenderCampaign is a bulk campaign send from the worker.
+	SenderCampaign SenderType = "campaign"
+	// SenderSystem is a product-generated message: SLA warnings,
+	// out-of-hours replies, client-inactivity nudges.
+	SenderSystem SenderType = "system"
+	// SenderAPI is a send made with an API key.
+	SenderAPI SenderType = "api"
+	// SenderEcho is an outgoing message made in the WhatsApp Business app
+	// and echoed back to us, not sent by this product.
+	SenderEcho SenderType = "echo"
+)
+
+// CountsAsAgentReply reports whether a message counts as a human agent
+// response for SLA and analytics purposes.
+func (s SenderType) CountsAsAgentReply() bool {
+	return s == SenderAgent
+}
+
+// Valid reports whether the sender type is one of the known values.
+func (s SenderType) Valid() bool {
+	switch s {
+	case SenderContact, SenderAgent, SenderBot, SenderAutomation,
+		SenderCampaign, SenderSystem, SenderAPI, SenderEcho:
+		return true
+	}
+	return false
+}
+
 // MessageType represents the type of WhatsApp message
 type MessageType string
 
@@ -125,6 +173,10 @@ const (
 	TransferSourceFlow            TransferSource = "flow"
 	TransferSourceKeyword         TransferSource = "keyword"
 	TransferSourceChatbotDisabled TransferSource = "chatbot_disabled"
+	// TransferSourceAutomation is a transfer an automation rule asked for
+	// (plan 08). It is distinct from "manual" because nobody clicked it, and
+	// a queue full of unexplained transfers is a queue nobody trusts.
+	TransferSourceAutomation TransferSource = "automation"
 )
 
 // CampaignStatus represents bulk message campaign states

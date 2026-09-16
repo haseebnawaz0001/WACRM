@@ -15,6 +15,7 @@ import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import { ConfirmDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
+import CampaignAudience from '@/components/campaigns/CampaignAudience.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Badge } from '@/components/ui/badge'
@@ -80,6 +81,9 @@ import {
 interface Campaign {
   id: string
   name: string
+  /** Set when the campaign is aimed at a saved segment (plan 05). */
+  audience_type?: string
+  segment_id?: string | null
   whatsapp_account?: string
   template_id?: string
   template_name?: string
@@ -1189,6 +1193,15 @@ onUnmounted(() => {
         </div>
       </CardContent>
     </Card>
+
+    <!-- Audience: a saved segment instead of a pasted list (plan 05). -->
+    <CampaignAudience
+      v-if="!isNew && campaign"
+      :campaign-id="campaign.id"
+      :segment-id="campaign.segment_id"
+      :editable="campaign.status === 'draft' || campaign.status === 'scheduled'"
+      @changed="loadCampaign"
+    />
 
     <!-- Recipients Card (collapsible) -->
     <Card v-if="!isNew && campaign">

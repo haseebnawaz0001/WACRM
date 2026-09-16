@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
+	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -40,8 +43,11 @@ type ContactResponse struct {
 	LastInboundAt      *time.Time `json:"last_inbound_at,omitempty"`
 	ServiceWindowOpen  bool       `json:"service_window_open"`
 	MarketingOptOut    bool       `json:"marketing_opt_out"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	// Fields carries the contact's custom field values, keyed by field key.
+	Fields    map[string]any `json:"fields,omitempty"`
+	Source    string         `json:"source,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // MessageResponse represents a message for the frontend
@@ -1431,6 +1437,9 @@ type UpdateContactRequest struct {
 	Metadata           *map[string]any `json:"metadata"`
 	AssignedUserID     *uuid.UUID      `json:"assigned_user_id"`
 	ClearAssignedAgent *bool           `json:"clear_assigned_agent"`
+
+	// Fields carries custom field values keyed by field key (plan 01).
+	Fields map[string]any `json:"fields"`
 }
 
 // UpdateContact updates an existing contact
@@ -1491,11 +1500,35 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 		updates["assigned_user_id"] = req.AssignedUserID
 	}
 
-	if len(updates) == 0 {
+	if len(updates) == 0 && len(req.Fields) == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No fields to update", nil, "")
 	}
 
-	if err := a.DB.Model(contact).Updates(updates).Error; err != nil {
+	// Column updates and custom field values are written together, so a
+	// rejected field value cannot leave half an edit applied.
+	var changedFields []string
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if len(updates) > 0 {
+			if err := tx.Model(contact).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		if len(req.Fields) > 0 {
+			changed, err := customfields.New(tx).SetValues(tx, orgID, contact.ID,
+				models.FieldEntityContact, req.Fields, &userID)
+			if err != nil {
+				return err
+			}
+			changedFields = changed
+		}
+		return nil
+	}); err != nil {
+		// A rejected value is the caller's mistake and names the field, so it
+		// is worth returning rather than flattening into a 500.
+		var invalid *customfields.ValidationError
+		if errors.As(err, &invalid) {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, invalid.Error(), nil, "")
+		}
 		a.Log.Error("Failed to update contact", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact", nil, "")
 	}
@@ -1505,6 +1538,15 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 
 	a.logAudit(orgID, userID,
 		"contact", contact.ID, models.AuditActionUpdated, &oldContact, contact)
+
+	// One activity entry per field that actually changed, so the timeline says
+	// what was edited rather than just "contact updated".
+	for _, key := range changedFields {
+		a.PublishEvent(crmevents.New(orgID, "contact.field_changed",
+			crmevents.UserActor(userID, ""), map[string]any{
+				"field": key,
+			}).ForContact(contact.ID))
+	}
 
 	return r.SendEnvelope(a.buildContactResponse(contact, orgID))
 }
@@ -1574,6 +1616,14 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 	// 24-hour service window: open if customer messaged within the last 24 hours.
 	serviceWindowOpen := contact.LastInboundAt != nil && time.Since(*contact.LastInboundAt) < 24*time.Hour
 
+	// Custom field values. A failure here degrades the record rather than
+	// failing the request: the contact is still worth returning without them.
+	fields, err := customfields.New(a.DB).Values(context.Background(), orgID, contact.ID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("Failed to load contact fields", "error", err, "contact_id", contact.ID)
+		fields = nil
+	}
+
 	return ContactResponse{
 		ID:                 contact.ID,
 		PhoneNumber:        phoneNumber,
@@ -1590,6 +1640,8 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 		LastInboundAt:      contact.LastInboundAt,
 		ServiceWindowOpen:  serviceWindowOpen,
 		MarketingOptOut:    contact.MarketingOptOut,
+		Fields:             fields,
+		Source:             contact.Source,
 		CreatedAt:          contact.CreatedAt,
 		UpdatedAt:          contact.UpdatedAt,
 	}

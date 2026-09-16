@@ -59,7 +59,28 @@ func createTestAgentMessage(t *testing.T, app *App, orgID, contactID, agentID uu
 		Direction:       models.DirectionOutgoing,
 		MessageType:     models.MessageTypeText,
 		Content:         "agent reply",
+		SenderType:      models.SenderAgent,
 		SentByUserID:    &agentID,
+		Status:          models.MessageStatusSent,
+	}
+	require.NoError(t, app.DB.Create(msg).Error)
+}
+
+// createTestAPIMessage creates an outgoing message sent with an API key. API
+// keys carry the creating user's id in sent_by_user_id, so such a message is
+// indistinguishable from an agent reply on that column alone.
+func createTestAPIMessage(t *testing.T, app *App, orgID, contactID, userID uuid.UUID, accountName string, sentAt time.Time) {
+	t.Helper()
+	msg := &models.Message{
+		BaseModel:       models.BaseModel{ID: uuid.New(), CreatedAt: sentAt},
+		OrganizationID:  orgID,
+		ContactID:       contactID,
+		WhatsAppAccount: accountName,
+		Direction:       models.DirectionOutgoing,
+		MessageType:     models.MessageTypeTemplate,
+		Content:         "automated template",
+		SenderType:      models.SenderAPI,
+		SentByUserID:    &userID,
 		Status:          models.MessageStatusSent,
 	}
 	require.NoError(t, app.DB.Create(msg).Error)
@@ -287,4 +308,58 @@ func TestSLAEscalationFiresWhenNoAgentResponse(t *testing.T) {
 
 	assert.Equal(t, 1, updated.SLA.EscalationLevel, "escalation level should increase to 1")
 	require.NotNil(t, updated.SLA.EscalatedAt)
+}
+
+// An API-key send carries the creating user's id, so before sender_type it
+// looked exactly like that agent replying — and silently suppressed the SLA
+// warning for a customer nobody had actually answered.
+func TestAgentRespondedSince_IgnoresAPISendsAttributedToTheAgent(t *testing.T) {
+	app := newSLATestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	since := time.Now().Add(-10 * time.Minute)
+	createTestAPIMessage(t, app, org.ID, contact.ID, agent.ID, account.Name, time.Now().Add(-5*time.Minute))
+
+	proc := NewSLAProcessor(app, time.Minute)
+	transfer := models.AgentTransfer{ContactID: contact.ID, AgentID: &agent.ID}
+
+	assert.False(t, proc.agentRespondedSince(transfer, since),
+		"an automated API send is not an agent picking up the conversation")
+}
+
+// A campaign or bot message to the same contact must not count either.
+func TestAgentRespondedSince_IgnoresNonAgentSenders(t *testing.T) {
+	app := newSLATestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	for _, sender := range []models.SenderType{
+		models.SenderBot, models.SenderCampaign, models.SenderSystem,
+		models.SenderAutomation, models.SenderEcho,
+	} {
+		msg := &models.Message{
+			BaseModel:       models.BaseModel{ID: uuid.New(), CreatedAt: time.Now().Add(-5 * time.Minute)},
+			OrganizationID:  org.ID,
+			ContactID:       contact.ID,
+			WhatsAppAccount: account.Name,
+			Direction:       models.DirectionOutgoing,
+			MessageType:     models.MessageTypeText,
+			Content:         "not an agent",
+			SenderType:      sender,
+			SentByUserID:    &agent.ID,
+			Status:          models.MessageStatusSent,
+		}
+		require.NoError(t, app.DB.Create(msg).Error)
+	}
+
+	proc := NewSLAProcessor(app, time.Minute)
+	transfer := models.AgentTransfer{ContactID: contact.ID, AgentID: &agent.ID}
+
+	assert.False(t, proc.agentRespondedSince(transfer, time.Now().Add(-10*time.Minute)),
+		"only a real agent reply counts as the agent responding")
 }
