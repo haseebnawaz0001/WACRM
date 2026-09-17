@@ -79,7 +79,7 @@ func (a *App) CreateTaskType(r *fastglue.Request) error {
 	req.Key = strings.TrimSpace(req.Key)
 	req.Label = strings.TrimSpace(req.Label)
 	if req.Key == "" {
-		req.Key = slugifyTaskTypeKey(req.Label)
+		req.Key = slugifyKey(req.Label, 50)
 	}
 	if err := validateTaskType(req); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
@@ -321,9 +321,10 @@ func validateTaskType(req taskTypeRequest) error {
 	return nil
 }
 
-// slugifyTaskTypeKey derives a key from a label, so the settings form can ask
-// for one thing instead of two.
-func slugifyTaskTypeKey(label string) string {
+// slugifyKey derives a stable key from a label, so a settings form can ask for
+// one thing instead of two. Shared with contact fields, which allow a longer
+// key, hence the limit being a parameter.
+func slugifyKey(label string, maxLen int) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(strings.TrimSpace(label)) {
 		switch {
@@ -340,8 +341,8 @@ func slugifyTaskTypeKey(label string) string {
 	if key != "" && (key[0] < 'a' || key[0] > 'z') {
 		key = "t_" + key
 	}
-	if len(key) > 50 {
-		key = key[:50]
+	if len(key) > maxLen {
+		key = key[:maxLen]
 	}
 	return key
 }

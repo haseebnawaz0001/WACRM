@@ -660,10 +660,14 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// Contact timeline (plan 02)
 	g.GET("/api/contacts/{id}/timeline", app.GetContactTimeline)
+	g.GET("/api/contacts/{id}/conversations", app.ListContactConversations)
 
 	// Tasks (plan 04)
 	g.GET("/api/tasks", app.ListTasks)
 	g.POST("/api/tasks", app.CreateTask)
+	g.POST("/api/tasks/bulk", app.BulkTasks)
+	g.GET("/api/tasks/{id}", app.GetTask)
+	g.DELETE("/api/tasks/{id}", app.DeleteTask)
 	g.GET("/api/task-types", app.ListTaskTypes)
 	g.POST("/api/task-types", app.CreateTaskType)
 	g.PUT("/api/task-types/reorder", app.ReorderTaskTypes)
@@ -746,6 +750,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/conversations/pending", app.MarkConversationPending)
 	g.POST("/api/conversations/reopen", app.ReopenConversation)
 	g.POST("/api/conversations/assign", app.AssignConversation)
+	g.POST("/api/conversations/bulk", app.BulkConversations)
+	g.GET("/api/conversations/{id}", app.GetConversationByID)
 
 	// Contacts list v2 (plan 01 + plan 00 F6)
 	g.POST("/api/contacts/search", app.SearchContacts)
@@ -758,6 +764,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// Contact fields (plan 01)
 	g.GET("/api/contact-fields", app.ListContactFields)
+	g.PUT("/api/contact-fields/reorder", app.ReorderContactFields)
+	g.GET("/api/contact-fields/metadata-keys", app.ListContactMetadataKeys)
+	g.POST("/api/contact-fields/promote-metadata", app.PromoteMetadata)
 	g.POST("/api/contact-fields", app.CreateContactField)
 	g.PUT("/api/contact-fields/{id}", app.UpdateContactField)
 	g.DELETE("/api/contact-fields/{id}", app.DeleteContactField)

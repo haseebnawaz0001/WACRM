@@ -287,7 +287,19 @@ export const contactFieldsService = {
   create: (data: Partial<ContactField>) => api.post('/contact-fields', data),
   update: (id: string, data: Partial<ContactField> & { archived?: boolean }) =>
     api.put(`/contact-fields/${id}`, data),
-  delete: (id: string) => api.delete(`/contact-fields/${id}`)
+  delete: (id: string) => api.delete(`/contact-fields/${id}`),
+  reorder: (ids: string[]) => api.put('/contact-fields/reorder', { ids }),
+  /** Metadata keys an organization is already collecting, for promotion. */
+  metadataKeys: () => api.get<{ keys: string[] }>('/contact-fields/metadata-keys'),
+  /**
+   * Turns a metadata key into a real field and copies the values across
+   * (plan 01). The metadata is left in place: an integration is probably still
+   * writing to it.
+   */
+  promoteMetadata: (metadataKey: string, field: Record<string, unknown>) =>
+    api.post<{ field: ContactField; promoted: number; skipped: number }>(
+      '/contact-fields/promote-metadata', { metadata_key: metadataKey, field }
+    )
 }
 
 // --- Tasks (plan 04) ---
@@ -344,7 +356,23 @@ export const tasksService = {
   cancel: (id: string) => api.post<{ task: Task }>(`/tasks/${id}/cancel`, {}),
   reassign: (id: string, ownerId: string) =>
     api.post<{ task: Task }>(`/tasks/${id}/reassign`, { owner_id: ownerId }),
-  types: () => api.get<{ task_types: TaskType[] }>('/task-types')
+  types: () => api.get<{ task_types: TaskType[] }>('/task-types'),
+  get: (id: string) => api.get<{ task: Task }>(`/tasks/${id}`),
+  update: (id: string, data: Record<string, any>) => api.put<{ task: Task }>(`/tasks/${id}`, data),
+  reopen: (id: string) => api.post<{ task: Task }>(`/tasks/${id}/reopen`, {}),
+  delete: (id: string) => api.delete(`/tasks/${id}`),
+  /**
+   * One action across a selection (plan 04). Failures come back per task, so
+   * one row somebody else just completed does not undo the other forty-nine.
+   */
+  bulk: (
+    ids: string[],
+    action: 'complete' | 'cancel' | 'reassign' | 'reschedule' | 'delete',
+    payload: { owner_id?: string; due_at?: string } = {}
+  ) =>
+    api.post<{ applied: number; failed: number; failures: Record<string, string> }>(
+      '/tasks/bulk', { ids, action, ...payload }
+    )
 }
 
 /**
@@ -425,6 +453,22 @@ export interface TimelineItem {
   summary: string
   data?: Record<string, any>
   group?: { count: number; from_customer: number; from: string; to: string }
+}
+
+export const conversationsService = {
+  /** One contact's conversation history — the profile's "have we spoken before?" */
+  forContact: (contactId: string) =>
+    api.get<{ conversations: any[]; total: number }>(`/contacts/${contactId}/conversations`),
+  /** One conversation by its own id, including resolved ones a link names. */
+  get: (id: string) => api.get<{ conversation: any }>(`/conversations/${id}`),
+  bulk: (
+    ids: string[],
+    action: 'resolve' | 'pending' | 'snooze' | 'assign',
+    payload: { until?: string; assignee_id?: string | null; team_id?: string | null } = {}
+  ) =>
+    api.post<{ applied: number; failed: number; failures: Record<string, string> }>(
+      '/conversations/bulk', { ids, action, ...payload }
+    )
 }
 
 export const timelineService = {

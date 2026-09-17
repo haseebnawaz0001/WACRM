@@ -180,6 +180,9 @@ var routePermissions = map[string]routeAccess{
 	"POST /api/chatbot/transfers/pick":                       needs(models.ResourceTransfers, models.ActionWrite),        // PickNextTransfer
 	"PUT /api/chatbot/transfers/{id}/assign":                 needs(models.ResourceTransfers, models.ActionWrite),        // AssignAgentTransfer
 	"PUT /api/chatbot/transfers/{id}/resume":                 needs(models.ResourceTransfers, models.ActionWrite),        // ResumeFromTransfer
+	"PUT /api/contact-fields/reorder":                        needs(models.ResourceContactFields, models.ActionWrite),    // ReorderContactFields
+	"GET /api/contact-fields/metadata-keys":                  needs(models.ResourceContactFields, models.ActionRead),     // ListContactMetadataKeys
+	"POST /api/contact-fields/promote-metadata":              needs(models.ResourceContactFields, models.ActionWrite),    // PromoteMetadata
 	"GET /api/contact-fields":                                needs(models.ResourceContactFields, models.ActionRead),     // ListContactFields
 	"POST /api/contact-fields":                               needs(models.ResourceContactFields, models.ActionWrite),    // CreateContactField
 	"DELETE /api/contact-fields/{id}":                        needs(models.ResourceContactFields, models.ActionDelete),   // DeleteContactField
@@ -211,7 +214,10 @@ var routePermissions = map[string]routeAccess{
 	"PUT /api/contacts/{id}/notes/{note_id}":                 needs(models.ResourceChat, models.ActionWrite),             // UpdateConversationNote
 	"GET /api/contacts/{id}/session-data":                    needs(models.ResourceContacts, models.ActionRead),          // GetContactSessionData
 	"PUT /api/contacts/{id}/tags":                            needs(models.ResourceContacts, models.ActionWrite),         // UpdateContactTags
+	"GET /api/contacts/{id}/conversations":                   needs(models.ResourceContacts, models.ActionRead),          // ListContactConversations
 	"GET /api/contacts/{id}/timeline":                        needs(models.ResourceContacts, models.ActionRead),          // GetContactTimeline
+	"POST /api/conversations/bulk":                           needs(models.ResourceChat, models.ActionWrite),             // BulkConversations
+	"GET /api/conversations/{id}":                            needs(models.ResourceChat, models.ActionRead),              // GetConversationByID
 	"POST /api/conversations/assign":                         needs(models.ResourceChatAssign, models.ActionWrite),       // AssignConversation
 	"POST /api/conversations/pending":                        needs(models.ResourceChat, models.ActionWrite),             // MarkConversationPending
 	"POST /api/conversations/reopen":                         needs(models.ResourceChat, models.ActionWrite),             // ReopenConversation
@@ -328,6 +334,9 @@ var routePermissions = map[string]routeAccess{
 	"PUT /api/task-types/reorder":                            needs(models.ResourceTasks, models.ActionDelete),           // ReorderTaskTypes
 	"PUT /api/task-types/{id}":                               needs(models.ResourceTasks, models.ActionDelete),           // UpdateTaskType
 	"DELETE /api/task-types/{id}":                            needs(models.ResourceTasks, models.ActionDelete),           // DeleteTaskType
+	"POST /api/tasks/bulk":                                   needs(models.ResourceTasks, models.ActionWrite),            // BulkTasks
+	"GET /api/tasks/{id}":                                    needs(models.ResourceTasks, models.ActionRead),             // GetTask
+	"DELETE /api/tasks/{id}":                                 needs(models.ResourceTasks, models.ActionDelete),           // DeleteTask
 	"GET /api/tasks":                                         needs(models.ResourceTasks, models.ActionRead),             // ListTasks
 	"POST /api/tasks":                                        needs(models.ResourceTasks, models.ActionWrite),            // CreateTask
 	"PUT /api/tasks/{id}":                                    needs(models.ResourceTasks, models.ActionWrite),            // UpdateTask
