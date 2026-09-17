@@ -290,41 +290,69 @@ func (s *Service) create(db *gorm.DB, orgID uuid.UUID, id Identity, opts Resolve
 		return nil, "", err
 	}
 
-	s.seedLifecycleStage(db, orgID, contact)
+	s.seedSystemFields(db, orgID, contact, opts.Source)
 
 	s.publish(db, orgID, contact, "contact.created", opts.Actor)
 	return contact, OutcomeCreated, nil
 }
 
-// seedLifecycleStage gives a brand-new contact the "new" lifecycle stage
-// (plan 01).
+// seedSystemFields gives a brand-new contact the system field values plan 01
+// defines: the "new" lifecycle stage, and the source it arrived from.
 //
-// Without it the field is simply absent until somebody edits the contact by
-// hand, so the lifecycle funnel starts at whatever stage people remembered to
-// set and a segment on "new" never matches the contacts that actually are.
+// Without the stage the field is simply absent until somebody edits the
+// contact by hand, so the lifecycle funnel starts at whatever stage people
+// remembered to set and a segment on "new" never matches the contacts that
+// actually are.
+//
+// The source needs writing here for a subtler reason. It is kept in two
+// places: the contacts.source column, which segments filter on, and the
+// built-in "source" field, which the CRM reports read. Only the column was
+// ever written, so "new contacts by source" reported every contact as unknown
+// while a segment on the same attribute matched them correctly — one of those
+// two answers being wrong is worse than the attribute not existing, because
+// both look authoritative.
 //
 // A failure is logged by the caller's error path, not returned: the contact
 // exists and the message that created it must not be lost over a default.
-func (s *Service) seedLifecycleStage(db *gorm.DB, orgID uuid.UUID, contact *models.Contact) {
+func (s *Service) seedSystemFields(db *gorm.DB, orgID uuid.UUID, contact *models.Contact, source string) {
+	s.setSystemField(db, orgID, contact.ID, models.FieldKeyLifecycleStage, models.LifecycleNew)
+	if source != "" {
+		s.setSystemField(db, orgID, contact.ID, models.FieldKeySource, source)
+	}
+}
+
+// setSystemField writes one built-in dropdown value for a new contact.
+func (s *Service) setSystemField(db *gorm.DB, orgID, contactID uuid.UUID, key, value string) {
 	var def models.CustomFieldDefinition
 	if err := db.Where("organization_id = ? AND entity_type = ? AND key = ?",
-		orgID, models.FieldEntityContact, models.FieldKeyLifecycleStage).
+		orgID, models.FieldEntityContact, key).
 		First(&def).Error; err != nil {
 		// Organizations seeded before plan 01 may not have the field yet.
 		return
 	}
 
-	value := models.CustomFieldValue{
+	// Both built-ins are dropdowns and system fields cannot be re-typed, so
+	// anything else means the field was replaced by hand; writing an option
+	// into it would put the value in a column the field does not read.
+	// An organization may also have retired an option the product still
+	// emits, and storing it anyway would produce a value the field's own
+	// editor cannot show and no filter can select.
+	if def.Type != models.FieldTypeDropdown || !def.HasOption(value) {
+		s.logf("contacts: field %q does not offer %q, leaving it unset", key, value)
+		return
+	}
+
+	row := models.CustomFieldValue{
 		OrganizationID: orgID,
 		EntityType:     models.FieldEntityContact,
-		EntityID:       contact.ID,
+		EntityID:       contactID,
 		FieldID:        def.ID,
-		ValueOption:    ptrString(models.LifecycleNew),
+		ValueOption:    ptrString(value),
 	}
 	// Ignore a conflict: a concurrent writer setting it first is fine.
 	_ = db.Where("organization_id = ? AND entity_type = ? AND entity_id = ? AND field_id = ?",
-		orgID, models.FieldEntityContact, contact.ID, def.ID).
-		FirstOrCreate(&value).Error
+		orgID, models.FieldEntityContact, contactID, def.ID).
+		FirstOrCreate(&row).Error
 }
 
 func ptrString(s string) *string { return &s }

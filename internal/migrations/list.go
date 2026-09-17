@@ -74,6 +74,96 @@ func init() {
 		Name: "2026_09_26_seed_crm_default_widgets",
 		Run:  seedCRMDefaultWidgets,
 	})
+	Register(Migration{
+		Name: "2026_09_27_backfill_contact_source_field",
+		Run:  backfillContactSourceField,
+	})
+}
+
+// backfillContactSourceField copies contacts.source into the built-in "source"
+// field (plan 01).
+//
+// The attribute has always been kept twice: the column, which segments filter
+// on, and the field, which the CRM reports read. Only the column was written,
+// so "new contacts by source" showed every existing contact as unknown while a
+// segment on the same attribute matched them. New contacts are written to both
+// now; this brings the history onto the same footing, and tops up any source
+// option an organization is missing so the values it copies are selectable.
+func backfillContactSourceField(tx *gorm.DB) error {
+	if err := topUpSourceOptions(tx); err != nil {
+		return err
+	}
+
+	// Only rows whose source the field actually offers are copied. A value
+	// outside the option list would be invisible in the editor and unmatchable
+	// by a filter, which is worse than leaving it to the column alone.
+	return tx.Exec(`
+		INSERT INTO custom_field_values
+			(organization_id, entity_type, entity_id, field_id, value_option, created_at, updated_at)
+		SELECT c.organization_id, ?, c.id, d.id, c.source, now(), now()
+		FROM contacts c
+		JOIN custom_field_definitions d
+		  ON d.organization_id = c.organization_id
+		 AND d.entity_type = ?
+		 AND d.key = ?
+		 AND d.deleted_at IS NULL
+		WHERE c.source <> ''
+		  AND c.source IS NOT NULL
+		  AND c.deleted_at IS NULL
+		  AND EXISTS (
+			SELECT 1 FROM jsonb_array_elements(d.options) AS opt
+			WHERE opt->>'value' = c.source
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM custom_field_values v
+			WHERE v.entity_type = ? AND v.entity_id = c.id AND v.field_id = d.id
+		  )`,
+		models.FieldEntityContact, models.FieldEntityContact,
+		models.FieldKeySource, models.FieldEntityContact).Error
+}
+
+// topUpSourceOptions adds any built-in source option an organization's field is
+// missing, leaving the ones it has — including its own additions — untouched.
+func topUpSourceOptions(tx *gorm.DB) error {
+	var builtIn models.CustomFieldDefinition
+	for _, field := range customfields.BuiltInFields() {
+		if field.Key == models.FieldKeySource {
+			builtIn = field
+			break
+		}
+	}
+
+	var defs []models.CustomFieldDefinition
+	if err := tx.Where("entity_type = ? AND key = ?",
+		models.FieldEntityContact, models.FieldKeySource).Find(&defs).Error; err != nil {
+		return err
+	}
+
+	for _, def := range defs {
+		options := def.Options
+		added := false
+		for _, raw := range builtIn.Options {
+			option, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			value, _ := option["value"].(string)
+			if value == "" || def.HasOption(value) {
+				continue
+			}
+			options = append(options, option)
+			added = true
+		}
+		if !added {
+			continue
+		}
+		if err := tx.Model(&models.CustomFieldDefinition{}).
+			Where("id = ?", def.ID).
+			Update("options", options).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // normalizeAuditResourceTypes collapses the two spellings the audit log

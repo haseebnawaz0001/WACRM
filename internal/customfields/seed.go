@@ -44,6 +44,7 @@ func BuiltInFields() []models.CustomFieldDefinition {
 				map[string]any{"value": "api", "label": "API", "color": "gray"},
 				map[string]any{"value": "manual", "label": "Manual", "color": "gray"},
 				map[string]any{"value": "call", "label": "Call", "color": "green"},
+				map[string]any{"value": "address_book_sync", "label": "Address book sync", "color": "gray"},
 			},
 		},
 		{

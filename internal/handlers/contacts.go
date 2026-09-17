@@ -16,9 +16,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/contacts"
 	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/customfields"
+	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -1493,9 +1495,19 @@ type CreateContactRequest struct {
 	WhatsAppAccount string         `json:"whatsapp_account"`
 	Tags            []string       `json:"tags"`
 	Metadata        map[string]any `json:"metadata"`
+
+	// Fields carries custom field values keyed by field key (plan 01).
+	Fields map[string]any `json:"fields"`
 }
 
-// CreateContact creates a new contact or restores a soft-deleted one
+// CreateContact creates a contact by hand, from the UI or the API.
+//
+// It goes through the contact lifecycle service rather than inserting a row
+// (plan 10, S2). Creating one here used to mean the record started with no
+// source and no lifecycle stage, published no contact.created event — so no
+// timeline entry, no webhook and no automation trigger — and restored a
+// contact somebody had deliberately deleted, which is the one thing the
+// lifecycle service exists to refuse.
 func (a *App) CreateContact(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
@@ -1516,78 +1528,94 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "phone_number is required", nil, "")
 	}
 
-	// Normalize phone number
-	normalizedPhone := req.PhoneNumber
-	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-		normalizedPhone = normalizedPhone[1:]
+	fieldSvc := customfields.New(a.DB)
+	defs, err := fieldSvc.DefinitionsByKey(context.Background(), orgID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("Failed to load contact fields", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
 	}
 
-	// Check if contact exists (including soft-deleted)
-	var existingContact models.Contact
-	if err := a.DB.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&existingContact).Error; err == nil {
-		// Contact exists
-		if existingContact.DeletedAt.Valid {
-			// Restore soft-deleted contact
-			a.DB.Unscoped().Model(&existingContact).Update("deleted_at", nil)
-			existingContact.DeletedAt.Valid = false
-			// Update fields
-			updates := map[string]any{}
-			if req.ProfileName != "" {
-				updates["profile_name"] = req.ProfileName
-			}
-			if req.WhatsAppAccount != "" {
-				updates["whats_app_account"] = req.WhatsAppAccount
-			}
-			if req.Tags != nil {
-				tagsArray := make(models.JSONBArray, len(req.Tags))
-				for i, tag := range req.Tags {
-					tagsArray[i] = tag
-				}
-				updates["tags"] = tagsArray
-			}
-			if req.Metadata != nil {
-				updates["metadata"] = models.JSONB(req.Metadata)
-			}
-			if len(updates) > 0 {
-				a.DB.Model(&existingContact).Updates(updates)
-			}
-			// Reload contact
-			a.DB.First(&existingContact, existingContact.ID)
-			return r.SendEnvelope(a.buildContactResponse(&existingContact, orgID))
-		}
-		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Contact with this phone number already exists", nil, "")
+	fields := customfields.ApplyDefaults(defs, req.Fields)
+	if missing := customfields.MissingRequired(defs, fields); len(missing) > 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"These fields are required: "+strings.Join(missing, ", "),
+			map[string]any{"missing_fields": missing}, "")
 	}
 
-	// Create new contact
-	contact := models.Contact{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  orgID,
-		PhoneNumber:     normalizedPhone,
-		ProfileName:     req.ProfileName,
-		WhatsAppAccount: req.WhatsAppAccount,
+	// A contact created by hand and one created by an integration are worth
+	// telling apart: reports split acquisition by source, and "who typed this
+	// in" is the first question about a record nobody recognises.
+	source := contacts.SourceManual
+	if method, ok := r.RequestCtx.UserValue(middleware.ContextKeyAuthMethod).(string); ok &&
+		method == middleware.AuthMethodAPIKey {
+		source = contacts.SourceAPI
 	}
 
+	contact, outcome, err := a.Contacts().Resolve(context.Background(), orgID,
+		contacts.Identity{Phone: req.PhoneNumber}, contacts.ResolveOpts{
+			CreateIfMissing:    true,
+			AllowRestore:       false,
+			UpdateName:         false,
+			ProfileName:        req.ProfileName,
+			Source:             source,
+			DefaultCountryCode: a.orgDefaultCountryCode(orgID),
+			Actor:              crmevents.UserActor(userID, ""),
+		})
+	if err != nil {
+		a.Log.Error("Failed to create contact", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
+	}
+	if outcome != contacts.OutcomeCreated {
+		// The number already belongs to somebody, possibly under a different
+		// formatting or as the survivor of a merge. Saying so beats creating
+		// a second record for one person.
+		return r.SendErrorEnvelope(fasthttp.StatusConflict,
+			"Contact with this phone number already exists",
+			map[string]any{"contact_id": contact.ID}, "")
+	}
+
+	updates := map[string]any{}
+	if req.WhatsAppAccount != "" {
+		updates["whatsapp_account"] = req.WhatsAppAccount
+	}
 	if req.Tags != nil {
 		tagsArray := make(models.JSONBArray, len(req.Tags))
 		for i, tag := range req.Tags {
 			tagsArray[i] = tag
 		}
-		contact.Tags = tagsArray
+		updates["tags"] = tagsArray
 	}
-
 	if req.Metadata != nil {
-		contact.Metadata = models.JSONB(req.Metadata)
+		updates["metadata"] = models.JSONB(req.Metadata)
 	}
 
-	if err := a.DB.Create(&contact).Error; err != nil {
-		a.Log.Error("Failed to create contact", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
+	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if len(updates) > 0 {
+			if err := tx.Model(&models.Contact{}).Where("id = ?", contact.ID).
+				Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		if len(fields) > 0 {
+			if _, err := customfields.New(tx).SetValues(tx, orgID, contact.ID,
+				models.FieldEntityContact, fields, &userID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		a.Log.Error("Failed to apply contact details", "error", err, "contact_id", contact.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+
+	if err := a.DB.First(contact, contact.ID).Error; err != nil {
+		a.Log.Error("Failed to reload contact", "error", err, "contact_id", contact.ID)
 	}
 
 	a.logAudit(orgID, userID,
-		models.ResourceContacts, contact.ID, models.AuditActionCreated, nil, &contact)
+		models.ResourceContacts, contact.ID, models.AuditActionCreated, nil, contact)
 
-	return r.SendEnvelope(a.buildContactResponse(&contact, orgID))
+	return r.SendEnvelope(a.buildContactResponse(contact, orgID))
 }
 
 // UpdateContactRequest represents the request body for updating a contact.

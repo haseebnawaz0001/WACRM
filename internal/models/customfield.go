@@ -143,3 +143,22 @@ func (CustomFieldValue) TableName() string {
 func (v CustomFieldValue) IsEmpty() bool {
 	return v.ValueText == nil && v.ValueNumber == nil && v.ValueDate == nil && v.ValueOption == nil
 }
+
+// HasOption reports whether a dropdown offers this value.
+//
+// Writing a value a dropdown does not offer produces a record that no filter
+// on that field can ever match and that the editor shows as blank, so the
+// callers that set a field from code — the contact lifecycle's source, an
+// automation action — check first rather than storing something unreachable.
+func (d CustomFieldDefinition) HasOption(value string) bool {
+	for _, raw := range d.Options {
+		option, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if stored, ok := option["value"].(string); ok && stored == value {
+			return true
+		}
+	}
+	return false
+}
