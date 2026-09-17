@@ -9,6 +9,11 @@ export interface UserSettings {
   campaign_updates?: boolean
   /** Per-user override of the organization's timezone (plan 10, S11). */
   timezone?: string
+  /**
+   * Per-type notification preferences, keyed by notification type
+   * (plan 00, F5). Absent means the default, which is on.
+   */
+  notifications?: Record<string, { in_app: boolean; sound: boolean }>
 }
 
 export interface Permission {

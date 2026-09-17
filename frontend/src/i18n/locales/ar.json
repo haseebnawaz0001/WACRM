@@ -1064,7 +1064,26 @@
     "passwordMismatch": "كلمات السر الجديدة غير متطابقة",
     "passwordTooShort": "يجب أن تكون كلمة السر الجديدة 6 أحرف على الأقل",
     "passwordChanged": "تم تغيير كلمة السر بنجاح",
-    "passwordChangeFailed": "فشل تغيير كلمة السر"
+    "passwordChangeFailed": "فشل تغيير كلمة السر",
+    "notifications": "Notifications",
+    "notificationsDesc": "What reaches you in the app, and what makes a sound. Both are on unless you turn them off.",
+    "notificationType": "Type",
+    "inApp": "In app",
+    "sound": "Sound",
+    "notificationsSaved": "Notification preferences saved",
+    "notificationsSaveFailed": "Preferences could not be saved",
+    "notificationTypes": {
+      "task_due": "A task is due",
+      "task_overdue": "A task is overdue",
+      "task_assigned": "A task is assigned to me",
+      "conversation_assigned": "A conversation is assigned to me",
+      "conversation_snooze_ended": "A snoozed conversation wakes up",
+      "sla_escalation": "A reply is overdue (SLA)",
+      "automation": "An automation needs attention",
+      "merge_suggestions": "Possible duplicate contacts",
+      "deal_rotting": "A deal has gone quiet",
+      "campaign_paused": "A campaign was paused"
+    }
   },
   "accounts": {
     "metaConnectionDetails": "تفاصيل",
@@ -2609,5 +2628,13 @@
     "sendCampaign": "Send campaign",
     "countFailed": "The count could not be refreshed",
     "campaignFailed": "The campaign could not be created"
+  },
+  "inbox": {
+    "snoozePresets": {
+      "threeHours": "In 3 hours",
+      "tomorrow": "Tomorrow morning",
+      "mondayMorning": "Monday morning",
+      "nextWeek": "Next week"
+    }
   }
 }

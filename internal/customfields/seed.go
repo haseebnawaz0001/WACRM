@@ -45,6 +45,13 @@ func BuiltInFields() []models.CustomFieldDefinition {
 				map[string]any{"value": "manual", "label": "Manual", "color": "gray"},
 				map[string]any{"value": "call", "label": "Call", "color": "green"},
 				map[string]any{"value": "address_book_sync", "label": "Address book sync", "color": "gray"},
+				// Ways a contact reaches a business that the product itself
+				// never sets, but people record by hand or map an import onto.
+				// Offering them is what stops "Other" from becoming the answer
+				// to every question about where customers come from (plan 01).
+				map[string]any{"value": "website", "label": "Website", "color": "blue"},
+				map[string]any{"value": "referral", "label": "Referral", "color": "green"},
+				map[string]any{"value": "other", "label": "Other", "color": "gray"},
 			},
 		},
 		{

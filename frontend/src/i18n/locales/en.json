@@ -1380,7 +1380,26 @@
     "passwordMismatch": "New passwords do not match",
     "passwordTooShort": "New password must be at least 6 characters",
     "passwordChanged": "Password changed successfully",
-    "passwordChangeFailed": "Failed to change password"
+    "passwordChangeFailed": "Failed to change password",
+    "notifications": "Notifications",
+    "notificationsDesc": "What reaches you in the app, and what makes a sound. Both are on unless you turn them off.",
+    "notificationType": "Type",
+    "inApp": "In app",
+    "sound": "Sound",
+    "notificationsSaved": "Notification preferences saved",
+    "notificationsSaveFailed": "Preferences could not be saved",
+    "notificationTypes": {
+      "task_due": "A task is due",
+      "task_overdue": "A task is overdue",
+      "task_assigned": "A task is assigned to me",
+      "conversation_assigned": "A conversation is assigned to me",
+      "conversation_snooze_ended": "A snoozed conversation wakes up",
+      "sla_escalation": "A reply is overdue (SLA)",
+      "automation": "An automation needs attention",
+      "merge_suggestions": "Possible duplicate contacts",
+      "deal_rotting": "A deal has gone quiet",
+      "campaign_paused": "A campaign was paused"
+    }
   },
   "accounts": {
     "metaConnectionDetails": "Details",
@@ -3136,7 +3155,13 @@
     "returnToQueue": "Return to queue",
     "handBackToBot": "Hand back to the chatbot",
     "pickNext": "Take the next one",
-    "queueEmpty": "Nothing waiting in the queue"
+    "queueEmpty": "Nothing waiting in the queue",
+    "snoozePresets": {
+      "threeHours": "In 3 hours",
+      "tomorrow": "Tomorrow morning",
+      "mondayMorning": "Monday morning",
+      "nextWeek": "Next week"
+    }
   },
   "segments": {
     "title": "Segments",

@@ -851,7 +851,6 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/messages", app.SendMessage) // Legacy route
 	g.POST("/api/messages/template", app.SendTemplateMessage)
 	g.POST("/api/messages/media", app.SendMediaMessage)
-	g.PUT("/api/messages/{id}/read", app.MarkMessageRead)
 
 	// Conversation Notes
 	g.GET("/api/contacts/{id}/notes", app.ListConversationNotes)
@@ -967,8 +966,6 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// Analytics
 	g.GET("/api/analytics/dashboard", app.GetDashboardStats)
-	g.GET("/api/analytics/messages", app.GetMessageAnalytics)
-	g.GET("/api/analytics/chatbot", app.GetChatbotAnalytics)
 	g.GET("/api/analytics/agents", app.GetAgentAnalytics)
 	g.GET("/api/analytics/agents/{id}", app.GetAgentDetails)
 	g.GET("/api/analytics/agents/comparison", app.GetAgentComparison)

@@ -55,3 +55,33 @@ type Notification struct {
 func (Notification) TableName() string {
 	return "notifications"
 }
+
+// NotificationTypes are every kind the product sends.
+//
+// Listed once so the preferences UI can offer them and the settings endpoint
+// can refuse a key nothing will ever read: a preference set against a type
+// that does not exist looks saved and does nothing.
+func NotificationTypes() []string {
+	return []string{
+		NotificationTaskDue,
+		NotificationTaskOverdue,
+		NotificationTaskAssigned,
+		NotificationConversationAssigned,
+		NotificationConversationSnoozeEnded,
+		NotificationSLAEscalation,
+		NotificationAutomation,
+		NotificationMergeSuggestions,
+		NotificationDealRotting,
+		NotificationCampaignPaused,
+	}
+}
+
+// IsNotificationType reports whether a name is one the product sends.
+func IsNotificationType(name string) bool {
+	for _, known := range NotificationTypes() {
+		if known == name {
+			return true
+		}
+	}
+	return false
+}

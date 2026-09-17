@@ -6,6 +6,10 @@ const skipWebServer = !!process.env.CI || !!process.env.BASE_URL
 export default defineConfig({
   testDir: './e2e/tests',
   globalSetup: './e2e/global-setup.ts',
+  // The suite cleans up after itself as well as before: a run against a
+  // development database used to leave its contacts in the product until
+  // somebody next ran the tests.
+  globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

@@ -164,8 +164,19 @@ export const usersService = {
     api.put(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
   me: () => api.get('/me'),
-  updateSettings: (data: { email_notifications: boolean; new_message_alerts: boolean; campaign_updates: boolean; timezone?: string }) =>
-    api.put('/me/settings', data),
+  updateSettings: (data: {
+    email_notifications: boolean
+    new_message_alerts: boolean
+    campaign_updates: boolean
+    timezone?: string
+    /**
+     * Per-type in-app and sound preferences (plan 00, F5).
+     *
+     * The server has honoured these since the bell shipped; nothing could set
+     * them, so every user sat on the default for every type.
+     */
+    notifications?: Record<string, { in_app: boolean; sound: boolean }>
+  }) => api.put('/me/settings', data),
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.put('/me/password', data),
   updateAvailability: (isAvailable: boolean) =>

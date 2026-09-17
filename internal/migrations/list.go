@@ -78,6 +78,14 @@ func init() {
 		Name: "2026_09_27_backfill_contact_source_field",
 		Run:  backfillContactSourceField,
 	})
+	// Plan 01 lists website, referral and other as sources an organization can
+	// record by hand. They were missing, so anything arriving that way had to
+	// be filed under a source that did not describe it. A migration of its own
+	// because the earlier top-up has already run everywhere.
+	Register(Migration{
+		Name: "2026_09_28_top_up_source_options",
+		Run:  topUpSourceOptions,
+	})
 }
 
 // backfillContactSourceField copies contacts.source into the built-in "source"

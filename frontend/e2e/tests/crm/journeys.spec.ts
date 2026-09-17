@@ -28,9 +28,12 @@ async function adminApi(request: APIRequestContext): Promise<ApiHelper> {
 }
 
 async function createContact(api: ApiHelper, name: string): Promise<string> {
+  // Prefixed so the cleanup's own patterns reach it. These fixtures were named
+  // "Journey Primary" and friends, which match nothing the cleanup looks for,
+  // so every run left them behind in whatever database it ran against.
   const resp = await api.post('/api/contacts', {
     phone_number: uniquePhone(),
-    profile_name: name,
+    profile_name: `E2E-${name}`,
     whatsapp_account: 'acct'
   })
   expect(resp.status(), await resp.text()).toBeLessThan(300)
@@ -72,7 +75,7 @@ test.describe('J-CRM: a contact becomes a record', () => {
     })
     expect(rendered.status()).toBe(200)
     const content = (await rendered.json()).data.content
-    expect(content).toContain('Journey Fields')
+    expect(content).toContain('E2E-Journey Fields')
     expect(content).toContain('Kano Logistics')
     expect(content).not.toContain('{{')
 

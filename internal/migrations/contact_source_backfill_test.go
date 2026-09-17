@@ -114,3 +114,30 @@ func sourceFieldOf(t *testing.T, db *gorm.DB, orgID, contactID uuid.UUID) string
 	}
 	return *got
 }
+
+// Plan 01 lists website, referral and other as sources an organization records
+// by hand. They shipped after the first top-up had already run everywhere, so
+// they need a migration of their own — an option an org never receives is one
+// its people cannot choose.
+func TestTopUpSourceOptions_AddsTheLaterBuiltIns(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	org := testutil.CreateTestOrganization(t, db)
+	require.NoError(t, orgseed.Seed(db, org.ID))
+
+	require.NoError(t, db.Model(&models.CustomFieldDefinition{}).
+		Where("organization_id = ? AND entity_type = ? AND key = ?",
+			org.ID, models.FieldEntityContact, models.FieldKeySource).
+		Update("options", models.JSONBArray{
+			map[string]any{"value": "manual", "label": "Manual"},
+		}).Error)
+
+	require.NoError(t, db.Transaction(migrationByName(t, "2026_09_28_top_up_source_options")))
+
+	var def models.CustomFieldDefinition
+	require.NoError(t, db.Where("organization_id = ? AND entity_type = ? AND key = ?",
+		org.ID, models.FieldEntityContact, models.FieldKeySource).First(&def).Error)
+
+	for _, option := range []string{"website", "referral", "other", "inbound", "manual"} {
+		assert.True(t, def.HasOption(option), "the source field should offer %q", option)
+	}
+}

@@ -91,6 +91,22 @@ type UserSettingsRequest struct {
 	// A pointer so "not sent" and "cleared" are different: clients that predate
 	// the field must not silently wipe an override the user set.
 	Timezone *string `json:"timezone,omitempty"`
+
+	// Notifications holds per-type in-app and sound preferences, keyed by
+	// notification type (plan 00, F5): {"task_due": {"in_app": true,
+	// "sound": false}}.
+	//
+	// notify.Send has read these since the bell shipped; nothing could set
+	// them, so every user was on the default for every type and an agent
+	// getting a sound for each of forty campaign updates had no way to stop
+	// it but to mute the tab. A pointer for the same reason as the timezone.
+	Notifications *map[string]NotificationPreference `json:"notifications,omitempty"`
+}
+
+// NotificationPreference is what a user wants for one notification type.
+type NotificationPreference struct {
+	InApp bool `json:"in_app"`
+	Sound bool `json:"sound"`
 }
 
 // ChangePasswordRequest represents the request body for changing password
@@ -810,6 +826,20 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 	user.Settings["new_message_alerts"] = req.NewMessageAlerts
 	user.Settings["campaign_updates"] = req.CampaignUpdates
 
+	if req.Notifications != nil {
+		// Only known types are stored, so a stale client cannot fill the blob
+		// with keys nothing reads and no preference can be set for a type the
+		// product does not send.
+		prefs := map[string]any{}
+		for name, pref := range *req.Notifications {
+			if !models.IsNotificationType(name) {
+				continue
+			}
+			prefs[name] = map[string]any{"in_app": pref.InApp, "sound": pref.Sound}
+		}
+		user.Settings["notifications"] = prefs
+	}
+
 	if req.Timezone != nil {
 		if tz := strings.TrimSpace(*req.Timezone); tz == "" {
 			delete(user.Settings, "timezone")
@@ -845,6 +875,7 @@ func notificationSettingsSnapshot(settings models.JSONB) map[string]any {
 		"email_notifications": settings["email_notifications"],
 		"new_message_alerts":  settings["new_message_alerts"],
 		"campaign_updates":    settings["campaign_updates"],
+		"notifications":       settings["notifications"],
 	}
 }
 

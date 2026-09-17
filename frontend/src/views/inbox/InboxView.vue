@@ -129,6 +129,74 @@ async function resolve(row: InboxRow) {
 const snoozing = ref<InboxRow | null>(null)
 const snoozeUntil = ref('')
 
+/**
+ * Snooze presets (plan 03).
+ *
+ * The dialog offered a datetime field and nothing else, so parking something
+ * until tomorrow morning — the overwhelmingly common case — meant typing a
+ * date and a time. These are the answers people actually give; the field stays
+ * for the ones they do not.
+ *
+ * Each is computed in the viewer's own clock, because "tomorrow morning" is a
+ * statement about their day.
+ */
+const snoozePresets = [
+  { key: 'threeHours', at: () => addHours(3) },
+  { key: 'tomorrow', at: () => tomorrowAt(9) },
+  { key: 'mondayMorning', at: () => nextMondayAt(9) },
+  { key: 'nextWeek', at: () => addDays(7, 9) }
+] as const
+
+function addHours(hours: number) {
+  const at = new Date()
+  at.setHours(at.getHours() + hours, at.getMinutes(), 0, 0)
+  return at
+}
+
+function tomorrowAt(hour: number) {
+  const at = new Date()
+  at.setDate(at.getDate() + 1)
+  at.setHours(hour, 0, 0, 0)
+  return at
+}
+
+function nextMondayAt(hour: number) {
+  const at = new Date()
+  // Sunday is 0, so a Sunday gets tomorrow rather than a week away.
+  const daysUntilMonday = (8 - at.getDay()) % 7 || 7
+  at.setDate(at.getDate() + daysUntilMonday)
+  at.setHours(hour, 0, 0, 0)
+  return at
+}
+
+function addDays(days: number, hour: number) {
+  const at = new Date()
+  at.setDate(at.getDate() + days)
+  at.setHours(hour, 0, 0, 0)
+  return at
+}
+
+/** Applies a preset immediately: picking one is the decision. */
+async function snoozePreset(at: Date) {
+  if (!snoozing.value) return
+  const row = snoozing.value
+  snoozing.value = null
+  try {
+    await inboxService.snooze(row.contact_id, at.toISOString())
+    snoozeUntil.value = ''
+    fetchInbox()
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || t('common.error'))
+  }
+}
+
+/** The local datetime-input value for a preset, so the field shows what it means. */
+function presetLabel(at: Date) {
+  return at.toLocaleString(undefined, {
+    weekday: 'short', hour: 'numeric', minute: '2-digit'
+  })
+}
+
 async function confirmSnooze() {
   if (!snoozing.value || !snoozeUntil.value) return
   const row = snoozing.value
@@ -309,10 +377,25 @@ onUnmounted(() => {
     <Dialog :open="!!snoozing" @update:open="open => !open && (snoozing = null)">
       <DialogContent>
         <DialogHeader><DialogTitle>{{ t('inbox.snoozeTitle') }}</DialogTitle></DialogHeader>
-        <div class="space-y-1.5">
-          <Label>{{ t('inbox.snoozeUntil') }}</Label>
-          <Input v-model="snoozeUntil" type="datetime-local" />
-          <p class="text-xs text-muted-foreground">{{ t('inbox.snoozeHint') }}</p>
+        <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-2">
+            <Button
+              v-for="preset in snoozePresets"
+              :key="preset.key"
+              variant="outline"
+              size="sm"
+              class="justify-between"
+              @click="snoozePreset(preset.at())"
+            >
+              <span>{{ t(`inbox.snoozePresets.${preset.key}`) }}</span>
+              <span class="text-xs text-muted-foreground">{{ presetLabel(preset.at()) }}</span>
+            </Button>
+          </div>
+          <div class="space-y-1.5">
+            <Label>{{ t('inbox.snoozeUntil') }}</Label>
+            <Input v-model="snoozeUntil" type="datetime-local" />
+            <p class="text-xs text-muted-foreground">{{ t('inbox.snoozeHint') }}</p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" @click="snoozing = null">{{ t('common.cancel') }}</Button>

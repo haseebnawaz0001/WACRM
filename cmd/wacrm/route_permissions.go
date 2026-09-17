@@ -76,9 +76,7 @@ var routePermissions = map[string]routeAccess{
 	"GET /api/analytics/agents":                              needs(models.ResourceAnalytics, models.ActionRead),         // GetAgentAnalytics
 	"GET /api/analytics/agents/comparison":                   needs(models.ResourceAnalytics, models.ActionRead),         // GetAgentComparison
 	"GET /api/analytics/agents/{id}":                         needs(models.ResourceAnalytics, models.ActionRead),         // GetAgentDetails
-	"GET /api/analytics/chatbot":                             needs(models.ResourceAnalytics, models.ActionRead),         // GetChatbotAnalytics
 	"GET /api/analytics/dashboard":                           needs(models.ResourceAnalytics, models.ActionRead),         // GetDashboardStats
-	"GET /api/analytics/messages":                            needs(models.ResourceAnalytics, models.ActionRead),         // GetMessageAnalytics
 	"GET /api/analytics/meta":                                needs(models.ResourceAnalytics, models.ActionRead),         // GetMetaAnalytics
 	"GET /api/analytics/meta/accounts":                       needs(models.ResourceAnalytics, models.ActionRead),         // ListMetaAccountsForAnalytics
 	"POST /api/analytics/meta/refresh":                       needs(models.ResourceAnalytics, models.ActionRead),         // RefreshMetaAnalyticsCache
@@ -270,7 +268,6 @@ var routePermissions = map[string]routeAccess{
 	"POST /api/messages":                                     needs(models.ResourceChat, models.ActionWrite),             // SendMessage
 	"POST /api/messages/media":                               needs(models.ResourceChat, models.ActionWrite),             // SendMediaMessage
 	"POST /api/messages/template":                            needs(models.ResourceChat, models.ActionWrite),             // SendTemplateMessage
-	"PUT /api/messages/{id}/read":                            needs(models.ResourceChat, models.ActionRead),              // MarkMessageRead
 	"GET /api/notifications":                                 self(),                                                     // ListNotifications
 	"POST /api/notifications/read-all":                       self(),                                                     // MarkAllNotificationsRead
 	"GET /api/notifications/unread-count":                    self(),                                                     // GetUnreadNotificationCount
