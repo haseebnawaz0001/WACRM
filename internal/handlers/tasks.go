@@ -343,23 +343,6 @@ func (a *App) ReassignTask(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]any{"task": toTaskResponse(*task)})
 }
 
-// ListTaskTypes returns the organization's task types for the create form.
-func (a *App) ListTaskTypes(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceTasks, models.ActionRead)
-	if err != nil {
-		return err
-	}
-
-	var types []models.TaskType
-	if err := a.DB.Where("organization_id = ? AND archived_at IS NULL", orgID).
-		Order("position, label").Find(&types).Error; err != nil {
-		a.Log.Error("Failed to list task types", "error", err, "org_id", orgID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load task types", nil, "")
-	}
-
-	return r.SendEnvelope(map[string]any{"task_types": types})
-}
-
 // UpdateTaskRequest is the editable shape of a task.
 //
 // Pointers throughout so "leave it alone" and "clear it" are different

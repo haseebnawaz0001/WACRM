@@ -204,7 +204,10 @@
     "webhooks": "वेबहुक",
     "Webhook": "वेबहुक",
     "widget": "विजेट",
-    "Widget": "विजेट"
+    "Widget": "विजेट",
+    "taskType": "task type",
+    "taskTypes": "task types",
+    "TaskType": "Task Type"
   },
   "nav": {
     "dashboard": "डैशबोर्ड",
@@ -242,7 +245,8 @@
     "skipToMain": "मुख्य सामग्री पर जाएं",
     "expandSidebar": "साइडबार फैलाएं",
     "collapseSidebar": "साइडबार सिकोड़ें",
-    "toggleMenu": "मेन्यू टॉगल करें"
+    "toggleMenu": "मेन्यू टॉगल करें",
+    "taskTypes": "Task Types"
   },
   "userMenu": {
     "myAccount": "मेरा खाता",
@@ -2247,5 +2251,39 @@
     "callFailed": "विफल",
     "permissionSent": "अनुरोध भेजा",
     "permissionSentDesc": "WhatsApp पर स्वीकार करना होगा।"
+  },
+  "taskTypes": {
+    "title": "Task Types",
+    "yourTypes": "Your task types",
+    "yourTypesDesc": "The kinds of follow-up your team commits to. Built-in types can be relabelled to match the words you use; the product creates tasks of those kinds itself, so they cannot be removed.",
+    "typeLabel": "Label",
+    "typeKey": "Key",
+    "defaultDue": "Default deadline",
+    "defaultDueHint": "How far ahead a new task of this kind is due. A call back is same-day work; a quote is not.",
+    "colour": "Colour",
+    "addType": "Add type",
+    "editType": "Edit task type",
+    "dialogDesc": "Name the work and say when it is normally due.",
+    "labelPlaceholder": "Book a fitting",
+    "labelRequired": "A label is required",
+    "builtIn": "Built-in",
+    "builtInHint": "Built-in types can be relabelled, but their key stays the same: automations and chatbot flows create tasks by key.",
+    "archived": "Archived",
+    "archivedHint": "Keeps existing tasks and their history, but stops offering this type on new ones.",
+    "noTypesYet": "No task types yet",
+    "noTypesYetDesc": "Add the kinds of follow-up your team does.",
+    "deleteTitle": "Delete this task type?",
+    "deleteDesc": "\"{label}\" will no longer be offered. A type that tasks already use is archived instead, so their history stays intact.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "reorderFailed": "The new order could not be saved",
+    "dueNow": "Immediately",
+    "dueHour": "In an hour",
+    "dueFourHours": "In four hours",
+    "dueTomorrow": "Tomorrow",
+    "dueThreeDays": "In three days",
+    "dueWeek": "In a week",
+    "dueMonth": "In a month",
+    "dueMinutes": "In {count} minutes"
   }
 }

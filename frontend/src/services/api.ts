@@ -322,6 +322,9 @@ export interface TaskType {
   color: string
   default_due_offset_minutes: number
   position: number
+  /** Built-ins can be relabelled and reordered, never deleted or archived. */
+  is_system?: boolean
+  archived_at?: string | null
 }
 
 export const tasksService = {
@@ -342,6 +345,26 @@ export const tasksService = {
   reassign: (id: string, ownerId: string) =>
     api.post<{ task: Task }>(`/tasks/${id}/reassign`, { owner_id: ownerId }),
   types: () => api.get<{ task_types: TaskType[] }>('/task-types')
+}
+
+/**
+ * Task types are settings, not tasks (plan 04).
+ *
+ * The five built-ins describe a shop. A clinic books procedures and a lender
+ * chases documents, and with no way to add those every other kind of work
+ * became "Other" — which makes the type column useless for reporting the
+ * moment anyone relies on it.
+ */
+export const taskTypesService = {
+  list: (includeArchived = false) =>
+    api.get<{ task_types: TaskType[] }>(
+      `/task-types${includeArchived ? '?include_archived=true' : ''}`
+    ),
+  create: (data: Record<string, unknown>) => api.post<{ task_type: TaskType }>('/task-types', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put<{ task_type: TaskType }>(`/task-types/${id}`, data),
+  reorder: (ids: string[]) => api.put('/task-types/reorder', { ids }),
+  delete: (id: string) => api.delete(`/task-types/${id}`)
 }
 
 // --- Inbox and conversations (plan 03) ---

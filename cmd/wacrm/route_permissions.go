@@ -323,6 +323,10 @@ var routePermissions = map[string]routeAccess{
 	"DELETE /api/tags/{name}":                                needs(models.ResourceTags, models.ActionDelete),            // DeleteTag
 	"PUT /api/tags/{name}":                                   needs(models.ResourceTags, models.ActionWrite),             // UpdateTag
 	"GET /api/task-types":                                    needs(models.ResourceTasks, models.ActionRead),             // ListTaskTypes
+	"POST /api/task-types":                                   needs(models.ResourceTasks, models.ActionDelete),           // CreateTaskType
+	"PUT /api/task-types/reorder":                            needs(models.ResourceTasks, models.ActionDelete),           // ReorderTaskTypes
+	"PUT /api/task-types/{id}":                               needs(models.ResourceTasks, models.ActionDelete),           // UpdateTaskType
+	"DELETE /api/task-types/{id}":                            needs(models.ResourceTasks, models.ActionDelete),           // DeleteTaskType
 	"GET /api/tasks":                                         needs(models.ResourceTasks, models.ActionRead),             // ListTasks
 	"POST /api/tasks":                                        needs(models.ResourceTasks, models.ActionWrite),            // CreateTask
 	"PUT /api/tasks/{id}":                                    needs(models.ResourceTasks, models.ActionWrite),            // UpdateTask

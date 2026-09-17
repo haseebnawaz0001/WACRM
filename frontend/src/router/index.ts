@@ -303,6 +303,12 @@ const router = createRouter({
           meta: { permission: 'contact_fields' }
         },
         {
+          path: 'settings/task-types',
+          name: 'task-types',
+          component: () => import('@/views/settings/TaskTypesView.vue'),
+          meta: { permission: 'tasks' }
+        },
+        {
           path: 'settings/tags',
           name: 'tags',
           component: () => import('@/views/settings/TagsView.vue'),
@@ -467,6 +473,7 @@ const navigationOrder = [
     { path: '/settings/canned-responses', permission: 'canned_responses' },
     { path: '/settings/pipelines', permission: 'pipelines' },
     { path: '/settings/contact-fields', permission: 'contact_fields' },
+  { path: '/settings/task-types', permission: 'tasks' },
     { path: '/settings/tags', permission: 'tags' },
     { path: '/settings/teams', permission: 'teams' },
     { path: '/settings/users', permission: 'users' },
