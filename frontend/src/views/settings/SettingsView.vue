@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader, AuditLogPanel, TimezoneSelect } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
-import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
+import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music, Inbox } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -39,6 +39,7 @@ const generalSettings = ref({
   default_timezone: 'UTC',
   date_format: 'YYYY-MM-DD',
   mask_phone_numbers: false,
+  marketing_frequency_cap_hours: 0,
   meta_app_id: '',
   meta_config_id: '',
   meta_app_secret: '',
@@ -56,6 +57,33 @@ const notificationSettings = ref({
 // organization's", which is what most people want; the exception is the agent
 // who works from another country and needs timestamps in their own day.
 const personalTimezone = ref('')
+
+/**
+ * Inbox rules (plan 03, plan 10 §4.8).
+ *
+ * These lived only in the backend until now, and before that in the chatbot's
+ * SLA settings — so an organization that did not want response-time alerting
+ * also could not make the inbox close anything, and every conversation ever
+ * opened stayed in the list.
+ */
+const inboxSettings = ref({
+  reopen_window_hours: 24,
+  auto_resolve_idle_hours: 0,
+  pending_timeout_hours: 0,
+  auto_pending_on_agent_reply: false
+})
+
+async function saveInboxSettings() {
+  isSubmitting.value = true
+  try {
+    await organizationService.updateSettings({ inbox: { ...inboxSettings.value } })
+    toast.success(t('settings.inboxSaved'))
+  } catch {
+    toast.error(t('common.failedSave', { resource: t('resources.settings') }))
+  } finally {
+    isSubmitting.value = false
+  }
+}
 
 // Calling Settings
 const callingSettings = ref({
@@ -101,10 +129,19 @@ onMounted(async () => {
         default_timezone: orgData.settings?.timezone || 'UTC',
         date_format: orgData.settings?.date_format || 'YYYY-MM-DD',
         mask_phone_numbers: orgData.settings?.mask_phone_numbers || false,
+        marketing_frequency_cap_hours: orgData.settings?.marketing_frequency_cap_hours || 0,
         meta_app_id: orgData.settings?.meta_app_id || '',
         meta_config_id: orgData.settings?.meta_config_id || '',
         meta_app_secret: '',
         has_meta_app_secret: orgData.settings?.has_meta_app_secret || false
+      }
+      if (orgData.settings?.inbox) {
+        inboxSettings.value = {
+          reopen_window_hours: orgData.settings.inbox.reopen_window_hours ?? 24,
+          auto_resolve_idle_hours: orgData.settings.inbox.auto_resolve_idle_hours ?? 0,
+          pending_timeout_hours: orgData.settings.inbox.pending_timeout_hours ?? 0,
+          auto_pending_on_agent_reply: orgData.settings.inbox.auto_pending_on_agent_reply ?? false
+        }
       }
       callingSettings.value = {
         calling_enabled: orgData.settings?.calling_enabled || false,
@@ -139,7 +176,8 @@ async function saveGeneralSettings() {
       name: generalSettings.value.organization_name,
       timezone: generalSettings.value.default_timezone,
       date_format: generalSettings.value.date_format,
-      mask_phone_numbers: generalSettings.value.mask_phone_numbers
+      mask_phone_numbers: generalSettings.value.mask_phone_numbers,
+      marketing_frequency_cap_hours: Number(generalSettings.value.marketing_frequency_cap_hours) || 0
     }
     if (canWriteAccounts.value) {
       payload.meta_app_id = generalSettings.value.meta_app_id
@@ -264,6 +302,10 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
               <Bell class="h-4 w-4 mr-2" />
               {{ $t('settings.notifications') }}
             </TabsTrigger>
+            <TabsTrigger value="inbox" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+              <Inbox class="h-4 w-4 mr-2" />
+              {{ $t('settings.inbox') }}
+            </TabsTrigger>
             <TabsTrigger value="calling" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Phone class="h-4 w-4 mr-2" />
               {{ $t('settings.calling') }}
@@ -326,6 +368,18 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     :checked="generalSettings.mask_phone_numbers"
                     @update:checked="generalSettings.mask_phone_numbers = $event"
                   />
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+                <div class="space-y-2">
+                  <Label for="marketing-cap" class="text-white/70 light:text-gray-700">{{ $t('settings.marketingFrequencyCap') }}</Label>
+                  <Input
+                    id="marketing-cap"
+                    v-model.number="generalSettings.marketing_frequency_cap_hours"
+                    type="number"
+                    min="0"
+                    class="max-w-xs bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-200 light:text-gray-900"
+                  />
+                  <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.marketingFrequencyCapDesc') }}</p>
                 </div>
                 <div class="flex justify-end">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
@@ -446,6 +500,64 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
           </TabsContent>
 
           <!-- Calling Settings Tab -->
+          <!-- Inbox Tab (plan 03) -->
+          <TabsContent value="inbox">
+            <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+              <div class="p-6 pb-3">
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.inbox') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.inboxDesc') }}</p>
+              </div>
+              <div class="space-y-4 p-6 pt-3">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-1.5">
+                    <Label for="reopen-window">{{ $t('settings.reopenWindow') }}</Label>
+                    <Input
+                      id="reopen-window"
+                      v-model.number="inboxSettings.reopen_window_hours"
+                      type="number"
+                      min="0"
+                    />
+                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.reopenWindowDesc') }}</p>
+                  </div>
+                  <div class="space-y-1.5">
+                    <Label for="auto-resolve">{{ $t('settings.autoResolveIdle') }}</Label>
+                    <Input
+                      id="auto-resolve"
+                      v-model.number="inboxSettings.auto_resolve_idle_hours"
+                      type="number"
+                      min="0"
+                    />
+                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.autoResolveIdleDesc') }}</p>
+                  </div>
+                  <div class="space-y-1.5">
+                    <Label for="pending-timeout">{{ $t('settings.pendingTimeout') }}</Label>
+                    <Input
+                      id="pending-timeout"
+                      v-model.number="inboxSettings.pending_timeout_hours"
+                      type="number"
+                      min="0"
+                    />
+                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.pendingTimeoutDesc') }}</p>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-4 rounded-md border border-white/[0.08] p-3 light:border-gray-200">
+                  <div>
+                    <Label for="auto-pending">{{ $t('settings.autoPending') }}</Label>
+                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.autoPendingDesc') }}</p>
+                  </div>
+                  <Switch id="auto-pending" v-model="inboxSettings.auto_pending_on_agent_reply" />
+                </div>
+
+                <div class="flex justify-end">
+                  <Button :disabled="isSubmitting" @click="saveInboxSettings">
+                    {{ $t('common.save') }}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="calling">
             <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">

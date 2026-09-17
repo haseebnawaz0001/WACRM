@@ -50,7 +50,7 @@ func (a *App) FilterUsersWhoCanSeeContact(orgID uuid.UUID, contact *models.Conta
 		Order("opened_at DESC").First(&conv).Error; err == nil {
 		if conv.AssigneeID != nil {
 			allowed[*conv.AssigneeID] = true
-		} else if !conv.BotActive {
+		} else if !conv.IsBotHandled() {
 			if conv.TeamID == nil {
 				generalQueue = true
 			} else {

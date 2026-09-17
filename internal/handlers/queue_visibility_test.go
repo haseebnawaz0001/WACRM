@@ -42,11 +42,11 @@ func TestGetContact_AgentCanOpenAnUnassignedQueuedConversation(t *testing.T) {
 		OrganizationID: org.ID,
 		ContactID:      contact.ID,
 		Status:         models.ConversationOpen,
-		BotActive:      false,
+		Handling:       models.HandlingNone,
 		OpenedAt:       time.Now(),
 	}).Error)
 	require.NoError(t, app.DB.Model(&models.Conversation{}).
-		Where("contact_id = ?", contact.ID).Update("bot_active", false).Error)
+		Where("contact_id = ?", contact.ID).Update("handling", models.HandlingNone).Error)
 
 	req := testutil.NewJSONRequest(t, nil)
 	testutil.SetAuthContext(req, org.ID, agent.ID)
@@ -69,7 +69,7 @@ func TestGetContact_BotHeldConversationStaysHidden(t *testing.T) {
 		OrganizationID: org.ID,
 		ContactID:      contact.ID,
 		Status:         models.ConversationOpen,
-		BotActive:      true,
+		Handling:       models.HandlingBot,
 		OpenedAt:       time.Now(),
 	}).Error)
 
@@ -99,7 +99,7 @@ func TestGetContact_OtherTeamsQueueStaysHidden(t *testing.T) {
 		OpenedAt:       time.Now(),
 	}
 	require.NoError(t, app.DB.Create(conv).Error)
-	require.NoError(t, app.DB.Model(conv).Update("bot_active", false).Error)
+	require.NoError(t, app.DB.Model(conv).Update("handling", models.HandlingNone).Error)
 
 	req := testutil.NewJSONRequest(t, nil)
 	testutil.SetAuthContext(req, org.ID, agent.ID)

@@ -1,0 +1,154 @@
+---
+title: Automations
+description: Event-triggered rules over CRM records
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Automations require `automations:read`, `automations:write` and `automations:delete`. Agents hold none of these by design: a rule acts on behalf of the whole organization.
+</Aside>
+
+## Overview
+
+An automation is **when** something happens, **only if** the contact matches, **then** do these things. Rules react to events from the same catalog that feeds webhooks, so anything a webhook can hear, a rule can act on.
+
+Validation happens at save time, not at fire time. A rule referring to a template that does not exist, or a stage in another pipeline, is rejected on save rather than failing silently at 3am.
+
+## Trigger types
+
+```bash
+GET /api/automations/catalog
+```
+
+Returns every trigger with the configuration it accepts, and every action with its own. It is the source the rule editor renders from, so the editor cannot drift from what the engine understands.
+
+Triggers include `contact.created`, `contact.tag_added`, `contact.tag_removed`, `contact.assigned`, `contact.field_changed`, `contact.lifecycle_stage_changed`, `conversation.created`, `conversation.status_changed`, `conversation.assigned`, `conversation.sla_breached`, `deal.created`, `deal.stage_changed`, `deal.won`, `deal.lost`, `call.missed`, `call.completed`, `chatbot.flow_completed` and `campaign.replied`, plus time-based triggers such as "no reply for N days".
+
+## Actions
+
+| Action | Does |
+|---|---|
+| `add_tags` / `remove_tags` | Change a contact's tags |
+| `set_field` | Write a contact field |
+| `set_contact_owner` | Change who owns the contact |
+| `set_conversation_status` | Resolve, snooze or reopen |
+| `assign_conversation` | Assign to a user, or queue to a team |
+| `create_task` | Create a follow-up |
+| `add_note` | Add a note to the contact |
+| `notify_users` | Send an in-app notification |
+| `call_webhook` | Call an external URL |
+| `create_deal` | Add a deal to a pipeline |
+| `move_deal_stage` | Move a deal |
+| `send_message` | Send a free-text WhatsApp message |
+| `send_template` | Send an approved template |
+
+Sending obeys the same rules as every other send: `send_message` needs an open 24-hour service window and fails with a readable reason outside it, and `send_template` refuses a MARKETING template to a contact who has opted out. Messages sent this way are recorded with an `automation` sender, so they never count as an agent's first response.
+
+`assign_conversation` to a team goes through the transfer queue, so the team's strategy and business hours apply. It records what actually happened — `assigned`, `queued`, `suppressed_out_of_hours`, `already_active` or `failed` — rather than always claiming success.
+
+## List Automations
+
+```bash
+GET /api/automations
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "automations": [
+      {
+        "id": "…",
+        "name": "Replied to campaign",
+        "description": "",
+        "enabled": true,
+        "trigger_type": "campaign.replied",
+        "trigger_config": { "campaign_ids": [] },
+        "contact_filter": { "op": "and", "children": [] },
+        "actions": [
+          {
+            "id": "a1",
+            "type": "set_field",
+            "config": { "key": "lifecycle_stage", "value": "lead" },
+            "continue_on_error": false
+          }
+        ],
+        "run_policy": {
+          "once_per_contact": false,
+          "cooldown_minutes": 0,
+          "max_runs_per_hour": 500
+        },
+        "last_run_at": "2026-09-17T09:12:00Z",
+        "run_count": 148,
+        "error_count": 0,
+        "stats": { "runs_24h": 12, "failures_24h": 0 }
+      }
+    ]
+  }
+}
+```
+
+## Create / Update Automation
+
+```bash
+POST /api/automations
+PUT  /api/automations/{id}
+```
+
+The body is the rule as above, minus the computed fields. Each action needs a stable `id`: it is what lets a retry skip the steps that already succeeded rather than sending the message twice.
+
+`continue_on_error` keeps the rest of the list running when one action fails — for the steps that are nice to have rather than the point of the rule.
+
+## Enable / Disable
+
+```bash
+POST /api/automations/{id}/enable
+POST /api/automations/{id}/disable
+```
+
+A rule that fails ten times in a row is disabled automatically and its author is notified. A rule that is quietly broken and still "running" is worse than one that has stopped.
+
+## Dry run
+
+```bash
+POST /api/automations/{id}/test
+```
+
+```json
+{
+  "contact_id": "…",
+  "event_data": {}
+}
+```
+
+Runs the rule against a real contact and reports what each action **would** do. Nothing is written — no message sent, no field changed — so a rule can be tried against a live record before it is enabled.
+
+## Runs
+
+```bash
+GET /api/automations/{id}/runs
+GET /api/contacts/{id}/automation-runs
+```
+
+Every run, with what triggered it, which actions ran and what they returned. The per-contact view answers "why did this contact get that message".
+
+Runs are retained for a bounded period and trimmed daily.
+
+## Run policies
+
+| Policy | Effect |
+|---|---|
+| `once_per_contact` | The rule acts on a contact at most once, ever |
+| `cooldown_minutes` | A contact cannot be acted on again within this window |
+| `max_runs_per_hour` | Organization-wide cap, default 500 |
+
+The hourly cap is not optional: an unbounded rule is one bad event away from messaging every customer at once.
+
+## Loop protection
+
+A rule never reacts to its own output, and a chain of rules triggering one another stops at depth three. The origin travels with the event all the way to the engine, which runs in another process — a depth that stopped at the queue would leave the engine unable to tell a rule's own output from a person's change.
+
+Rules are idempotent per event: a redelivered event is a no-op. Time-based triggers use a deterministic id per subject and period, so "no reply in three days" fires once per waiting period and re-arms when the next agent message lands.

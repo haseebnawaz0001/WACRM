@@ -157,10 +157,11 @@ async function save() {
   if (!rule.value) return
   isSaving.value = true
   try {
-    const { data } = await automationsService.update(rule.value.id, {
+    const { data: envelope } = await automationsService.update(rule.value.id, {
       ...rule.value,
       contact_filter: filter.value.rules?.length ? filter.value : null
     })
+    const data = (envelope as any)?.data ?? envelope
     rule.value = data.automation
     toast.success(t('common.savedSuccess'))
   } catch (error: any) {
@@ -193,7 +194,8 @@ async function searchTestContacts() {
     return
   }
   try {
-    const { data } = await contactsService.list({ search: testQuery.value, limit: 10 })
+    const { data: envelope } = await contactsService.list({ search: testQuery.value, limit: 10 })
+    const data = (envelope as any)?.data ?? envelope
     testResults.value = data.contacts || data || []
   } catch {
     testResults.value = []
@@ -204,7 +206,8 @@ watch(testQuery, searchTestContacts)
 async function runTest(contactId: string) {
   if (!rule.value) return
   try {
-    const { data } = await automationsService.test(rule.value.id, contactId)
+    const { data: envelope } = await automationsService.test(rule.value.id, contactId)
+    const data = (envelope as any)?.data ?? envelope
     testRun.value = data.run
   } catch (error: any) {
     toast.error(error?.response?.data?.message || t('common.error'))

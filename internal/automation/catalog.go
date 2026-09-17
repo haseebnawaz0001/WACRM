@@ -53,10 +53,29 @@ var triggers = map[string]Trigger{
 	"contact.tag_removed":   {Type: "contact.tag_removed", Kind: KindEvent, Group: "contacts", ConfigKeys: []string{"tags"}},
 	"contact.field_changed": {Type: "contact.field_changed", Kind: KindEvent, Group: "contacts", ConfigKeys: []string{"field", "to"}},
 	"contact.assigned":      {Type: "contact.assigned", Kind: KindEvent, Group: "contacts", ConfigKeys: []string{"to_user_ids"}},
+	// Lifecycle stage is the change people most want to act on — "became a
+	// customer, send the onboarding template" — and matching it through the
+	// generic field_changed trigger meant every rule author re-derived the
+	// same filter (plan 01).
+	"contact.lifecycle_stage_changed": {Type: "contact.lifecycle_stage_changed", Kind: KindEvent, Group: "contacts", ConfigKeys: []string{"to"}},
 
 	"conversation.created":        {Type: "conversation.created", Kind: KindEvent, Group: "conversations", ConfigKeys: []string{"accounts"}},
 	"conversation.status_changed": {Type: "conversation.status_changed", Kind: KindEvent, Group: "conversations", ConfigKeys: []string{"to", "reasons"}},
 	"conversation.assigned":       {Type: "conversation.assigned", Kind: KindEvent, Group: "conversations", ConfigKeys: []string{"user_ids", "team_ids"}},
+	// A breach is a promise the organization made and missed, which is the
+	// canonical thing to escalate automatically (plan 08).
+	"conversation.sla_breached": {Type: "conversation.sla_breached", Kind: KindEvent, Group: "conversations", ConfigKeys: nil},
+
+	// Calls (plan 10, §4.4). "Missed call → callback task in an hour" is the
+	// journey this trigger exists for.
+	"call.missed":    {Type: "call.missed", Kind: KindEvent, Group: "calls", ConfigKeys: []string{"direction"}},
+	"call.completed": {Type: "call.completed", Kind: KindEvent, Group: "calls", ConfigKeys: []string{"direction"}},
+
+	// The chatbot finishing a qualification flow is when the CRM work starts.
+	"chatbot.flow_completed": {Type: "chatbot.flow_completed", Kind: KindEvent, Group: "chatbot", ConfigKeys: []string{"flow_ids"}},
+
+	// A reply to a campaign is the moment a blast becomes a conversation.
+	"campaign.replied": {Type: "campaign.replied", Kind: KindEvent, Group: "campaigns", ConfigKeys: []string{"campaign_ids"}},
 
 	"task.created":   {Type: "task.created", Kind: KindEvent, Group: "tasks", ConfigKeys: []string{"type_keys"}},
 	"task.completed": {Type: "task.completed", Kind: KindEvent, Group: "tasks", ConfigKeys: []string{"type_keys"}},

@@ -14,10 +14,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/contacts"
+	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/schedule"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
+	"gorm.io/gorm"
 )
 
 func redactURLForLog(raw string) string {
@@ -889,6 +891,20 @@ func (a *App) buildAIContext(orgID uuid.UUID, session *models.ChatbotSession, us
 		case models.ContextTypeStatic:
 			content = ctx.StaticContent
 
+		case models.ContextTypeContactProfile:
+			// What the CRM already knows about the person being talked to
+			// (plan 10, 4.3). Static content stays as the instruction — "use
+			// these facts, do not repeat them back" — with the record under it.
+			content = ctx.StaticContent
+			profile := a.buildContactProfileContext(orgID, session, ctx.ApiConfig)
+			if profile != "" {
+				if content != "" {
+					content = content + "\n\n" + profile
+				} else {
+					content = profile
+				}
+			}
+
 		case models.ContextTypeAPI:
 			// Start with static content/prompt if provided
 			content = ctx.StaticContent
@@ -1627,6 +1643,8 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		a.DB.Model(&models.Message{}).Where("id = ?", message.ID).
 			Update("conversation_id", conv.ID.String())
 		message.ConversationID = conv.ID.String()
+
+		a.attributeCampaignReply(conv)
 	}
 
 	// If the chatbot will handle this conversation (enabled + no active
@@ -1799,4 +1817,33 @@ func (a *App) timeoutChatSession(ctx context.Context, session *models.ChatbotSes
 		return
 	}
 	a.logSessionMessage(session.ID, models.DirectionOutgoing, msg, "timeout")
+}
+
+// attributeCampaignReply links a freshly opened conversation to the campaign
+// that prompted it, and says so (plan 10, §4.5).
+//
+// Best-effort: the customer's message is already saved, and failing to credit a
+// campaign is not a reason to lose it.
+func (a *App) attributeCampaignReply(conv *models.Conversation) {
+	campaignID, err := a.Conversations().AttributeToCampaign(
+		context.Background(), conv, conversation.DefaultAttributionWindow)
+	if err != nil {
+		a.Log.Error("Failed to attribute campaign reply", "error", err, "conversation_id", conv.ID)
+		return
+	}
+	if campaignID == nil {
+		return
+	}
+
+	if err := a.Conversations().PublishCampaignReplied(a.DB, conv, *campaignID); err != nil {
+		a.Log.Error("Failed to publish campaign reply event", "error", err, "campaign_id", campaignID)
+	}
+
+	// One increment per conversation, which is what the attribution guard
+	// above guarantees: a customer who sends five messages replied once.
+	if err := a.DB.Model(&models.BulkMessageCampaign{}).
+		Where("id = ?", *campaignID).
+		UpdateColumn("replied_count", gorm.Expr("replied_count + 1")).Error; err != nil {
+		a.Log.Error("Failed to count campaign reply", "error", err, "campaign_id", campaignID)
+	}
 }

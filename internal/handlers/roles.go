@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"sort"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // roleAuditSnapshot returns a diff-friendly representation of a role.
@@ -262,6 +264,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 				a.Log.Error("Failed to fetch permissions", "error", err)
 				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
 			}
+			a.recordPermissionRevocations(&role, role.Permissions, permissions, userID)
 			if err := a.DB.Model(&role).Association("Permissions").Replace(permissions); err != nil {
 				a.Log.Error("Failed to update role permissions", "error", err)
 				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
@@ -305,6 +308,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 			a.Log.Error("Failed to fetch permissions", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
 		}
+		a.recordPermissionRevocations(&role, role.Permissions, permissions, userID)
 		// Replace associations
 		if err := a.DB.Model(&role).Association("Permissions").Replace(permissions); err != nil {
 			a.Log.Error("Failed to update role permissions", "error", err)
@@ -525,4 +529,59 @@ func splitPermissionKey(key string) []string {
 		}
 	}
 	return nil
+}
+
+// recordPermissionRevocations remembers permissions an administrator took away
+// from a role, and forgets the ones they gave back (plan 10, S1).
+//
+// Permission backfills run on upgrade and add what new features need to roles
+// that already exist. Without this record every backfill would quietly undo a
+// deliberate removal: an admin who took `contacts:delete` away from a role
+// would find it restored after the next deploy, with nothing to explain it.
+//
+// It is best-effort by design. Failing to record a revocation must not fail the
+// role update the person asked for; the worst case is that a later backfill
+// re-grants one permission, which is where the product already was.
+func (a *App) recordPermissionRevocations(role *models.CustomRole, before, after []models.Permission, actor uuid.UUID) {
+	remaining := make(map[uuid.UUID]bool, len(after))
+	for _, p := range after {
+		remaining[p.ID] = true
+	}
+
+	var revoked []models.RolePermissionRevocation
+	now := time.Now().UTC()
+	for _, p := range before {
+		if remaining[p.ID] {
+			continue
+		}
+		revoked = append(revoked, models.RolePermissionRevocation{
+			CustomRoleID: role.ID,
+			PermissionID: p.ID,
+			RevokedByID:  &actor,
+			RevokedAt:    now,
+		})
+	}
+
+	if len(revoked) > 0 {
+		if err := a.DB.Clauses(clause.OnConflict{DoNothing: true}).
+			Create(&revoked).Error; err != nil {
+			a.Log.Error("Failed to record permission revocations",
+				"error", err, "role_id", role.ID)
+		}
+	}
+
+	// Granting a permission back clears the standing instruction not to grant
+	// it. Otherwise a permission removed once could never be restored by a
+	// backfill again, even after the admin changed their mind.
+	if len(after) > 0 {
+		granted := make([]uuid.UUID, 0, len(after))
+		for _, p := range after {
+			granted = append(granted, p.ID)
+		}
+		if err := a.DB.Where("custom_role_id = ? AND permission_id IN ?", role.ID, granted).
+			Delete(&models.RolePermissionRevocation{}).Error; err != nil {
+			a.Log.Error("Failed to clear permission revocations",
+				"error", err, "role_id", role.ID)
+		}
+	}
 }

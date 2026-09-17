@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +18,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
-	"gorm.io/gorm/clause"
+	"gorm.io/gorm"
 )
 
 // agentTransferRow represents a flat row result from the JOINed query
@@ -638,28 +640,28 @@ func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
 		return nil
 	}
 
-	transfer, err := findByIDAndOrg[models.AgentTransfer](a.DB, r, transferID, orgID, "Transfer")
+	// Through the transfer service, which re-reads the row under the contact
+	// advisory lock (plan 10, S5). Checking the status and then saving was a
+	// read-modify-write: the SLA job expiring the same transfer, or a second
+	// agent resuming it, both landed between the two statements.
+	resumed, outcome, err := transfers.New(a.DB).Resume(context.Background(), orgID, transferID, userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Transfer not found", nil, "")
+	}
 	if err != nil {
-		return nil
-	}
-
-	if transfer.Status != models.TransferStatusActive {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Transfer is not active", nil, "")
-	}
-
-	// Update transfer
-	now := time.Now()
-	transfer.Status = models.TransferStatusResumed
-	transfer.ResumedAt = &now
-	transfer.ResumedBy = &userID
-
-	if err := a.DB.Save(transfer).Error; err != nil {
-		a.Log.Error("Failed to resume transfer", "error", err, "transfer_id", transfer.ID)
+		a.Log.Error("Failed to resume transfer", "error", err, "transfer_id", transferID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to resume transfer", nil, "")
 	}
+	if outcome == transfers.AlreadyActive {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Transfer is not active", nil, "")
+	}
+	transfer := resumed
 
 	// Clear chatbot tracking so client inactivity SLA doesn't trigger after transfer is closed
 	a.ClearContactChatbotTracking(transfer.ContactID)
+
+	// Handing back means the bot is driving again (plan 10, S5).
+	a.setConversationHandling(transfer.OrganizationID, transfer.ContactID, models.HandlingBot)
 
 	// Broadcast WebSocket notification
 	a.broadcastTransferResumed(transfer)
@@ -876,104 +878,47 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 		userTeamIDs = append(userTeamIDs, m.TeamID)
 	}
 
-	// Use transaction with FOR UPDATE lock to prevent race conditions
-	tx := a.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Build query for picking transfer with row-level locking
-	query := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-		Where("organization_id = ? AND status = ? AND agent_id IS NULL", orgID, models.TransferStatusActive).
-		Order("transferred_at ASC")
-
-	if teamIDStr != "" {
-		// Pick from specific team
-		if teamIDStr == "general" {
-			query = query.Where("team_id IS NULL")
-		} else {
-			teamID, err := uuid.Parse(teamIDStr)
-			if err == nil {
-				// Verify user is member of this team (unless they have full access)
-				if !hasFullAccess {
-					found := false
-					for _, tid := range userTeamIDs {
-						if tid == teamID {
-							found = true
-							break
-						}
-					}
-					if !found {
-						tx.Rollback()
-						return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You are not a member of this team", nil, "")
-					}
-				}
-				query = query.Where("team_id = ?", teamID)
-			}
-		}
-	} else if !hasFullAccess {
-		// Users without full access can only pick from their teams or general queue
-		if len(userTeamIDs) > 0 {
-			query = query.Where("team_id IS NULL OR team_id IN ?", userTeamIDs)
-		} else {
-			query = query.Where("team_id IS NULL")
-		}
+	// The pick goes through the transfer service so it takes the product's
+	// canonical lock order — contact advisory lock, then the transfer row
+	// (plan 10, S5). This handler used to lock the transfer first and read the
+	// contact second, which is the opposite of what the conversation service
+	// does; the two running together on one contact deadlocked.
+	in := transfers.PickInput{
+		OrgID:              orgID,
+		UserID:             userID,
+		AllowedTeamIDs:     userTeamIDs,
+		Unrestricted:       hasFullAccess,
+		AssignContactOwner: settings != nil && settings.AgentAssignment.AssignToSameAgent,
 	}
-	// Users with full access can pick from any queue if no team_id specified
 
-	// Find oldest unassigned active transfer (FIFO) - locked row
-	var transfer models.AgentTransfer
-	result := query.First(&transfer)
+	if teamIDStr == "general" {
+		in.GeneralOnly = true
+	} else if teamIDStr != "" {
+		teamID, parseErr := uuid.Parse(teamIDStr)
+		if parseErr != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid team id", nil, "")
+		}
+		if !hasFullAccess && !containsUUID(userTeamIDs, teamID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You are not a member of this team", nil, "")
+		}
+		in.TeamID = &teamID
+	}
 
-	if result.Error != nil {
-		tx.Rollback()
+	picked, err := transfers.New(a.DB).PickNext(context.Background(), in)
+	if errors.Is(err, transfers.ErrNoneQueued) {
 		return r.SendEnvelope(map[string]any{
 			"message":  "No transfers in queue",
 			"transfer": nil,
 		})
 	}
-
-	// Assign to current user (self-pick)
-	transfer.AgentID = &userID
-	// If no one initiated the transfer, mark the picker as the one who initiated (self-pick)
-	if transfer.TransferredByUserID == nil {
-		transfer.TransferredByUserID = &userID
-	}
-
-	// Update SLA tracking for pickup
-	a.UpdateSLAOnPickup(&transfer)
-
-	if err := tx.Save(&transfer).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to pick transfer", "error", err, "transfer_id", transfer.ID)
+	if err != nil {
+		a.Log.Error("Failed to pick transfer", "error", err, "org_id", orgID, "user_id", userID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to pick transfer", nil, "")
 	}
+	transfer := *picked
 
-	// Pin the agent as the contact's relationship manager only when the org
-	// has opted into AssignToSameAgent and no manager is already set. The
-	// active transfer itself grants this agent visibility into the chat (see
-	// ListContacts query in contacts.go), so we don't need contact.AssignedUserID
-	// for visibility. Setting it unconditionally would leak this conversation
-	// into the agent's chat list permanently after resume.
-	if settings != nil && settings.AgentAssignment.AssignToSameAgent {
-		// Re-fetch contact for the up-to-date assigned_user_id under the tx.
-		var contact models.Contact
-		if err := tx.Where("id = ?", transfer.ContactID).First(&contact).Error; err == nil && contact.AssignedUserID == nil {
-			if err := tx.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", userID).Error; err != nil {
-				tx.Rollback()
-				a.Log.Error("Failed to update contact assignment", "error", err, "transfer_id", transfer.ID)
-				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact assignment", nil, "")
-			}
-		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit().Error; err != nil {
-		a.Log.Error("Failed to complete pickup", "error", err, "transfer_id", transfer.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to complete pickup", nil, "")
-	}
+	// Picking it up means a person is handling the conversation.
+	a.setConversationHandling(orgID, transfer.ContactID, models.HandlingHuman)
 
 	// Load related data for response (outside transaction)
 	a.DB.Where("id = ?", transfer.ContactID).First(&transfer.Contact)
@@ -1241,6 +1186,10 @@ func (a *App) saveAndFinalizeTransfer(transfer *models.AgentTransfer, account *m
 			})
 	}
 
+	// A transfer means a person now owns the conversation, even while it is
+	// still waiting in a queue (plan 10, S5).
+	a.setConversationHandling(account.OrganizationID, contact.ID, models.HandlingHuman)
+
 	// Broadcast to WebSocket
 	a.broadcastTransferCreated(transfer, contact)
 
@@ -1265,6 +1214,7 @@ func (a *App) createTransferToQueue(account *models.WhatsAppAccount, contact *mo
 			if settings.BusinessHours.OutOfHoursMessage != "" {
 				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
 			}
+			a.setConversationHandling(account.OrganizationID, contact.ID, models.HandlingHandoffPending)
 			return
 		}
 	}
@@ -1304,6 +1254,7 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 			if settings.BusinessHours.OutOfHoursMessage != "" {
 				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
 			}
+			a.setConversationHandling(account.OrganizationID, contact.ID, models.HandlingHandoffPending)
 			return
 		}
 	}
@@ -1368,6 +1319,7 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 			if settings.BusinessHours.OutOfHoursMessage != "" {
 				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
 			}
+			a.setConversationHandling(account.OrganizationID, contact.ID, models.HandlingHandoffPending)
 			return transfers.SuppressedOutOfHours
 		}
 	}
@@ -1417,39 +1369,58 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 // ReturnAgentTransfersToQueue returns all active transfers assigned to an agent back to their team queues
 // Called when an agent goes offline/unavailable
 func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
-	var transfers []models.AgentTransfer
-	if err := a.DB.Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive).
-		Preload("Contact").Find(&transfers).Error; err != nil {
-		a.Log.Error("Failed to find agent transfers for queue return", "error", err, "user_id", userID)
+	// Through the transfer service so each unassignment takes the contact
+	// advisory lock in the canonical order (plan 10, S5). Doing it with a bare
+	// Save raced the conversation service whenever an agent went away while a
+	// customer was writing to them.
+	returned, err := transfers.New(a.DB).ReturnToQueue(context.Background(), orgID, userID)
+	if err != nil {
+		a.Log.Error("Failed to return agent transfers to queue", "error", err, "user_id", userID)
+		return 0
+	}
+	if len(returned) == 0 {
 		return 0
 	}
 
-	if len(transfers) == 0 {
-		return 0
-	}
-
-	// Return each transfer to its team queue (or general queue)
-	for i := range transfers {
-		transfer := &transfers[i]
-		transfer.AgentID = nil
-
-		if err := a.DB.Save(transfer).Error; err != nil {
-			a.Log.Error("Failed to return transfer to queue", "error", err, "transfer_id", transfer.ID)
-			continue
-		}
-
-		// The contact owner is intentionally left untouched here (plan 10,
-		// S5): an agent going unavailable returns their conversations to the
-		// queue, but does not stop being the contact's relationship manager.
-
-		// Broadcast the unassignment
+	for i := range returned {
+		transfer := &returned[i]
+		// The contact owner is intentionally left untouched (plan 10, S5): an
+		// agent going unavailable returns their conversations to the queue,
+		// but does not stop being the contact's relationship manager.
+		a.DB.Where("id = ?", transfer.ContactID).First(&transfer.Contact)
 		a.broadcastTransferAssigned(transfer)
 	}
 
 	a.Log.Info("Returned agent transfers to queue",
 		"user_id", userID,
-		"count", len(transfers),
+		"count", len(returned),
 	)
 
-	return len(transfers)
+	return len(returned)
+}
+
+// setConversationHandling keeps conversations.handling in step with what the
+// transfer layer just did (plan 10, S5).
+//
+// Best-effort: the transfer is the operation the caller asked for, and failing
+// it because a bookkeeping column would not update would be the wrong trade.
+// The consequence of a miss is a conversation shown in the wrong inbox view
+// until the next thing touches it.
+func (a *App) setConversationHandling(orgID, contactID uuid.UUID, handling models.ConversationHandling) {
+	if err := a.Conversations().SetHandling(context.Background(), orgID, contactID, handling); err != nil {
+		a.Log.Error("Failed to update conversation handling",
+			"error", err, "contact_id", contactID, "handling", handling)
+	}
+}
+
+// containsUUID reports membership. Used for the team-queue check, where the
+// list is a handful of team ids and building a set would cost more than the
+// scan.
+func containsUUID(list []uuid.UUID, want uuid.UUID) bool {
+	for _, id := range list {
+		if id == want {
+			return true
+		}
+	}
+	return false
 }

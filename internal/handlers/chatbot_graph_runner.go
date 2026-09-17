@@ -15,6 +15,8 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmcontext"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/safehttp"
@@ -42,6 +44,31 @@ type chatNodeCtx struct {
 	buttonID         string
 	flowResponseData map[string]any // form fields from a WhatsApp Flow submission
 	consumed         bool
+
+	// crm is the CRM namespace — contact.*, conversation.*, org.* — built
+	// once for this run (plan 10, S6). Flow conditions could previously see
+	// only session data, so "is this a VIP customer?" was unanswerable inside
+	// a flow: the tag was on the contact, and the contact was not in scope.
+	crm map[string]any
+}
+
+// vars is what templates and conditions in this flow are evaluated against.
+//
+// The CRM namespace is authoritative and session data is layered on top,
+// except under the reserved roots: a flow that stored a variable called
+// "contact" must not be able to rewrite who the conversation is with.
+func (c *chatNodeCtx) vars() map[string]any {
+	out := make(map[string]any, len(c.crm)+len(c.session.SessionData))
+	for key, value := range c.crm {
+		out[key] = value
+	}
+	for key, value := range c.session.SessionData {
+		if crmcontext.IsReserved(key) {
+			continue
+		}
+		out[key] = value
+	}
+	return out
 }
 
 // nodeOutcome is the return value of a node executor.
@@ -105,6 +132,22 @@ func (a *App) runChatGraph(
 		session.SessionData["contact_name"] = contact.ProfileName
 	}
 
+	// The CRM namespace, once per run (plan 10, S6). A failure here is not
+	// fatal: a flow that cannot see the contact record still runs on session
+	// data, which is exactly where it was before.
+	if contact != nil {
+		crm, err := a.CRMContext().Build(context.Background(), contact.OrganizationID, crmcontext.Opts{
+			ContactID:     contact.ID,
+			IncludeFields: true,
+		})
+		if err != nil {
+			a.Log.Warn("chat graph could not build the CRM context",
+				"session", session.ID, "contact", contact.ID, "error", err)
+		} else {
+			ctx.crm = crmcontext.WithLegacyAliases(crm)
+		}
+	}
+
 	if session.CurrentStep == "" {
 		session.CurrentStep = graph.EntryNode
 		// Trigger input is not "for" the entry node — clear it so we don't
@@ -125,7 +168,7 @@ func (a *App) runChatGraph(
 		// short-circuit through the default edge without executing the
 		// node. Authored from the editor's per-node Advanced section.
 		if expr := stringFromConfig(node.Config, "skip_condition"); expr != "" {
-			matched, err := evaluateConditionExpression(expr, session.SessionData)
+			matched, err := evaluateConditionExpression(expr, ctx.vars())
 			if err != nil {
 				a.Log.Warn("skip_condition failed; ignoring",
 					"node", node.ID, "session", session.ID, "expression", expr, "error", err)
@@ -249,7 +292,7 @@ func (a *App) execChatMessage(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	if text == "" {
 		return nodeOutcome{outcome: "default"}, nil
 	}
-	text = processTemplate(text, ctx.session.SessionData)
+	text = processTemplate(text, ctx.vars())
 	if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, text); err != nil {
 		return nodeOutcome{}, fmt.Errorf("send message: %w", err)
 	}
@@ -286,7 +329,7 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	if body == "" {
 		body = node.Label
 	}
-	body = processTemplate(body, ctx.session.SessionData)
+	body = processTemplate(body, ctx.vars())
 	buttons := buttonsFromConfig(node.Config)
 	if len(buttons) == 0 {
 		return nodeOutcome{}, fmt.Errorf("buttons node %q has no buttons configured", node.ID)
@@ -296,7 +339,7 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	for _, b := range buttons {
 		for _, key := range []string{"title", "url", "phone_number"} {
 			if s, ok := b[key].(string); ok && s != "" {
-				b[key] = processTemplate(s, ctx.session.SessionData)
+				b[key] = processTemplate(s, ctx.vars())
 			}
 		}
 	}
@@ -334,7 +377,7 @@ func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, err
 		if body == "" {
 			return nodeOutcome{}, fmt.Errorf("prompt node %q has no body configured", node.ID)
 		}
-		rendered := processTemplate(body, ctx.session.SessionData)
+		rendered := processTemplate(body, ctx.vars())
 		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, rendered); err != nil {
 			return nodeOutcome{}, fmt.Errorf("send prompt: %w", err)
 		}
@@ -413,7 +456,7 @@ func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOut
 	if errorMsg == "" {
 		errorMsg = "Invalid input. Please try again."
 	}
-	errorMsg = processTemplate(errorMsg, ctx.session.SessionData)
+	errorMsg = processTemplate(errorMsg, ctx.vars())
 	if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, errorMsg); err != nil {
 		return nodeOutcome{}, fmt.Errorf("send validation error: %w", err)
 	}
@@ -534,7 +577,7 @@ func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, 
 		return nodeOutcome{outcome: "false"}, nil
 	}
 
-	matched, err := evaluateConditionExpression(expression, ctx.session.SessionData)
+	matched, err := evaluateConditionExpression(expression, ctx.vars())
 	if err != nil {
 		a.Log.Warn("condition node expression failed",
 			"node", node.ID, "session", ctx.session.ID, "expression", expression, "error", err)
@@ -547,9 +590,15 @@ func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, 
 }
 
 // evaluateConditionExpression compiles + runs a boolean expression via
-// expr-lang/expr against SessionData. The result is coerced to bool —
+// expr-lang/expr against the flow's variables. The result is coerced to bool —
 // non-bool truthy values count as true (matches expr's natural casting).
-func evaluateConditionExpression(expression string, data models.JSONB) (bool, error) {
+//
+// The environment is the merged CRM namespace plus session data (plan 10, S6),
+// not session data alone. A flow could previously not ask "is this a VIP
+// customer?", because the tag lives on the contact and the contact was not in
+// scope — so authors duplicated CRM data into session variables and it went
+// stale the moment anybody edited the record.
+func evaluateConditionExpression(expression string, data map[string]any) (bool, error) {
 	env := make(map[string]any, len(data))
 	maps.Copy(env, data)
 
@@ -735,7 +784,7 @@ func (a *App) execChatAIResponse(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome,
 //	}
 func (a *App) execChatTransfer(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	if body := stringFromConfig(node.Config, "body", "message", "text"); body != "" {
-		message := processTemplate(body, ctx.session.SessionData)
+		message := processTemplate(body, ctx.vars())
 		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, message); err != nil {
 			a.Log.Error("transfer node failed to send body",
 				"node", node.ID, "session", ctx.session.ID, "error", err)
@@ -963,7 +1012,11 @@ func (a *App) execChatEnd(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error)
 // + dedicated columns. Called after every yield and on the completion path.
 func (a *App) persistChatSession(s *models.ChatbotSession) error {
 	s.LastActivityAt = time.Now()
-	if s.Status == models.SessionStatusCompleted && s.CompletedAt == nil {
+
+	// completed_at is stamped exactly once, which is also what makes it safe
+	// to key the completion event off: persist is called after every yield.
+	justCompleted := s.Status == models.SessionStatusCompleted && s.CompletedAt == nil
+	if justCompleted {
 		now := time.Now()
 		s.CompletedAt = &now
 	}
@@ -971,7 +1024,31 @@ func (a *App) persistChatSession(s *models.ChatbotSession) error {
 		a.Log.Error("persist chat session", "session", s.ID, "error", err)
 		return err
 	}
+
+	if justCompleted {
+		a.publishFlowCompleted(s)
+	}
 	return nil
+}
+
+// publishFlowCompleted announces that a chatbot flow finished (plan 10, S7).
+//
+// A qualification flow that collects a company and an email has done CRM work,
+// and nothing outside the chatbot could tell it had happened: the session row
+// changed status and that was all. This is the event a rule listens to when it
+// wants to act on what the flow collected.
+func (a *App) publishFlowCompleted(s *models.ChatbotSession) {
+	event := crmevents.New(s.OrganizationID, "chatbot.flow_completed",
+		crmevents.SystemActor(), map[string]any{
+			"session_id": s.ID.String(),
+		})
+	if s.CurrentFlowID != nil {
+		event.Data["flow_id"] = s.CurrentFlowID.String()
+	}
+	if s.ContactID != uuid.Nil {
+		event = event.ForContact(s.ContactID)
+	}
+	a.PublishEvent(event)
 }
 
 // appendChatPath records the executed node + outcome in SessionData["__path__"].

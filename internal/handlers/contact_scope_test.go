@@ -83,7 +83,7 @@ func TestListConversationNotes_AllowsAQueuedConversation(t *testing.T) {
 		OpenedAt:       time.Now(),
 	}
 	require.NoError(t, app.DB.Create(conv).Error)
-	require.NoError(t, app.DB.Model(conv).Update("bot_active", false).Error)
+	require.NoError(t, app.DB.Model(conv).Update("handling", models.HandlingNone).Error)
 
 	req := testutil.NewJSONRequest(t, nil)
 	testutil.SetAuthContext(req, org.ID, agent.ID)

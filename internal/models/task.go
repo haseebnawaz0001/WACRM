@@ -26,6 +26,8 @@ const (
 	TaskSourceAutomation = "automation"
 	TaskSourceAPI        = "api"
 	TaskSourceChatbot    = "chatbot"
+	// TaskSourceCall is a follow-up created from a call's outcome.
+	TaskSourceCall = "call"
 )
 
 // Built-in task type keys, seeded for every organization.
@@ -79,6 +81,10 @@ type Task struct {
 	ConversationID *uuid.UUID `gorm:"type:uuid" json:"conversation_id,omitempty"`
 	DealID         *uuid.UUID `gorm:"type:uuid;index" json:"deal_id,omitempty"`
 	MessageID      *uuid.UUID `gorm:"type:uuid" json:"message_id,omitempty"`
+	// CallLogID links a call-back to the call that caused it (plan 10, 4.4),
+	// so completing it from the call outcome dialog knows which task it is and
+	// the timeline can show the call and the follow-up as one thread.
+	CallLogID *uuid.UUID `gorm:"type:uuid;index" json:"call_log_id,omitempty"`
 
 	TypeID      uuid.UUID `gorm:"type:uuid;not null" json:"type_id"`
 	Title       string    `gorm:"size:255;not null" json:"title"`

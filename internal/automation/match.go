@@ -66,6 +66,24 @@ func MatchTrigger(rule *models.AutomationRule, event crmevents.Event) bool {
 			return false
 		}
 		return anyOrMember(cfg.Strings("to_stage_ids"), dataString(event, "stage_id"))
+
+	case "contact.lifecycle_stage_changed":
+		return anyOrMember(cfg.Strings("to"), dataString(event, "stage"))
+
+	case "call.missed", "call.completed":
+		// Direction matters: "we could not reach them" and "they could not
+		// reach us" call for opposite follow-ups.
+		return anyOrEquals(cfg.Str("direction"), dataString(event, "direction"))
+
+	case "chatbot.flow_completed":
+		return anyOrMember(cfg.Strings("flow_ids"), dataString(event, "flow_id"))
+
+	case "campaign.replied":
+		return anyOrMember(cfg.Strings("campaign_ids"), dataString(event, "campaign_id"))
+
+	case "conversation.sla_breached":
+		// A breach has nothing to narrow by: it already means one thing.
+		return true
 	}
 
 	// A time trigger's own job decides what matches; by the time a synthetic

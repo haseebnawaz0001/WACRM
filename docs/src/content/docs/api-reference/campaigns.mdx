@@ -219,17 +219,25 @@ total.
 
 ## Get Recipients
 
-Get all recipients of a campaign with their per-recipient delivery status. This
-endpoint returns the **full** recipient list for the campaign — it is not
-paginated.
+Get a campaign's recipients with their per-recipient delivery status.
 
 ```bash
 GET /api/campaigns/{id}/recipients
 ```
 
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default `1`) |
+| `limit` | integer | Page size, 1–200. Default `50` |
+| `status` | string | `pending`, `sent`, `delivered`, `read` or `failed` |
+
+The list is read to answer "who did not get it", which is what the `status` filter is for. It is paged because a campaign can hold hundreds of thousands of recipients.
+
 ### Response
 
-The `recipients` array holds every recipient; `total` is the count.
+`total` is the number matching the filter, not the size of the page.
 
 ```json
 {
@@ -251,7 +259,9 @@ The `recipients` array holds every recipient; `total` is the count.
         "read_at": "2024-01-01T10:05:00Z"
       }
     ],
-    "total": 1000
+    "total": 1000,
+    "page": 1,
+    "limit": 50
   }
 }
 ```
@@ -392,6 +402,106 @@ is convenient for polling while a campaign is sending.
 ```bash
 GET /api/campaigns/{id}/progress
 ```
+
+## Audience
+
+A campaign can be aimed at a **segment** instead of an uploaded recipient list.
+
+```bash
+PUT  /api/campaigns/{id}/audience
+POST /api/campaigns/{id}/audience/preview
+```
+
+```json
+{
+  "audience_type": "segment",
+  "segment_id": "…"
+}
+```
+
+The audience can only be set while the campaign is a draft or scheduled. Changing the aim after a send has started would mean the recipient list no longer matches what went out.
+
+### Materialisation
+
+Recipients are written when the campaign **starts**, not when the audience is set — from the manual button and from the scheduler alike. A campaign scheduled last week therefore goes to whoever matches today.
+
+The filter is snapshotted at the same moment, so "who did this go to, and why" survives later edits to the segment.
+
+### Preview
+
+```bash
+POST /api/campaigns/{id}/audience/preview
+```
+
+Returns the count, **who is being left out and why**, and ten rendered samples:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "count": 9410,
+    "excluded": {
+      "opted_out": 2980,
+      "invalid_phone": 12,
+      "duplicate": 8,
+      "recently_mailed": 140
+    },
+    "sample": [
+      { "contact_id": "…", "name": "Ayesha", "phone": "+923001234567", "preview": "Hi Ayesha, we have news." }
+    ]
+  }
+}
+```
+
+"12,400 contacts" and "12,400 minus 3,000 who opted out" are different decisions, which is why the exclusions are itemised rather than netted off.
+
+The samples are **rendered**, not the raw template: approving `Hi {{1}}` tells nobody what the customer will read.
+
+| Exclusion | Meaning |
+|---|---|
+| `opted_out` | Marketing opt-out. Applies to MARKETING templates only |
+| `invalid_phone` | The number does not normalise to anything sendable |
+| `duplicate` | Two contacts share a number; messaging the same person twice in one campaign is the visible failure |
+| `recently_mailed` | The organization's marketing frequency cap |
+
+### Marketing frequency cap
+
+An organization can set `marketing_frequency_cap_hours` in **Settings → General**. A contact who has received a marketing campaign within that window is excluded from the next one, across campaigns.
+
+It is **off by default**. Opt-out is the only protection a contact has otherwise, and it is all-or-nothing: somebody sent four marketing campaigns in a week has no way to ask for fewer without asking for none. It is not switched on for anyone automatically, because a number chosen on an organization's behalf would silently drop recipients from campaigns they had already approved.
+
+The cap applies to MARKETING templates only. A delivery notification or a one-time code is not what anybody means by "too many messages".
+
+It applies to **segment-targeted** campaigns. An uploaded recipient list is a list of numbers rather than of contacts, and a number that matches nothing in the CRM has no history to cap against.
+
+## Parameter mapping
+
+Instead of a value per recipient in a CSV, a campaign can map each of the template's parameters to a contact field:
+
+```json
+{
+  "param_mappings": {
+    "customer_name": { "source": "contact.name", "fallback": "there" },
+    "policy": { "source": "contact.fields.policy_number", "fallback": "—" },
+    "branch": { "source": "static", "value": "Lahore" }
+  }
+}
+```
+
+| Source | Resolves to |
+|---|---|
+| `contact.name` | The contact's name |
+| `contact.phone_number` | Their number |
+| `contact.fields.<key>` | A custom field |
+| `static` | The literal in `value`, the same for everyone |
+
+The sources are a closed list rather than an arbitrary path: a campaign renders for thousands of contacts at once, and a typo that silently produced empty values would be found by the recipients.
+
+Mappings are keyed by the **template's own parameter names**, so a template that gains a parameter does not shift every value along by one.
+
+`fallback` is what is sent when the source resolves to nothing. Meta rejects a send with an empty parameter, so without a fallback a contact missing a company name fails instead of sending — the fallback turns "this one recipient has a gap" into a message that still goes out.
+
+Validation reports **which** parameters a mapping does not cover, rather than refusing with "invalid", so the campaign screen can name them.
 
 ## Campaign Status
 

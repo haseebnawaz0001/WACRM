@@ -1,0 +1,207 @@
+---
+title: Conversations & Inbox
+description: Conversation state, the inbox views and read position
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Reading the inbox requires `chat:read`. Resolving, snoozing, reopening and marking pending require `chat:write`. Assigning a conversation to someone else requires `chat.assign:write`.
+</Aside>
+
+## Overview
+
+A **conversation** is one episode of talking to a contact — it opens when they write to you, and closes when somebody resolves it. A contact has at most one active conversation at a time, enforced by a unique index rather than by convention, so two agents cannot open two.
+
+Everything the inbox shows is derived from the conversation row: who is waiting, for how long, who owns it, and whether a human or the chatbot is answering.
+
+### Status
+
+| Status | Meaning |
+|---|---|
+| `open` | Needs attention from us — bot or human |
+| `pending` | We replied and are waiting on the customer |
+| `snoozed` | Hidden until `snoozed_until`, or until the customer writes again |
+| `resolved` | Done |
+
+Resolved is history, not inbox. It is excluded from inbox listings unless you ask for it by name.
+
+### Handling
+
+`status` says whether the conversation needs attention; `handling` says who is on it. They are separate because the old boolean could not tell "an agent owns it" from "nobody does".
+
+| Handling | Meaning |
+|---|---|
+| `bot` | The chatbot is answering, no human involved |
+| `human` | An agent or team owns it |
+| `none` | Nobody is on it |
+| `handoff_pending` | A handover was requested and did not land — suppressed out of hours, or no agent available |
+
+`handoff_pending` appears in **Unassigned**: the customer asked for a person and the request went nowhere, which is exactly a queue item.
+
+## List Inbox
+
+```bash
+GET /api/inbox
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `view` | string | `mine` (default), `unassigned`, `bot` or `all` |
+| `status` | string | One status. Omit it and resolved conversations are hidden |
+| `page` | integer | Page number (default `1`) |
+| `limit` | integer | Results per page |
+
+The views are not filters over the same set. `unassigned` excludes bot-handled conversations, because nobody is waiting on a person there; `bot` is only the ones the chatbot holds.
+
+An agent who cannot read every contact sees only the conversations for contacts they can see. The inbox is not a way around contact visibility.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "conversations": [
+      {
+        "id": "…",
+        "contact_id": "…",
+        "contact_name": "Ayesha",
+        "contact_phone": "+923001234567",
+        "last_message_preview": "Is it still available?",
+        "status": "open",
+        "handling": "none",
+        "assignee_id": "",
+        "team_id": "",
+        "whatsapp_account": "support",
+        "opened_at": "2026-09-17T08:00:00Z",
+        "last_message_at": "2026-09-17T09:14:00Z",
+        "waiting_since": "2026-09-17T09:14:00Z",
+        "first_response_at": null,
+        "message_count": 6,
+        "reopened_count": 0,
+        "bot_active": false
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50,
+    "view": "mine"
+  }
+}
+```
+
+`waiting_since` is when the customer last wrote without a reply — it is what a waiting-time badge should render, not `last_message_at`.
+
+`first_response_at` is stamped only by a message whose sender is an **agent**. A chatbot reply, an automation or a campaign does not count as a first response, which is what keeps the response-time reports honest.
+
+## Inbox Counts
+
+```bash
+GET /api/inbox/counts
+```
+
+Returns the badge count for every view in one grouped query, so a sidebar does not make four requests.
+
+```json
+{
+  "status": "success",
+  "data": { "mine": 4, "unassigned": 11, "bot": 3, "all": 18 }
+}
+```
+
+## Get a Contact's Conversation
+
+```bash
+GET /api/contacts/{id}/conversation
+```
+
+Returns the contact's active conversation, or `{"conversation": null}` if they have none. A contact who has never written has no conversation, which is a normal state rather than an error.
+
+## Resolve
+
+```bash
+POST /api/conversations/resolve
+```
+
+```json
+{
+  "contact_id": "…",
+  "reason": "answered"
+}
+```
+
+Resolving also ends the chatbot session, so a resolved conversation cannot keep being answered by the bot.
+
+## Snooze
+
+```bash
+POST /api/conversations/snooze
+```
+
+```json
+{
+  "contact_id": "…",
+  "until": "2026-09-18T09:00:00Z"
+}
+```
+
+A snoozed conversation comes back at `until`, and the person who snoozed it is notified. It also comes back immediately if the customer writes.
+
+## Mark Pending
+
+```bash
+POST /api/conversations/pending
+```
+
+Says "we answered, it is now with them". Pending conversations still count as active; they are simply not waiting on us.
+
+## Reopen
+
+```bash
+POST /api/conversations/reopen
+```
+
+Reopens a resolved conversation instead of starting a fresh one, so the history stays in one episode. `reopened_count` records how often that has happened — a conversation resolved and reopened four times is usually a conversation that was never actually resolved.
+
+## Assign
+
+```bash
+POST /api/conversations/assign
+```
+
+```json
+{
+  "contact_id": "…",
+  "assignee_id": "…",
+  "team_id": null
+}
+```
+
+Send `assignee_id: null` to unassign. Assigning a conversation does **not** change the contact's owner: ownership of a customer and ownership of one conversation are different things, and conflating them meant the owner silently changed every time a chat was handed over.
+
+Assignment is written to the audit log as `assigned`, against the conversation.
+
+## Read position
+
+```bash
+POST /api/contacts/{id}/mark-read
+```
+
+Read state is per user, not per conversation. Two agents looking at the same chat have their own unread counts, and the marker never moves backwards — re-opening an older message does not un-read the newer ones.
+
+A supervisor who can read every contact but is not the assignee is **peeking**: their opening the chat does not send WhatsApp read receipts to the customer, because a read receipt means "the person handling this has seen it".
+
+## Events
+
+| Event | Fires when |
+|---|---|
+| `conversation.created` | A new conversation opens |
+| `conversation.status_changed` | Resolved, snoozed, pending or reopened |
+| `conversation.assigned` | Assigned to an agent or team |
+| `conversation.sla_breached` | Passed its response deadline |
+| `conversation.sla_escalated` | Escalated after going unanswered |
+
+All five are available to webhooks and to automation triggers.

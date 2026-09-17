@@ -39,7 +39,9 @@ test.describe('Message Templates - List View', () => {
     const href = await navigateToFirstItem(page)
     if (href) {
       expect(page.url()).toMatch(/\/templates\/[a-f0-9-]+/)
-      await expect(page.getByText('Details')).toBeVisible()
+      // By role: a template left behind by another spec can have "details" in
+      // its name, and a page-wide text match then resolves to two elements.
+      await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible()
     }
   })
 

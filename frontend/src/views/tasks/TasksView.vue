@@ -55,7 +55,8 @@ const canWrite = computed(() => authStore.hasPermission('tasks', 'write'))
 
 async function fetchTasks() {
   try {
-    const { data } = await tasksService.list({ view: view.value, status: status.value, limit: 100 })
+    const { data: envelope } = await tasksService.list({ view: view.value, status: status.value, limit: 100 })
+    const data = (envelope as any)?.data ?? envelope
     tasks.value = data.tasks || []
     fetchError.value = false
   } catch {
@@ -69,7 +70,8 @@ watch([view, status], fetchTasks)
 
 async function fetchTypes() {
   try {
-    const { data } = await tasksService.types()
+    const { data: envelope } = await tasksService.types()
+    const data = (envelope as any)?.data ?? envelope
     types.value = data.task_types || []
   } catch {
     types.value = []
@@ -111,7 +113,8 @@ const searchContacts = useDebounceFn(async () => {
     return
   }
   try {
-    const { data } = await contactsService.list({ search: contactQuery.value, limit: 10 })
+    const { data: envelope } = await contactsService.list({ search: contactQuery.value, limit: 10 })
+    const data = (envelope as any)?.data ?? envelope
     contactResults.value = data.contacts || data || []
   } catch {
     contactResults.value = []

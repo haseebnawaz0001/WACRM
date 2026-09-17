@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/deals"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -302,6 +303,18 @@ func (a *App) DeleteStage(r *fastglue.Request) error {
 	}
 
 	moveTo, _ := optionalUUIDArg(r.RequestCtx.QueryArgs(), "move_deals_to")
+
+	// Segment filters and automation triggers can name a stage (plan 10, S8).
+	// Removing it silently leaves them matching nothing, which reads as "the
+	// rule stopped working" with no visible cause.
+	dependents, depErr := entityrefs.FindDependents(a.DB, orgID, stageID.String())
+	if depErr != nil {
+		a.Log.Error("Failed to check stage references", "error", depErr, "stage_id", stageID)
+	} else if len(dependents) > 0 && !boolParam(r, "force") {
+		return r.SendErrorEnvelope(fasthttp.StatusConflict,
+			"This stage is still used by "+entityrefs.DescribeDependents(dependents),
+			map[string]any{"dependents": dependents}, "")
+	}
 
 	if err := a.Deals().DeleteStage(context.Background(), orgID, stageID, moveTo); err != nil {
 		switch {

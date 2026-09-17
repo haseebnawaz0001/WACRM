@@ -15,7 +15,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  PageHeader, SearchInput, DataTable, ErrorState, FilterBuilder, type Column
+  PageHeader, SearchInput, DataTable, ErrorState, FilterBuilder,
+  CreateContactDialog, ImportExportDialog, type Column
 } from '@/components/shared'
 import {
   contactsService, contactFieldsService,
@@ -24,8 +25,9 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Contact as ContactIcon, SlidersHorizontal, X, ListChecks } from 'lucide-vue-next'
+import { Contact as ContactIcon, SlidersHorizontal, X, ListChecks, Plus, ArrowDownUp } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
+import { useListViewState, jsonFilterCodec } from '@/composables/useListViewState'
 import { formatDate } from '@/lib/utils'
 
 const { t } = useI18n()
@@ -40,18 +42,53 @@ const filterFields = ref<FilterFieldInfo[]>([])
 const isLoading = ref(true)
 const fetchError = ref(false)
 
-const searchQuery = ref('')
-const currentPage = ref(1)
+/**
+ * The list's state lives in the URL (plan 10, S12).
+ *
+ * A filtered contacts list was previously un-shareable — "the ones tagged VIP
+ * with no owner" could only be described in words — and was lost on every
+ * reload, which is the moment somebody most wants it back.
+ */
+const {
+  search: searchQuery,
+  sortKey,
+  sortDir: sortDirection,
+  page: currentPage,
+  filter: urlFilter
+} = useListViewState<FilterNode>({
+  defaultSortKey: 'last_message_at',
+  defaultSortDir: 'desc',
+  ...jsonFilterCodec<FilterNode>()
+})
+
 const totalItems = ref(0)
 const pageSize = 50
 
-const sortKey = ref('last_message_at')
-const sortDirection = ref<'asc' | 'desc'>('desc')
 
 const showFilters = ref(false)
-const filter = ref<FilterNode>({ op: 'and', rules: [] })
+// The FilterBuilder wants a concrete node; the URL carries null when there is
+// no filter, so the two are bridged rather than conflated.
+const filter = computed<FilterNode>({
+  get: () => urlFilter.value ?? { op: 'and', rules: [] },
+  set: value => {
+    urlFilter.value = value?.rules?.length ? value : null
+  }
+})
 
 const canManageFields = computed(() => authStore.hasPermission('contact_fields', 'write'))
+const canWrite = computed(() => authStore.hasPermission('contacts', 'write'))
+const canImportExport = computed(() => authStore.hasPermission('contacts', 'read'))
+
+const createOpen = ref(false)
+const importExportOpen = ref(false)
+
+/** A new contact goes straight to its profile: creating one is usually the
+ *  first step of working on it, not an end in itself. */
+function onContactCreated(contact: any) {
+  createOpen.value = false
+  void fetchContacts()
+  if (contact?.id) void router.push(`/contacts/${contact.id}`)
+}
 
 /** How many leaf conditions are set, for the badge on the Filters button. */
 const activeFilterCount = computed(() => countRules(filter.value))
@@ -181,8 +218,26 @@ onMounted(async () => {
             <ListChecks class="h-4 w-4 mr-2" />{{ $t('contactFields.title') }}
           </Button>
         </RouterLink>
+
+        <!-- Creating and importing moved here with the module (plan 01). They
+             lived on the Settings page that this replaced, and a Contacts
+             module you cannot add a contact to is not the Contacts module. -->
+        <Button v-if="canImportExport" variant="outline" size="sm" @click="importExportOpen = true">
+          <ArrowDownUp class="h-4 w-4 mr-2" />{{ $t('importExport.title') }}
+        </Button>
+        <Button v-if="canWrite" size="sm" @click="createOpen = true">
+          <Plus class="h-4 w-4 mr-2" />{{ $t('contacts.addContact') }}
+        </Button>
       </template>
     </PageHeader>
+
+    <CreateContactDialog v-model:open="createOpen" @created="onContactCreated" />
+    <ImportExportDialog
+      v-model:open="importExportOpen"
+      table="contacts"
+      :table-label="$t('resources.contacts')"
+      @imported="fetchContacts"
+    />
 
     <ErrorState
       v-if="fetchError && !isLoading"

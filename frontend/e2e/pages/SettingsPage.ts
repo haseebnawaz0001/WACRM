@@ -372,11 +372,20 @@ export class CannedResponsesPage extends TableSettingsPage {
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 
+  /**
+   * Search first, then assert.
+   *
+   * The list is paged at twenty and ordered by usage, so a freshly created
+   * response sits at the back and falls off page one as soon as an
+   * organization has a few dozen. Searching is also what a person does.
+   */
   async expectResponseExists(name: string) {
+    await this.search(name)
     await expect(this.getResponseRow(name)).toBeVisible()
   }
 
   async expectResponseNotExists(name: string) {
+    await this.search(name)
     await expect(this.getResponseRow(name)).not.toBeVisible()
   }
 }
@@ -490,13 +499,15 @@ export class ContactsPage extends TableSettingsPage {
   readonly importExportDialog: Locator
 
   constructor(page: Page) {
-    super(page, { headingText: 'Contacts', addButtonText: 'Add Contact' })
+    // Contacts is its own module now, not a Settings child (plan 01). The
+    // page object keeps its name so every caller does not move with it.
+    super(page, { headingText: 'Contacts', addButtonText: 'Add contact' })
     this.importExportButton = page.getByRole('button', { name: /Import.*Export/i })
     this.importExportDialog = page.locator('[role="dialog"][data-state="open"]')
   }
 
   async goto() {
-    await this.page.goto('/settings/contacts')
+    await this.page.goto('/contacts')
     await this.page.waitForLoadState('networkidle')
   }
 

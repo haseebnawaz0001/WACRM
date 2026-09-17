@@ -24,8 +24,10 @@ import {
   reportsService,
   type ContactsBySourceReport, type LifecycleFunnelReport,
   type PipelineFunnelReport, type PipelineForecastReport,
-  type AgentPerformanceReport, type TaskAgentRow
+  type AgentPerformanceReport, type TaskAgentRow,
+  type CampaignRepliesReport
 } from '@/services/api'
+import { unwrapResponse, unwrapListResponse } from '@/lib/api-utils'
 import { useAuthStore } from '@/stores/auth'
 import { PieChart, Download } from 'lucide-vue-next'
 
@@ -41,6 +43,7 @@ const agents = ref<AgentPerformanceReport | null>(null)
 const tasks = ref<TaskAgentRow[]>([])
 const pipeline = ref<PipelineFunnelReport | null>(null)
 const forecast = ref<PipelineForecastReport | null>(null)
+const campaigns = ref<CampaignRepliesReport | null>(null)
 
 const isLoading = ref(true)
 const fetchError = ref(false)
@@ -60,16 +63,20 @@ function isoDaysAgo(days: number): string {
 async function load() {
   isLoading.value = true
   try {
-    const [contactsResult, lifecycleResult, agentsResult, tasksResult] = await Promise.all([
+    const [contactsResult, lifecycleResult, agentsResult, tasksResult, campaignsResult] = await Promise.all([
       reportsService.contactsBySource(range.value),
       reportsService.lifecycleFunnel(range.value),
       reportsService.agentPerformance(range.value),
-      reportsService.tasksByAgent(range.value)
+      reportsService.tasksByAgent(range.value),
+      reportsService.campaignReplies(range.value)
     ])
-    contacts.value = contactsResult.data
-    lifecycle.value = lifecycleResult.data
-    agents.value = agentsResult.data
-    tasks.value = tasksResult.data.rows || []
+    // Every response is { status, data: … }; reading `.data` off the axios
+    // response yields that envelope, not the report.
+    contacts.value = unwrapResponse<ContactsBySourceReport>(contactsResult)
+    lifecycle.value = unwrapResponse<LifecycleFunnelReport>(lifecycleResult)
+    agents.value = unwrapResponse<AgentPerformanceReport>(agentsResult)
+    tasks.value = unwrapListResponse<TaskAgentRow>(tasksResult, 'rows')
+    campaigns.value = unwrapResponse<CampaignRepliesReport>(campaignsResult)
     fetchError.value = false
   } catch {
     fetchError.value = true
@@ -83,8 +90,8 @@ async function load() {
       reportsService.pipelineFunnel(range.value),
       reportsService.pipelineForecast({ ...range.value, months: 6 })
     ])
-    pipeline.value = funnelResult.data
-    forecast.value = forecastResult.data
+    pipeline.value = unwrapResponse<PipelineFunnelReport>(funnelResult)
+    forecast.value = unwrapResponse<PipelineForecastReport>(forecastResult)
     pipelineAvailable.value = true
   } catch {
     // No pipeline configured is not an error, just a tab worth hiding.
@@ -172,6 +179,43 @@ onMounted(load)
 
       <!-- Overview -->
       <TabsContent value="overview" class="space-y-4">
+        <!-- R6: did the campaign work, as opposed to arrive (plan 09)? -->
+        <Card>
+          <CardHeader class="flex-row items-center justify-between space-y-0">
+            <CardTitle class="text-base">{{ t('crmReports.campaignReplies') }}</CardTitle>
+            <Button v-if="canExport" variant="ghost" size="sm" @click="download('campaign-replies')">
+              <Download class="mr-1.5 h-4 w-4" />
+              {{ t('crmReports.export') }}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <p v-if="!campaigns?.rows?.length" class="text-sm text-muted-foreground">
+              {{ t('crmReports.noCampaigns') }}
+            </p>
+            <template v-else>
+              <table class="w-full text-sm">
+                <thead class="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th class="pb-2 font-medium">{{ t('crmReports.campaign') }}</th>
+                    <th class="pb-2 text-right font-medium">{{ t('crmReports.delivered') }}</th>
+                    <th class="pb-2 text-right font-medium">{{ t('crmReports.replied') }}</th>
+                    <th class="pb-2 text-right font-medium">{{ t('crmReports.replyRate') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in campaigns.rows" :key="row.campaign_id" class="border-t">
+                    <td class="py-2">{{ row.name }}</td>
+                    <td class="py-2 text-right">{{ row.delivered }}</td>
+                    <td class="py-2 text-right">{{ row.replied }}</td>
+                    <td class="py-2 text-right">{{ row.reply_rate.toFixed(1) }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="mt-3 text-xs text-muted-foreground">{{ campaigns.counting_rule }}</p>
+            </template>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader class="flex-row items-center justify-between space-y-0">
             <CardTitle class="text-base">{{ t('crmReports.contactsBySource') }}</CardTitle>

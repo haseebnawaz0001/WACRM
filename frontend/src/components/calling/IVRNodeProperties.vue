@@ -11,6 +11,10 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { FilterBuilder } from '@/components/shared'
+import { contactsService, type FilterFieldInfo } from '@/services/api'
+import { unwrapListResponse } from '@/lib/api-utils'
+import { onMounted } from 'vue'
 import { Trash2, Plus, Upload, Play, Pause, X, Loader2, Type } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
@@ -51,6 +55,27 @@ function updateConfigEntries(entries: Record<string, any>) {
 function updateLabel(label: string) {
   emit('update:node', { ...props.node, label })
 }
+
+// A CRM condition routes on what the CRM knows about the caller, using the same
+// filter the contacts list, segments and automation use — so "tagged VIP" means
+// one thing across the product rather than four.
+const filterFields = ref<FilterFieldInfo[]>([])
+
+const crmFilter = computed({
+  get: () => props.node.config?.filter || { op: 'and', children: [] },
+  set: (value: any) => updateConfig('filter', value)
+})
+
+onMounted(async () => {
+  try {
+    filterFields.value = unwrapListResponse<FilterFieldInfo>(
+      await contactsService.filterFields(), 'fields'
+    )
+  } catch {
+    // A picker with no fields is still usable for the conditions already saved.
+    filterFields.value = []
+  }
+})
 
 // Audio upload state
 const audioFileInput = ref<HTMLInputElement | null>(null)
@@ -499,6 +524,17 @@ const greetingTab = computed(() =>
             </SelectItem>
           </SelectContent>
         </Select>
+      </div>
+    </template>
+
+    <!-- CRM condition: route on what we know about the caller -->
+    <template v-if="node.type === 'crm_condition'">
+      <div class="space-y-1.5">
+        <Label class="text-xs">Only if the caller matches</Label>
+        <FilterBuilder v-model="crmFilter" :fields="filterFields" />
+        <p class="text-[11px] text-muted-foreground">
+          A caller we do not recognise takes the <strong>No match</strong> path.
+        </p>
       </div>
     </template>
 

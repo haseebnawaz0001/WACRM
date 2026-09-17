@@ -1,0 +1,213 @@
+---
+title: Deals & Pipelines
+description: Sales pipelines, stages and the deals moving through them
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Deals require `deals:read`, `deals:write` and `deals:delete`; pipelines and their stages require `pipelines:read`, `pipelines:write` and `pipelines:delete`. A user who cannot read every contact sees their own deals and the deals on contacts they can see.
+</Aside>
+
+## Overview
+
+A **pipeline** is a sequence of stages; a **deal** is one thing moving through it. Not every organization sells: the object can be relabelled, so the same machinery serves a "Case" queue or a "Booking" board.
+
+Every organization gets a default pipeline with a seeded set of stages.
+
+### Stage types
+
+A stage is `open`, `won` or `lost`. **The deal's status mirrors its stage**, so moving a deal to a won stage closes it and moving it back out reopens it and clears the close. Status was previously a second thing to remember, which meant boards full of deals sitting in "Won" while still marked open.
+
+### Rotting
+
+`rotting` is derived from the stage's `rotting_days` and how long the deal has sat there. Nothing writes it, so it cannot be stale.
+
+## List Pipelines
+
+```bash
+GET /api/pipelines
+```
+
+Returns pipelines with their stages in order.
+
+## Create / Update Pipeline
+
+```bash
+POST /api/pipelines
+PUT /api/pipelines/{id}
+```
+
+```json
+{
+  "name": "Sales",
+  "object_label_singular": "Deal",
+  "object_label_plural": "Deals",
+  "currency": "PKR",
+  "is_default": true,
+  "position": 0
+}
+```
+
+## Stages
+
+```bash
+POST /api/pipelines/{id}/stages
+PUT  /api/pipeline-stages/{id}
+PUT  /api/pipelines/{id}/stages/reorder
+DELETE /api/pipeline-stages/{id}
+```
+
+```json
+{
+  "name": "Qualified",
+  "stage_type": "open",
+  "probability": 40,
+  "color": "blue",
+  "rotting_days": 14,
+  "position": 2
+}
+```
+
+Reordering takes the full order at once:
+
+```json
+{ "stage_ids": ["…", "…", "…"] }
+```
+
+Deleting a stage that still holds deals requires saying where they go:
+
+```bash
+DELETE /api/pipeline-stages/{id}?move_deals_to={other_stage_id}
+```
+
+Deleting a stage that a saved segment or automation names is refused with `409` and the dependents are listed; `?force=1` overrides.
+
+## The Board
+
+```bash
+GET /api/pipelines/{id}/board
+```
+
+Returns one column per stage with its totals and the first page of deals.
+
+```json
+{
+  "status": "success",
+  "data": {
+    "columns": [
+      {
+        "stage": { "id": "…", "name": "Qualified", "stage_type": "open", "probability": 40 },
+        "count": 12,
+        "total_value": 480000,
+        "weighted_value": 192000,
+        "deals": [ /* … */ ],
+        "has_more": true
+      }
+    ]
+  }
+}
+```
+
+`weighted_value` applies the stage probability. A column continues with:
+
+```bash
+GET /api/pipelines/{id}/stages/{stageId}/deals
+```
+
+which is keyset-paged on `?cursor=` — a long column loads without re-reading what is already on screen, and a deal added while somebody scrolls does not shift the next page.
+
+## List Deals
+
+```bash
+GET /api/deals
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `pipeline_id` | uuid | Restrict to one pipeline |
+| `status` | string | `open`, `won` or `lost` |
+| `owner_id` | uuid | Restrict to one owner |
+| `contact_id` | uuid | Restrict to one contact |
+
+## Create Deal
+
+```bash
+POST /api/deals
+```
+
+```json
+{
+  "contact_id": "…",
+  "pipeline_id": "",
+  "stage_id": "",
+  "conversation_id": "",
+  "title": "Annual renewal",
+  "value": 120000,
+  "currency": "PKR",
+  "owner_id": "",
+  "expected_close_date": "2026-10-31T00:00:00Z"
+}
+```
+
+Leave `pipeline_id` empty for the default pipeline and `stage_id` empty for its first open stage. Leave `owner_id` empty and the deal is owned by the contact's owner — the person already dealing with them.
+
+## Update Deal
+
+```bash
+PUT /api/deals/{id}
+```
+
+Only the fields present are changed. `lost_reason` is what the pipeline report groups lost deals by — a board full of lost deals with no reasons cannot answer the only question worth asking about them.
+
+## Move Deal
+
+```bash
+POST /api/deals/{id}/move
+```
+
+```json
+{
+  "stage_id": "…",
+  "before_id": "…",
+  "after_id": "…",
+  "lost_reason": ""
+}
+```
+
+`before_id` and `after_id` are the neighbours the card was dropped between. Moving into a lost stage requires `lost_reason`.
+
+Ordering within a column uses a fractional key, so a drag writes **one** row rather than renumbering the column.
+
+## Stage History
+
+```bash
+GET /api/deals/{id}/history
+```
+
+Every stage a deal has been in, with how long it stayed. This is what "median time in stage" in the pipeline report is computed from.
+
+## Contact's Deals
+
+```bash
+GET /api/contacts/{id}/deals
+```
+
+## Filtering contacts by deal
+
+`deal.has_open`, `deal.stage_id`, `deal.pipeline_id` and `deal.status` are registered contact filter fields, so a segment can be "contacts with an open deal in Qualified". They are evaluated as an existence check, so a contact with four deals is listed once.
+
+## Events
+
+| Event | Fires when |
+|---|---|
+| `deal.created` | A deal is added to a pipeline |
+| `deal.updated` | A deal's details change |
+| `deal.stage_changed` | A deal moves to another stage |
+| `deal.won` | A deal is marked won |
+| `deal.lost` | A deal is marked lost |
+| `deal.deleted` | A deal is deleted |
+
+The board also broadcasts `deal_updated` over the websocket, carrying ids only — the client re-reads what it needs, so a stale payload cannot overwrite a newer edit.

@@ -96,6 +96,9 @@ const (
 	IVRNodeTransfer     IVRNodeType = "transfer"
 	IVRNodeGotoFlow     IVRNodeType = "goto_flow"
 	IVRNodeTiming       IVRNodeType = "timing"
+	// IVRNodeCRMCondition branches on what the CRM knows about the caller
+	// (plan 10, 4.4).
+	IVRNodeCRMCondition IVRNodeType = "crm_condition"
 	IVRNodeHangup       IVRNodeType = "hangup"
 )
 
@@ -145,7 +148,22 @@ type Manager struct {
 	s3       *storage.S3Client // nil when recording is disabled
 	redis    *redis.Client
 	assigner *assignment.Assigner
+	matcher  ContactMatcher
 }
+
+// ContactMatcher answers whether a contact matches a saved filter.
+//
+// An interface rather than a direct call: compiling the filter needs the
+// organization's custom fields, pipeline stages and saved segments, which live
+// in packages this one cannot import without a cycle. The same shape as the
+// automation engine's Messenger and Assigner.
+type ContactMatcher interface {
+	Matches(ctx context.Context, orgID, contactID uuid.UUID, filter map[string]any) (bool, error)
+}
+
+// SetContactMatcher supplies the filter evaluator. Without one, a CRM condition
+// node takes its no_match edge rather than failing the call.
+func (m *Manager) SetContactMatcher(matcher ContactMatcher) { m.matcher = matcher }
 
 // NewManager creates a new call session manager
 func NewManager(cfg *config.CallingConfig, s3Client *storage.S3Client, db *gorm.DB, rd *redis.Client, waClient *whatsapp.Client, wsHub *websocket.Hub, assigner *assignment.Assigner, log logf.Logger) *Manager {
@@ -453,6 +471,11 @@ func (m *Manager) cleanupSession(callID string) {
 	if callerRec != nil || agentRec != nil {
 		go m.finalizeRecording(orgID, callLogID, callerRec, agentRec)
 	}
+
+	// Tell the rest of the product how the call ended (plan 10, §4.4). Until
+	// this existed, a missed call left a row nobody was watching: no timeline
+	// entry, no webhook, and no way to create the callback task automatically.
+	m.publishCallOutcome(callLogID)
 
 	m.log.Info("Call session cleaned up", "call_id", callID)
 }

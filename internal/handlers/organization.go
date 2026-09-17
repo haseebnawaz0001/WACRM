@@ -28,13 +28,14 @@ func generalSettingsSnapshot(name string, settings models.JSONB) map[string]any 
 		}
 	}
 	return map[string]any{
-		"name":                name,
-		"timezone":            settings["timezone"],
-		"date_format":         settings["date_format"],
-		"mask_phone_numbers":  settings["mask_phone_numbers"],
-		"meta_app_id":         settings["meta_app_id"],
-		"meta_config_id":      settings["meta_config_id"],
-		"has_meta_app_secret": hasSecret,
+		"name":                       name,
+		"timezone":                   settings["timezone"],
+		"date_format":                settings["date_format"],
+		"mask_phone_numbers":         settings["mask_phone_numbers"],
+		"meta_app_id":                settings["meta_app_id"],
+		"meta_config_id":             settings["meta_config_id"],
+		"has_meta_app_secret":        hasSecret,
+		marketingFrequencyCapSetting: settings[marketingFrequencyCapSetting],
 	}
 }
 
@@ -63,6 +64,35 @@ type OrganizationSettings struct {
 	MetaAppID           string `json:"meta_app_id"`
 	MetaConfigID        string `json:"meta_config_id"`
 	HasMetaAppSecret    bool   `json:"has_meta_app_secret"`
+
+	// MarketingFrequencyCapHours bounds how often one contact may receive a
+	// marketing campaign. 0 is off, and is the default: opt-out is the only
+	// protection today and it is all-or-nothing, but a cap chosen on an
+	// organization's behalf would drop recipients from campaigns they had
+	// already approved.
+	MarketingFrequencyCapHours int `json:"marketing_frequency_cap_hours"`
+
+	// Inbox holds the conversation rules (plan 10, S5 / 4.8). They live under
+	// settings.inbox rather than in the chatbot settings, because closing a
+	// stale conversation is an inbox decision and used to require the SLA
+	// feature to be switched on.
+	Inbox InboxSettings `json:"inbox"`
+}
+
+// InboxSettings are the conversation lifecycle rules, in hours.
+type InboxSettings struct {
+	// ReopenWindowHours: a customer message this soon after resolution
+	// reopens the same conversation instead of starting a new one.
+	ReopenWindowHours float64 `json:"reopen_window_hours"`
+	// AutoResolveIdleHours closes a conversation nothing has happened in.
+	// Zero means never.
+	AutoResolveIdleHours float64 `json:"auto_resolve_idle_hours"`
+	// PendingTimeoutHours closes a conversation waiting on the customer.
+	// Zero means never.
+	PendingTimeoutHours float64 `json:"pending_timeout_hours"`
+	// AutoPendingOnAgentReply moves a conversation to Pending when an agent
+	// replies, so "Open" means "waiting on us".
+	AutoPendingOnAgentReply bool `json:"auto_pending_on_agent_reply"`
 }
 
 // GetOrganizationSettings returns the organization settings
@@ -99,6 +129,9 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		if v, ok := org.Settings["date_format"].(string); ok && v != "" {
 			settings.DateFormat = v
 		}
+		if v, ok := org.Settings[marketingFrequencyCapSetting].(float64); ok && v > 0 {
+			settings.MarketingFrequencyCapHours = int(v)
+		}
 		if v, ok := org.Settings["calling_enabled"].(bool); ok {
 			settings.CallingEnabled = v
 		}
@@ -125,6 +158,16 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		}
 	}
 
+	// The inbox rules come back through the same resolver the conversation
+	// service uses, so the screen cannot disagree with the behaviour.
+	inbox := a.inboxSettings(orgID)
+	settings.Inbox = InboxSettings{
+		ReopenWindowHours:       inbox.ReopenWindow.Hours(),
+		AutoResolveIdleHours:    inbox.AutoResolveIdle.Hours(),
+		PendingTimeoutHours:     inbox.PendingTimeout.Hours(),
+		AutoPendingOnAgentReply: inbox.AutoPendingOnAgentReply,
+	}
+
 	return r.SendEnvelope(map[string]any{
 		"settings": settings,
 		"name":     org.Name,
@@ -139,18 +182,24 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		MaskPhoneNumbers    *bool   `json:"mask_phone_numbers"`
-		Timezone            *string `json:"timezone"`
-		DateFormat          *string `json:"date_format"`
-		Name                *string `json:"name"`
-		CallingEnabled      *bool   `json:"calling_enabled"`
-		MaxCallDuration     *int    `json:"max_call_duration"`
-		TransferTimeoutSecs *int    `json:"transfer_timeout_secs"`
-		HoldMusicFile       *string `json:"hold_music_file"`
-		RingbackFile        *string `json:"ringback_file"`
-		MetaAppID           *string `json:"meta_app_id"`
-		MetaConfigID        *string `json:"meta_config_id"`
-		MetaAppSecret       *string `json:"meta_app_secret"`
+		MaskPhoneNumbers    *bool          `json:"mask_phone_numbers"`
+		Timezone            *string        `json:"timezone"`
+		DateFormat          *string        `json:"date_format"`
+		Name                *string        `json:"name"`
+		CallingEnabled      *bool          `json:"calling_enabled"`
+		MaxCallDuration     *int           `json:"max_call_duration"`
+		TransferTimeoutSecs *int           `json:"transfer_timeout_secs"`
+		HoldMusicFile       *string        `json:"hold_music_file"`
+		RingbackFile        *string        `json:"ringback_file"`
+		MetaAppID           *string        `json:"meta_app_id"`
+		MetaConfigID        *string        `json:"meta_config_id"`
+		MetaAppSecret       *string        `json:"meta_app_secret"`
+		Inbox               *InboxSettings `json:"inbox"`
+		// MarketingFrequencyCapHours bounds how often one contact may receive
+		// a marketing campaign, in hours. 0 turns it off, which is the
+		// default: a number chosen on an organization's behalf would silently
+		// drop recipients from campaigns they had already approved.
+		MarketingFrequencyCapHours *int `json:"marketing_frequency_cap_hours"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -175,7 +224,7 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	oldCalling := callingSettingsSnapshot(org.Settings)
 
 	// Track which tabs received updates so we only audit the relevant ones.
-	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched
+	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched || req.MarketingFrequencyCapHours != nil
 	callingTouched := req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil || req.HoldMusicFile != nil || req.RingbackFile != nil
 
 	// Update settings
@@ -191,6 +240,9 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	}
 	if req.DateFormat != nil {
 		org.Settings["date_format"] = *req.DateFormat
+	}
+	if req.MarketingFrequencyCapHours != nil && *req.MarketingFrequencyCapHours >= 0 {
+		org.Settings[marketingFrequencyCapSetting] = *req.MarketingFrequencyCapHours
 	}
 	if req.CallingEnabled != nil {
 		org.Settings["calling_enabled"] = *req.CallingEnabled
@@ -220,6 +272,18 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 		}
 		org.Settings["meta_app_secret_encrypted"] = encSecret
+	}
+	if req.Inbox != nil {
+		if req.Inbox.ReopenWindowHours < 0 || req.Inbox.AutoResolveIdleHours < 0 || req.Inbox.PendingTimeoutHours < 0 {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+				"Inbox durations cannot be negative", nil, "")
+		}
+		org.Settings["inbox"] = map[string]any{
+			"reopen_window_hours":         req.Inbox.ReopenWindowHours,
+			"auto_resolve_idle_hours":     req.Inbox.AutoResolveIdleHours,
+			"pending_timeout_hours":       req.Inbox.PendingTimeoutHours,
+			"auto_pending_on_agent_reply": req.Inbox.AutoPendingOnAgentReply,
+		}
 	}
 	if req.Name != nil && *req.Name != "" {
 		org.Name = *req.Name

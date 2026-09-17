@@ -174,3 +174,135 @@ func TestResourceTypesAreSortedByLabel(t *testing.T) {
 		assert.LessOrEqual(t, types[i-1].Label, types[i].Label)
 	}
 }
+
+// modelsAuditActionConstants reads models.AuditAction* so a call site written
+// as models.AuditActionMerged resolves to the verb it stores.
+func modelsAuditActionConstants(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+
+	modelsDir := filepath.Join(root, "internal", "models")
+	entries, err := os.ReadDir(modelsDir)
+	require.NoError(t, err)
+
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, filepath.Join(modelsDir, entry.Name()), nil, 0)
+		require.NoError(t, err)
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			spec, ok := n.(*ast.ValueSpec)
+			if !ok {
+				return true
+			}
+			for i, name := range spec.Names {
+				if !strings.HasPrefix(name.Name, "AuditAction") || i >= len(spec.Values) {
+					continue
+				}
+				if lit, ok := spec.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					if value, err := strconv.Unquote(lit.Value); err == nil {
+						out[name.Name] = value
+					}
+				}
+			}
+			return true
+		})
+	}
+	return out
+}
+
+// auditedActions reads every logAudit / LogAudit call site and returns the verb
+// each one writes.
+func auditedActions(t *testing.T, root string, consts map[string]string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+
+	fset := token.NewFileSet()
+	err := filepath.Walk(filepath.Join(root, "internal"), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return parseErr
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+
+			// a.logAudit(orgID, userID, resourceType, resourceID, action, ...)
+			// audit.LogAudit(db, orgID, userID, userName, resourceType, resourceID, action, ...)
+			var argIndex int
+			switch sel.Sel.Name {
+			case "logAudit":
+				argIndex = 4
+			case "LogAudit":
+				argIndex = 6
+			default:
+				return true
+			}
+			if len(call.Args) <= argIndex {
+				return true
+			}
+
+			where := fset.Position(call.Pos()).String()
+			switch arg := call.Args[argIndex].(type) {
+			case *ast.BasicLit:
+				if arg.Kind == token.STRING {
+					if value, err := strconv.Unquote(arg.Value); err == nil {
+						out[value] = where
+					}
+				}
+			case *ast.SelectorExpr:
+				if value, known := consts[arg.Sel.Name]; known {
+					out[value] = where
+				}
+			}
+			return true
+		})
+		return nil
+	})
+	require.NoError(t, err)
+	return out
+}
+
+// The action filter is a projection of what the server writes, for the same
+// reason the resource filter is (plan 10, 4.10). A merge, an assignment, a
+// campaign start and an import are the changes people come to an audit log to
+// find; recording them as "updated" makes them indistinguishable from a rename.
+func TestActionCatalogCoversEveryAuditedAction(t *testing.T) {
+	root := repoRoot(t)
+	consts := modelsAuditActionConstants(t, root)
+	audited := auditedActions(t, root, consts)
+
+	require.NotEmpty(t, audited, "the scan must find the audit call sites at all")
+
+	for action, where := range audited {
+		assert.True(t, audit.KnownAction(action),
+			"%s is written to the audit log at %s but is not in the catalog, so it cannot be filtered for",
+			action, where)
+	}
+}
+
+// The reverse: an action nothing writes is a filter that always comes back
+// empty, which reads as "this never happens" rather than "this is not audited".
+func TestActionCatalogHasNoVerbsNobodyWrites(t *testing.T) {
+	root := repoRoot(t)
+	consts := modelsAuditActionConstants(t, root)
+	audited := auditedActions(t, root, consts)
+
+	for _, action := range audit.Actions() {
+		assert.Contains(t, audited, action.Value,
+			"%q is offered in the audit filter but nothing writes it", action.Value)
+	}
+}

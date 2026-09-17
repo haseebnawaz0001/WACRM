@@ -66,7 +66,8 @@ const objectPlural = computed(() => pipeline.value?.object_label_plural || t('pi
 
 async function fetchPipelines() {
   try {
-    const { data } = await pipelinesService.list()
+    const { data: envelope } = await pipelinesService.list()
+    const data = (envelope as any)?.data ?? envelope
     pipelines.value = data.pipelines || []
     if (pipelines.value.length && !pipeline.value) {
       pipeline.value = pipelines.value.find(p => p.is_default) || pipelines.value[0]
@@ -82,11 +83,12 @@ async function fetchBoard() {
     return
   }
   try {
-    const { data } = await pipelinesService.board(pipeline.value.id, {
+    const { data: envelope } = await pipelinesService.board(pipeline.value.id, {
       search: search.value || undefined,
       owner_id: ownerFilter.value === 'me' ? 'me' : undefined,
       status: statusFilter.value
     })
+    const data = (envelope as any)?.data ?? envelope
     pipeline.value = data.pipeline
     columns.value = data.columns || []
     fetchError.value = false
@@ -152,12 +154,13 @@ function cancelLoss() {
 
 async function commitMove(deal: Deal, stageId: string, before?: string, after?: string, lostReasonText?: string) {
   try {
-    const { data } = await dealsService.move(deal.id, {
+    const { data: envelope } = await dealsService.move(deal.id, {
       stage_id: stageId,
       before_id: before,
       after_id: after,
       lost_reason: lostReasonText
     })
+    const data = (envelope as any)?.data ?? envelope
     Object.assign(deal, data.deal)
     recountColumns()
   } catch (error: any) {
@@ -179,11 +182,12 @@ async function loadMore(column: BoardColumn) {
   if (!pipeline.value || !column.deals.length) return
   const cursor = column.deals[column.deals.length - 1].board_position
   try {
-    const { data } = await pipelinesService.stageDeals(pipeline.value.id, column.stage.id, cursor, {
+    const { data: envelope } = await pipelinesService.stageDeals(pipeline.value.id, column.stage.id, cursor, {
       search: search.value || undefined,
       owner_id: ownerFilter.value === 'me' ? 'me' : undefined,
       status: statusFilter.value
     })
+    const data = (envelope as any)?.data ?? envelope
     column.deals.push(...(data.deals || []))
     column.has_more = data.has_more
   } catch {
@@ -226,7 +230,8 @@ const searchContacts = useDebounceFn(async () => {
     return
   }
   try {
-    const { data } = await contactsService.list({ search: contactQuery.value, limit: 10 })
+    const { data: envelope } = await contactsService.list({ search: contactQuery.value, limit: 10 })
+    const data = (envelope as any)?.data ?? envelope
     contactResults.value = data.contacts || data || []
   } catch {
     contactResults.value = []
@@ -271,15 +276,34 @@ function money(value: number) {
 }
 
 let unsubscribe: (() => void) | null = null
+let unwatchBoard: (() => void) | null = null
+
+/**
+ * Watch the pipeline currently on screen (plan 10, S10).
+ *
+ * A board is a shared surface: two people move cards on it at once, and one
+ * of them used to see yesterday's arrangement until they reloaded. The topic
+ * carries ids only, so the client refetches what it is allowed to read.
+ */
+function watchBoardTopic(pipelineId: string) {
+  unwatchBoard?.()
+  unwatchBoard = wsService.subscribeTopics([`board:${pipelineId}`])
+}
+
+watch(() => pipeline.value?.id, id => {
+  if (id) watchBoardTopic(id)
+})
 
 onMounted(async () => {
   await fetchPipelines()
   await fetchBoard()
+  if (pipeline.value?.id) watchBoardTopic(pipeline.value.id)
   unsubscribe = wsService.subscribe('deal_updated', onDealUpdated)
 })
 
 onUnmounted(() => {
   unsubscribe?.()
+  unwatchBoard?.()
 })
 </script>
 

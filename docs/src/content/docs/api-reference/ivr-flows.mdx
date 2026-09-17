@@ -47,9 +47,34 @@ Each **node** has the shape:
 | `transfer` | Route the call to an agent team |
 | `goto_flow` | Jump to another IVR flow (terminal) |
 | `timing` | Branch on business hours |
+| `crm_condition` | Branch on what the CRM knows about the caller |
 | `hangup` | End the call (terminal) |
 
-**Edge conditions** select which outgoing edge is followed: `default`, `digit:N` (e.g. `digit:1`), `timeout`, `max_retries`, `http:2xx`, `http:non2xx`, `in_hours`, `out_of_hours`. Terminal nodes (`goto_flow`, `hangup`) must not have outgoing edges.
+**Edge conditions** select which outgoing edge is followed: `default`, `digit:N` (e.g. `digit:1`), `timeout`, `max_retries`, `http:2xx`, `http:non2xx`, `in_hours`, `out_of_hours`, `match`, `no_match`. Terminal nodes (`goto_flow`, `hangup`) must not have outgoing edges.
+
+### CRM condition
+
+Routing on keypresses alone means a customer worth keeping navigates the same three menus as everybody else. A `crm_condition` node carries a contact filter — the same one the contacts list, segments and automation use, so "tagged VIP" means one thing across the product:
+
+```json
+{
+  "id": "vip-check",
+  "type": "crm_condition",
+  "label": "VIP?",
+  "config": {
+    "filter": {
+      "op": "and",
+      "children": [
+        { "field": "tags", "operator": "has_any", "value": ["VIP"] }
+      ]
+    }
+  }
+}
+```
+
+It follows the `match` edge when the caller matches and `no_match` otherwise. **`no_match` is also where an unknown caller, an unconfigured node and a failed lookup go.** A call is in progress and has to keep moving, and treating any of those as a match would route a stranger to the account manager.
+
+`GET /api/contacts/filter-fields` lists every field a condition may name, including custom fields, deal state and saved segments.
 
 <Aside type="tip">
   If text-to-speech is configured on the server, any node with a non-empty `greeting_text` in its `config` has audio generated automatically on save, and the resulting filename is stored back in the node's `config.audio_file`. Without TTS, upload audio files and reference them instead.

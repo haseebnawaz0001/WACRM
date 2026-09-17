@@ -19,6 +19,7 @@ Manage webhooks under **Settings → Webhooks**, or via the API:
 - `POST /api/webhooks` — create a webhook.
 - `GET /api/webhooks/{id}` / `PUT /api/webhooks/{id}` / `DELETE /api/webhooks/{id}`
 - `POST /api/webhooks/{id}/test` — send a synchronous test event.
+- `GET /api/webhooks/{id}/deliveries` — what this webhook has been sent, newest first. `?failed=1` narrows it to the deliveries that did not succeed, and `?event_type=` to one event. Each row records the URL, the HTTP status, the number of attempts, how long it took and the error, if any.
 
 A webhook has a `name`, a target `url`, a list of `events`, optional custom `headers`, a signing `secret`, and an `is_active` flag. At least one event must be selected. The secret is never returned in API responses — the payload exposes only a `has_secret` boolean.
 
@@ -28,17 +29,87 @@ A webhook has a `name`, a target `url`, a list of `events`, optional custom `hea
 
 ## Event catalog
 
-Seven event types can be subscribed to:
+35 event types can be subscribed to. The list the API returns (`GET /api/webhooks/events`) is generated from the same catalog, so it is always what this server will actually deliver.
+
+### Messages
 
 | Event | Fires when |
 |---|---|
 | `message.incoming` | A new message is received from a contact. |
-| `message.sent` | An agent sends a message. |
 | `message.outgoing` | A message is sent to a contact (includes echoes). |
+| `message.sent` | An agent sends a message. |
+
+### Contacts
+
+| Event | Fires when |
+|---|---|
 | `contact.created` | A new contact is created. |
+| `contact.deleted` | A contact is deleted. |
+| `contact.updated` | A contact's details or custom fields change. |
+| `contact.restored` | A deleted contact is restored. |
+| `contact.tag_added` | A tag is added to a contact. |
+| `contact.tag_removed` | A tag is removed from a contact. |
+| `contact.assigned` | A contact's owner changes. |
+| `contact.merged` | Two contacts are merged. |
+| `contact.lifecycle_stage_changed` | A contact moved to a different lifecycle stage. |
+
+### Conversations
+
+| Event | Fires when |
+|---|---|
+| `conversation.created` | A new conversation opens. |
+| `conversation.status_changed` | A conversation is resolved, snoozed, pending or reopened. |
+| `conversation.assigned` | A conversation is assigned to an agent or team. |
+| `conversation.sla_breached` | A conversation passed its response deadline. |
+| `conversation.sla_escalated` | A conversation was escalated after going unanswered. |
+
+### Tasks
+
+| Event | Fires when |
+|---|---|
+| `task.created` | A follow-up task is created. |
+| `task.completed` | A task is completed. |
+| `task.overdue` | A task passes its deadline. |
+
+### Deals
+
+| Event | Fires when |
+|---|---|
+| `deal.created` | A deal is added to a pipeline. |
+| `deal.stage_changed` | A deal moves to another stage. |
+| `deal.won` | A deal is marked won. |
+| `deal.lost` | A deal is marked lost. |
+| `deal.updated` | A deal's details change. |
+| `deal.deleted` | A deal is deleted. |
+
+### Transfers
+
+| Event | Fires when |
+|---|---|
 | `transfer.created` | A transfer to a human agent is requested. |
 | `transfer.assigned` | A transfer is assigned to an agent. |
-| `transfer.resumed` | The chatbot is resumed (transfer closed). |
+| `transfer.resumed` | The chatbot resumes (transfer closed). |
+| `transfer.expired` | A transfer timed out before anyone picked it up. |
+
+### Calls
+
+| Event | Fires when |
+|---|---|
+| `call.missed` | A call ended without anyone answering. |
+| `call.completed` | A call was answered and has ended. |
+| `call.transfer_no_answer` | A call transfer timed out with no agent accepting. |
+
+### Chatbot
+
+| Event | Fires when |
+|---|---|
+| `chatbot.flow_completed` | A contact reached the end of a chatbot flow. |
+
+### Campaigns
+
+| Event | Fires when |
+|---|---|
+| `campaign.replied` | A contact replied after receiving a campaign. |
 
 ## Payload
 
@@ -47,12 +118,18 @@ Every delivery is a `POST` with `Content-Type: application/json` and a `User-Age
 ```json
 {
   "event": "message.incoming",
+  "event_id": "0f8f0c6e-1f4e-4a3f-9f1e-5c0b8a2d6a11",
+  "delivery_id": "4b1d9a7c-52a1-4ab6-9a2e-7f1c0b3d8e42",
   "timestamp": "2026-07-16T10:30:00Z",
   "data": { /* event-specific object */ }
 }
 ```
 
-The `data` object depends on the event — message events carry `message_id`, `contact_id`, `contact_phone`, `contact_name`, `message_type`, `content`, and `whatsapp_account`; transfer events carry `transfer_id`, the contact fields, `source`, and (once assigned) `agent_id` / `agent_name`. Any custom headers you configured on the webhook are added to the request.
+`event_id` identifies the event itself and is the same across every webhook it is delivered to, and across retries. Use it to deduplicate: a delivery that timed out on your side but succeeded on ours will arrive again with the same `event_id`.
+
+`delivery_id` identifies this one attempt to this one webhook, and matches the row returned by `GET /api/webhooks/{id}/deliveries`. Quote it when asking why something did or did not arrive.
+
+The `data` object depends on the event — message events carry `message_id`, `contact_id`, `contact_phone`, `contact_name`, `message_type`, `content`, and `whatsapp_account`; transfer events carry `transfer_id`, the contact fields, `source`, and (once assigned) `agent_id` / `agent_name`. CRM events carry the record they are about, so `task.created` carries the task and `deal.stage_changed` carries the deal with the stage it moved from. Any custom headers you configured on the webhook are added to the request.
 
 ## Verifying the signature
 

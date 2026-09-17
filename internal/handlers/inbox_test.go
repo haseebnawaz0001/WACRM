@@ -91,7 +91,8 @@ func TestListInbox_UnassignedExcludesBotHandled(t *testing.T) {
 	botHandled := openConversation(t, app, org.ID, "15553110001")
 	needsAgent := openConversation(t, app, org.ID, "15553110002")
 	require.NoError(t, app.DB.Model(&models.Conversation{}).
-		Where("contact_id = ?", needsAgent.ID).Update("bot_active", false).Error)
+		Where("contact_id = ?", needsAgent.ID).
+		Update("handling", models.HandlingNone).Error)
 
 	queue := inboxIDs(listInbox(t, app, org.ID, admin.ID, "unassigned"))
 	assert.True(t, queue[needsAgent.ID.String()])
@@ -172,7 +173,8 @@ func TestInboxCounts(t *testing.T) {
 
 	queued := openConversation(t, app, org.ID, "15553140002")
 	require.NoError(t, app.DB.Model(&models.Conversation{}).
-		Where("contact_id = ?", queued.ID).Update("bot_active", false).Error)
+		Where("contact_id = ?", queued.ID).
+		Update("handling", models.HandlingNone).Error)
 
 	openConversation(t, app, org.ID, "15553140003") // bot-handled
 
@@ -287,4 +289,112 @@ func TestGetConversation_ReturnsNullWhenNoneActive(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
 	assert.Nil(t, result.Data.Conversation)
+}
+
+// A handoff the product could not complete — out of hours, or no agent free —
+// is a queue item, not a bot conversation. The boolean this replaced could not
+// say that, so a customer who asked for a person at 11pm looked exactly like
+// one happily talking to the chatbot, and nobody followed up in the morning.
+func TestListInbox_UnassignedIncludesSuppressedHandoffs(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+
+	pending := openConversation(t, app, org.ID, "15553110011")
+	require.NoError(t, app.DB.Model(&models.Conversation{}).
+		Where("contact_id = ?", pending.ID).
+		Update("handling", models.HandlingHandoffPending).Error)
+
+	queue := listInbox(t, app, org.ID, admin.ID, "unassigned")
+	assert.True(t, inboxIDs(queue)[pending.ID.String()],
+		"someone asked for a person; that is exactly what the queue is for")
+
+	bot := inboxIDs(listInbox(t, app, org.ID, admin.ID, "bot"))
+	assert.False(t, bot[pending.ID.String()],
+		"the bot is not handling a conversation it already handed off")
+
+	var found bool
+	for _, c := range queue.Data.Conversations {
+		if c.ContactID == pending.ID.String() {
+			found = true
+			assert.Equal(t, string(models.HandlingHandoffPending), c.Handling,
+				"the client needs the state to show why it is waiting")
+			assert.False(t, c.BotActive,
+				"the compatibility flag must agree with the state it is derived from")
+		}
+	}
+	assert.True(t, found)
+}
+
+// notificationsFor reads one user's notifications of a type.
+func notificationsFor(t *testing.T, app *handlers.App, userID uuid.UUID, kind string) []models.Notification {
+	t.Helper()
+	var out []models.Notification
+	require.NoError(t, app.DB.Where("user_id = ? AND type = ?", userID, kind).Find(&out).Error)
+	return out
+}
+
+// Being handed a customer and finding out only when you next happen to open the
+// inbox is how a conversation sits unanswered for an afternoon.
+func TestAssignConversation_TellsTheNewAssignee(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	contact := openConversation(t, app, org.ID, "15553190001")
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "assignee_id": agent.ID.String(),
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.AssignConversation(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	notes := notificationsFor(t, app, agent.ID, models.NotificationConversationAssigned)
+	require.Len(t, notes, 1)
+	assert.Contains(t, notes[0].Link, contact.ID.String())
+}
+
+// Taking a conversation yourself is not news.
+func TestAssignConversation_TakingItYourselfIsNotANotification(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	contact := openConversation(t, app, org.ID, "15553190002")
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "assignee_id": admin.ID.String(),
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.AssignConversation(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	assert.Empty(t, notificationsFor(t, app, admin.ID, models.NotificationConversationAssigned))
+}
+
+// Unassigning has nobody to tell.
+func TestAssignConversation_UnassigningNotifiesNobody(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	admin := adminFor(t, app, org)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	contact := openConversation(t, app, org.ID, "15553190003")
+
+	assign := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "assignee_id": agent.ID.String(),
+	})
+	testutil.SetAuthContext(assign, org.ID, admin.ID)
+	require.NoError(t, app.AssignConversation(assign))
+
+	unassign := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "assignee_id": "",
+	})
+	testutil.SetAuthContext(unassign, org.ID, admin.ID)
+	require.NoError(t, app.AssignConversation(unassign))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(unassign))
+
+	assert.Len(t, notificationsFor(t, app, agent.ID, models.NotificationConversationAssigned), 1,
+		"only the assignment notified, not the unassignment")
 }

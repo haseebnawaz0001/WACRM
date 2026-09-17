@@ -41,7 +41,8 @@ const stageTypes = ['open', 'won', 'lost'] as const
 
 async function fetchPipelines() {
   try {
-    const { data } = await pipelinesService.list()
+    const { data: envelope } = await pipelinesService.list()
+    const data = (envelope as any)?.data ?? envelope
     pipelines.value = data.pipelines || []
     if (!selectedId.value && pipelines.value.length) {
       selectedId.value = (pipelines.value.find(p => p.is_default) || pipelines.value[0]).id
@@ -62,7 +63,8 @@ const newPipeline = ref({ name: '', currency: 'USD' })
 async function createPipeline() {
   if (!newPipeline.value.name) return
   try {
-    const { data } = await pipelinesService.create(newPipeline.value)
+    const { data: envelope } = await pipelinesService.create(newPipeline.value)
+    const data = (envelope as any)?.data ?? envelope
     showCreate.value = false
     newPipeline.value = { name: '', currency: 'USD' }
     await fetchPipelines()

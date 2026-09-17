@@ -46,6 +46,15 @@ const WS_TYPE_AUTH = 'auth'
 const WS_TYPE_NEW_MESSAGE = 'new_message'
 const WS_TYPE_STATUS_UPDATE = 'status_update'
 const WS_TYPE_SET_CONTACT = 'set_contact'
+const WS_TYPE_SUBSCRIBE = 'subscribe'
+const WS_TYPE_UNSUBSCRIBE = 'unsubscribe'
+// Events that carry ids and non-sensitive fields; the client refetches details
+// with its own permissions (plan 10, S10).
+const WS_TYPE_CONTACT_UPDATED = 'contact_updated'
+const WS_TYPE_CONTACT_MERGED = 'contact_merged'
+const WS_TYPE_CONVERSATION_UPDATED = 'conversation_updated'
+const WS_TYPE_TASK_UPDATED = 'task_updated'
+const WS_TYPE_CUSTOM_FIELDS_UPDATED = 'custom_fields_updated'
 const WS_TYPE_RESYNC_REQUIRED = 'resync_required'
 const WS_TYPE_PING = 'ping'
 const WS_TYPE_PONG = 'pong'
@@ -176,6 +185,9 @@ class WebSocketService {
         this.hasConnectedBefore = true
         this.reconnectAttempts = 0
         this.startPing()
+        // The server forgets subscriptions when a socket drops; a view that
+        // subscribed once would otherwise sit silent with no way to tell.
+        this.resubscribeTopics()
 
         // Force refresh data after reconnection to sync any missed updates
         if (isReconnection) {
@@ -294,7 +306,30 @@ class WebSocketService {
           useNotesStore().onNoteDeleted(message.payload.id)
           break
         case WS_TYPE_DEAL_UPDATED:
-          // Handled by whichever board is open, through subscribe().
+        case WS_TYPE_TASK_UPDATED:
+        case WS_TYPE_CUSTOM_FIELDS_UPDATED:
+          // Handled by whichever view is open, through subscribe(). These
+          // carry ids only, so the view refetches with its own permissions
+          // rather than trusting a payload assembled for somebody else
+          // (plan 10, S10).
+          break
+        case WS_TYPE_CONTACT_UPDATED:
+          // One row, not the whole list: refetching everything on every field
+          // edit is what made the contacts list flicker.
+          if (message.payload?.contact_id) {
+            store.refreshContactRow(message.payload.contact_id)
+          }
+          break
+        case WS_TYPE_CONVERSATION_UPDATED:
+          if (message.payload?.contact_id) {
+            store.refreshContactRow(message.payload.contact_id)
+          }
+          break
+        case WS_TYPE_CONTACT_MERGED:
+          // The contact this tab is open on no longer exists as its own
+          // record. Staying on a dead URL shows an empty chat with no
+          // explanation, so follow the merge.
+          this.onContactMerged(message.payload)
           break
         case WS_TYPE_RESYNC_REQUIRED: {
           // The server could not fit a message into our socket buffer and
@@ -719,6 +754,69 @@ class WebSocketService {
       type: WS_TYPE_SET_CONTACT,
       payload: { contact_id: contactId || '' }
     })
+  }
+
+  /**
+   * Topics this connection is watching (plan 10, S10).
+   *
+   * Held so a reconnect can restore them: the server forgets everything when
+   * the socket drops, and a view that subscribed once would then sit silent
+   * with no way to know it had stopped receiving anything.
+   */
+  private topics = new Set<string>()
+
+  /**
+   * Watch one or more topics — `contact:<id>`, `conversation:<id>`,
+   * `board:<pipelineId>`.
+   *
+   * Returns an unsubscribe function, so a component can clean up on unmount
+   * without tracking what it asked for.
+   */
+  subscribeTopics(topics: string[]): () => void {
+    const added = topics.filter(t => t && !this.topics.has(t))
+    added.forEach(t => this.topics.add(t))
+    if (added.length) {
+      this.send({ type: WS_TYPE_SUBSCRIBE, payload: { topics: added } })
+    }
+    return () => this.unsubscribeTopics(added)
+  }
+
+  unsubscribeTopics(topics: string[]) {
+    const removed = topics.filter(t => this.topics.delete(t))
+    if (removed.length) {
+      this.send({ type: WS_TYPE_UNSUBSCRIBE, payload: { topics: removed } })
+    }
+  }
+
+  /** Re-send the current subscriptions after a reconnect. */
+  private resubscribeTopics() {
+    if (this.topics.size) {
+      this.send({ type: WS_TYPE_SUBSCRIBE, payload: { topics: [...this.topics] } })
+    }
+  }
+
+  /**
+   * Follow a merge to the surviving contact.
+   *
+   * A tab left open on the secondary shows an empty chat with no explanation
+   * once the records are joined. Redirecting keeps the agent with the
+   * conversation they were actually having.
+   */
+  private onContactMerged(payload: { primary_contact_id?: string; secondary_contact_id?: string }) {
+    const store = useContactsStore()
+    const survivor = payload?.primary_contact_id
+    const merged = payload?.secondary_contact_id
+    if (!survivor || !merged) return
+
+    this.unsubscribeTopics([`contact:${merged}`])
+    if (store.currentContact?.id === merged) {
+      // Clear first: leaving the dead record selected would have the chat
+      // render against a contact that no longer exists while the list reloads.
+      store.setCurrentContact(null)
+      store.refreshContactRow(survivor)
+      void router.push({ name: 'chat-conversation', params: { contactId: survivor } })
+    }
+    store.fetchContacts()
   }
 
   private send(message: WSMessage) {

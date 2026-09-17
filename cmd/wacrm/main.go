@@ -235,6 +235,10 @@ func runServer(args []string) {
 
 	// Initialize CallManager (per-org calling_enabled DB setting controls access)
 	app.CallManager = calling.NewManager(&cfg.Calling, s3Client, db, rdb, waClient, wsHub, assigner, lo)
+	// An IVR condition node asks what the CRM knows about the caller. The
+	// evaluator lives in handlers because compiling a contact filter needs the
+	// organization's fields, stages and segments.
+	app.CallManager.SetContactMatcher(app.CallMatcher())
 	app.S3Client = s3Client
 	lo.Info("Call manager initialized")
 
@@ -266,6 +270,15 @@ func runServer(args []string) {
 	// Setup routes
 	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg)
 
+	// Every /api route must say how it is protected (plan 10, S1). Refusing to
+	// start is deliberate: a route whose protection nobody declared is exactly
+	// the shape of the bug this check exists to prevent, and a warning in a log
+	// nobody reads would not have caught the handlers that shipped unguarded.
+	if err := checkRoutePermissions(g); err != nil {
+		lo.Fatal("route permission self-check failed", "error", err)
+	}
+	lo.Info("route permission self-check passed", "routes", len(routePermissions))
+
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
 		Handler:            corsWrapper(g.Handler(), allowedOrigins),
@@ -284,11 +297,8 @@ func runServer(args []string) {
 		}
 	}()
 
-	// Start SLA processor (runs every minute)
-	slaProcessor := handlers.NewSLAProcessor(app, time.Minute)
-	slaCtx, slaCancel := context.WithCancel(context.Background())
-	go slaProcessor.Start(slaCtx)
-	lo.Info("SLA processor started")
+	// The SLA processor is a scheduler job now (plan 03), so it runs under the
+	// leader lock instead of once per replica.
 
 	// Start periodic jobs behind a cluster-wide leader lock (plan 00, F4), so
 	// adding a replica does not run every job several times over.
@@ -364,12 +374,6 @@ func runServer(args []string) {
 	lo.Info("Stopping campaign stats subscriber...")
 	app.StopCampaignStatsSubscriber()
 	lo.Info("Campaign stats subscriber stopped")
-
-	// Stop SLA processor
-	lo.Info("Stopping SLA processor...")
-	slaCancel()
-	slaProcessor.Stop()
-	lo.Info("SLA processor stopped")
 
 	// Stop the CRM event relay. Events still unpublished stay in the outbox
 	// and are picked up by whichever relay runs next.
@@ -662,7 +666,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/tasks", app.CreateTask)
 	g.GET("/api/task-types", app.ListTaskTypes)
 	g.POST("/api/tasks/{id}/complete", app.CompleteTask)
+	g.PUT("/api/tasks/{id}", app.UpdateTask)
 	g.POST("/api/tasks/{id}/cancel", app.CancelTask)
+	g.POST("/api/tasks/{id}/reopen", app.ReopenTask)
 	g.POST("/api/tasks/{id}/reassign", app.ReassignTask)
 
 	// Pipelines and deals (plan 07)
@@ -707,6 +713,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/reports/contacts-by-source", app.ContactsBySourceReport)
 	g.GET("/api/reports/lifecycle-funnel", app.LifecycleFunnelReport)
 	g.GET("/api/reports/pipeline-funnel", app.PipelineFunnelReport)
+	g.GET("/api/reports/campaign-replies", app.CampaignRepliesReport)
 	g.GET("/api/reports/pipeline-forecast", app.PipelineForecastReport)
 	g.GET("/api/reports/tasks-by-agent", app.TasksByAgentReport)
 	g.GET("/api/reports/agent-performance", app.AgentPerformanceReport)
@@ -731,11 +738,18 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/contacts/{id}/conversation", app.GetConversation)
 	g.POST("/api/conversations/resolve", app.ResolveConversation)
 	g.POST("/api/conversations/snooze", app.SnoozeConversation)
+	g.POST("/api/conversations/pending", app.MarkConversationPending)
+	g.POST("/api/conversations/reopen", app.ReopenConversation)
 	g.POST("/api/conversations/assign", app.AssignConversation)
 
 	// Contacts list v2 (plan 01 + plan 00 F6)
 	g.POST("/api/contacts/search", app.SearchContacts)
+	// One change applied to many contacts (plan 01).
+	g.POST("/api/contacts/bulk", app.BulkUpdateContacts)
 	g.GET("/api/contacts/filter-fields", app.GetContactFilterFields)
+
+	// One variable catalog for every template picker (plan 10, S6).
+	g.GET("/api/variables", app.GetVariableCatalog)
 
 	// Contact fields (plan 01)
 	g.GET("/api/contact-fields", app.ListContactFields)
@@ -930,6 +944,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/canned-responses/{id}", app.UpdateCannedResponse)
 	g.DELETE("/api/canned-responses/{id}", app.DeleteCannedResponse)
 	g.POST("/api/canned-responses/{id}/use", app.IncrementCannedResponseUsage)
+	// Server-side rendering, so every screen resolves the same names (S6).
+	g.POST("/api/canned-responses/{id}/resolve", app.ResolveCannedResponse)
 
 	// Sessions (admin/debug)
 	g.GET("/api/chatbot/sessions", app.ListChatbotSessions)
@@ -985,6 +1001,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/webhooks/{id}", app.UpdateWebhook)
 	g.DELETE("/api/webhooks/{id}", app.DeleteWebhook)
 	g.POST("/api/webhooks/{id}/test", app.TestWebhook)
+	g.GET("/api/webhooks/{id}/deliveries", app.ListWebhookDeliveries)
 
 	// Custom Actions
 	g.GET("/api/custom-actions", app.ListCustomActions)
@@ -1008,6 +1025,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/call-logs", app.ListCallLogs)
 	g.GET("/api/call-logs/{id}", app.GetCallLog)
 	g.GET("/api/call-logs/{id}/recording", app.GetCallRecording)
+	g.POST("/api/call-logs/{id}/outcome", app.RecordCallOutcome)
 
 	// Call Transfers
 	g.GET("/api/call-transfers", app.ListCallTransfers)

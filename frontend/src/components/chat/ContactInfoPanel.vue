@@ -25,6 +25,7 @@ import {
 import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
 import { TagBadge } from '@/components/ui/tag-badge'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
+import { ContactSidebar, type SidebarSection } from '@/components/shared'
 import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
@@ -89,6 +90,24 @@ const isResizing = ref(false)
 
 // Check if user can edit tags
 const canEditTags = computed(() => authStore.hasPermission('contacts', 'write'))
+
+/**
+ * The sections this panel renders, in the order an agent reads them.
+ *
+ * The same ids and the same order as the contact profile, which is the point
+ * of sharing the shell: the two screens tell one story rather than two.
+ * Metadata is hidden when there is none, because an empty "Additional data"
+ * heading is a question nobody asked. Nothing starts collapsed: the panel has
+ * always shown its contents, and folding sections away by default would take
+ * something from agents that the shared shell was not meant to change.
+ */
+const crmSections = computed<SidebarSection[]>(() => [
+  { id: 'header' },
+  { id: 'details', label: 'Details' },
+  { id: 'tags', label: 'Tags' },
+  { id: 'metadata', label: 'Additional data', hidden: !hasMetadata.value },
+  { id: 'session', label: 'Session data' }
+])
 
 // Fetch tags on mount
 onMounted(async () => {
@@ -244,6 +263,7 @@ async function updateContactTags(tags: string[]) {
 
 <template>
   <div
+    id="contact-info-panel"
     class="flex flex-col bg-card h-full relative"
     :style="{ width: `${panelWidth}px` }"
   >
@@ -263,7 +283,14 @@ async function updateContactTags(tags: string[]) {
     </div>
 
     <ScrollArea class="flex-1">
-      <div class="p-4 space-y-4">
+      <!-- The shared sidebar shell (plan 10, S12). The contact profile renders
+           the same sections through the same component, so an agent moving
+           between the chat and the record does not have to relearn where
+           anything is. What goes inside each section is this panel's; the
+           frame, the headings and remembering what somebody folded away are
+           the shell's. -->
+      <ContactSidebar :sections="crmSections" storage-key="chat-contact-panel" class="p-4">
+        <template #header>
         <!-- Contact Header -->
         <div class="flex flex-col items-center text-center pb-4 border-b">
           <Avatar class="h-16 w-16 mb-3">
@@ -281,15 +308,20 @@ async function updateContactTags(tags: string[]) {
           </div>
         </div>
 
+        </template>
+
         <!-- Details: the organization's own fields, editable in place (plan 01).
              An agent mid-conversation is the person most likely to learn a
              customer's company, and the least likely to leave the thread. -->
-        <ContactFieldsSection :contact-id="contact.id" :values="contact.fields" />
+        <template #details>
+          <ContactFieldsSection :contact-id="contact.id" :values="contact.fields" />
+        </template>
 
+        <template #tags>
         <!-- Tags Section (always shown) -->
-        <div class="pb-4">
+        <div>
           <div class="flex items-center justify-between py-2">
-            <h5 class="text-sm font-medium flex items-center gap-2">
+            <h5 class="sr-only flex items-center gap-2">
               <Tags class="h-4 w-4 text-muted-foreground" />
               Tags
             </h5>
@@ -352,9 +384,11 @@ async function updateContactTags(tags: string[]) {
             <Loader2 v-if="isUpdatingTags" class="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </div>
+        </template>
 
+        <template #metadata>
         <!-- Contact Metadata -->
-        <div v-if="hasMetadata" class="space-y-3">
+        <div class="space-y-3">
           <!-- General section: top-level primitives -->
           <MetadataSection
             v-if="metadataPrimitives.length > 0"
@@ -369,22 +403,24 @@ async function updateContactTags(tags: string[]) {
             :data="val"
           />
         </div>
+        </template>
 
+        <!-- Session data.
+             Its own section (plan 10, S7): these values describe the current
+             conversation and go away with it, unlike the contact fields above,
+             which are the customer's record. An agent reading the panel needs
+             to know which of the two they are looking at. -->
+        <template #session>
         <!-- No Session Data or no panel config -->
-        <div v-if="!props.sessionData || sortedSections.length === 0" class="text-center py-6 text-muted-foreground border-t">
+        <div v-if="!props.sessionData || sortedSections.length === 0" class="text-center py-6 text-muted-foreground">
           <User class="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p class="text-sm">No data configured</p>
           <p class="text-xs mt-1">Configure panel display in the chatbot flow settings.</p>
         </div>
 
-        <!-- Session data with panel config.
-             Labelled explicitly (plan 10, S7): these values describe the
-             current conversation and go away with it, unlike the contact
-             fields above, which are the customer's record. An agent reading
-             the panel needs to know which of the two they are looking at. -->
         <template v-else>
-          <div class="flex items-center justify-between border-t pt-4">
-            <h5 class="text-sm font-medium text-muted-foreground">Session data</h5>
+          <div class="flex items-center justify-between">
+            <span class="sr-only">Session data</span>
             <!-- Flow Name Badge -->
             <Badge v-if="props.sessionData?.flow_name" variant="outline" class="text-xs">
               {{ props.sessionData?.flow_name }}
@@ -477,7 +513,8 @@ async function updateContactTags(tags: string[]) {
             </div>
           </div>
         </template>
-      </div>
+        </template>
+      </ContactSidebar>
     </ScrollArea>
   </div>
 </template>

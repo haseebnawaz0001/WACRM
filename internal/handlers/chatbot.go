@@ -1196,6 +1196,11 @@ func (a *App) CreateAIContext(r *fastglue.Request) error {
 	if req.ContextType == "" {
 		req.ContextType = models.ContextTypeStatic
 	}
+	// A type nobody implements is a context that silently contributes nothing
+	// to the prompt, which reads as "the AI ignored my instructions".
+	if !models.KnownContextType(req.ContextType) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unknown context type", nil, "")
+	}
 
 	ctx := models.AIContext{
 		BaseModel:       models.BaseModel{ID: uuid.New()},

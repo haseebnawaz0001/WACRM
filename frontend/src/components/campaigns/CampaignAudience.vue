@@ -48,7 +48,8 @@ const editable = computed(() => props.editable !== false)
 async function loadSegments() {
   if (!canUseSegments.value) return
   try {
-    const { data } = await segmentsService.list()
+    const { data: envelope } = await segmentsService.list()
+    const data = (envelope as any)?.data ?? envelope
     segments.value = data.segments || []
   } catch {
     segments.value = []
@@ -73,7 +74,8 @@ async function refreshPreview() {
   }
   isPreviewing.value = true
   try {
-    const { data } = await campaignAudienceService.preview(props.campaignId)
+    const { data: envelope } = await campaignAudienceService.preview(props.campaignId)
+    const data = (envelope as any)?.data ?? envelope
     preview.value = data
   } catch {
     preview.value = null

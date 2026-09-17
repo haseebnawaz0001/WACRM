@@ -95,14 +95,47 @@ type ResolveOpts struct {
 	DefaultCountryCode string
 }
 
+// ConversationCloser resolves the contact's open conversation.
+//
+// It is an interface, and optional, so the lifecycle service keeps needing
+// nothing but a database handle: the campaign worker and the calling manager
+// construct one without a conversation service, and the HTTP layer supplies
+// the real one. Closing a conversation stays the conversation service's job
+// either way — this package does not learn a second way to do it.
+type ConversationCloser interface {
+	Resolve(ctx context.Context, orgID, contactID uuid.UUID, reason string, actor crmevents.Actor) (*models.Conversation, error)
+}
+
 // Service resolves contacts. It needs nothing but a database handle, so the
 // campaign worker and the calling manager can use it as well as HTTP handlers.
 type Service struct {
 	DB *gorm.DB
+
+	// Conversations closes the conversation of a deleted contact. Nil is
+	// valid: the deletion still happens, it just leaves the conversation to
+	// whoever resolves it next.
+	Conversations ConversationCloser
+
+	// Log records cascade problems. Nil discards them, which keeps the
+	// zero value usable in tests and short-lived callers.
+	Log func(format string, args ...any)
 }
 
 // New builds a Service.
 func New(db *gorm.DB) *Service { return &Service{DB: db} }
+
+// WithConversations returns a copy that closes conversations on delete.
+func (s *Service) WithConversations(c ConversationCloser) *Service {
+	out := *s
+	out.Conversations = c
+	return &out
+}
+
+func (s *Service) logf(format string, args ...any) {
+	if s.Log != nil {
+		s.Log(format, args...)
+	}
+}
 
 // Resolve finds, creates or restores the contact for an identity.
 //
@@ -298,6 +331,16 @@ func ptrString(s string) *string { return &s }
 
 // Delete soft-deletes a contact, recording why so a later inbound message knows
 // whether restoring is allowed.
+//
+// Deleting a contact also ends the work in flight for them (plan 10, S2). A
+// deleted contact that still owned an open conversation, a queued transfer and
+// a half-finished chatbot session left the conversation in an agent's inbox
+// with no contact behind it, kept a place in the transfer queue that could
+// never be picked up, and armed a prompt node that would swallow the first
+// message from whoever got that number next. Tasks and deals are deliberately
+// kept: they are a person's work, and deleting the customer record should not
+// silently destroy someone's to-do list — they are hidden from lists until the
+// contact comes back.
 func (s *Service) Delete(ctx context.Context, orgID, contactID uuid.UUID, reason string, actor crmevents.Actor) error {
 	db := s.DB.WithContext(ctx)
 
@@ -314,8 +357,61 @@ func (s *Service) Delete(ctx context.Context, orgID, contactID uuid.UUID, reason
 		return err
 	}
 
+	// An address-book sync removes a contact from the phone's address book; it
+	// says nothing about the conversation, which may still be live and is
+	// restored automatically on the next message. Only a deliberate deletion
+	// ends the work.
+	if reason != ReasonAddressBookSync {
+		s.endWorkInFlight(ctx, db, orgID, contactID, actor)
+	}
+
 	s.publish(db, orgID, &contact, "contact.deleted", actor)
 	return nil
+}
+
+// endWorkInFlight closes what a deleted contact was in the middle of.
+//
+// Each step is best-effort and logged rather than fatal: the contact is already
+// deleted, and refusing to finish because a chatbot session would not cancel
+// would leave the product in a worse state than a stale session does.
+func (s *Service) endWorkInFlight(ctx context.Context, db *gorm.DB, orgID, contactID uuid.UUID, actor crmevents.Actor) {
+	now := time.Now().UTC()
+
+	// A live session is a half-asked question. Cancelling it means the next
+	// message from that number starts a conversation rather than being read as
+	// an answer to a prompt nobody remembers.
+	//
+	// This runs before the conversation is resolved, because resolving also
+	// ends the session — as *completed*, which is the right word for a
+	// conversation somebody finished and the wrong one for a contact that was
+	// deleted out from under it.
+	if err := db.Model(&models.ChatbotSession{}).
+		Where("organization_id = ? AND contact_id = ? AND status = ?",
+			orgID, contactID, models.SessionStatusActive).
+		Updates(map[string]any{
+			"status":       models.SessionStatusCancelled,
+			"completed_at": now,
+		}).Error; err != nil {
+		s.logf("contacts: cancelling chatbot sessions for deleted contact %s: %v", contactID, err)
+	}
+
+	// A transfer whose contact no longer exists cannot be picked up. Expiring
+	// it frees the queue position and the unique active-transfer index.
+	if err := db.Model(&models.AgentTransfer{}).
+		Where("organization_id = ? AND contact_id = ? AND status = ?",
+			orgID, contactID, models.TransferStatusActive).
+		Update("status", models.TransferStatusExpired).Error; err != nil {
+		s.logf("contacts: expiring transfers for deleted contact %s: %v", contactID, err)
+	}
+
+	// The conversation is closed through the conversation service so there is
+	// exactly one place that moves a conversation to resolved, with the events
+	// and counters that go with it (S5).
+	if s.Conversations != nil {
+		if _, err := s.Conversations.Resolve(ctx, orgID, contactID, models.ResolutionContactDeleted, actor); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logf("contacts: resolving conversation for deleted contact %s: %v", contactID, err)
+		}
+	}
 }
 
 // Restore undoes a soft delete explicitly, on a person's instruction. Unlike

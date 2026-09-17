@@ -1,0 +1,174 @@
+---
+title: Tasks
+description: Follow-ups attached to contacts
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Tasks require the `tasks:read`, `tasks:write` and `tasks:delete` permissions. An agent sees their own tasks; seeing everyone's needs the wider contact visibility their role grants.
+</Aside>
+
+## Overview
+
+A task is a follow-up owned by a person and attached to a contact — "call back about the quote", "chase the documents". Tasks are what stop a conversation being resolved and then forgotten.
+
+**Overdue is derived, not stored.** A task is overdue when its deadline has passed and it is still open; nothing writes an `overdue` column, so no background job can leave a task stuck in the wrong state.
+
+### Ownership
+
+The owner is resolved in this order: whoever the request names, then the contact's owner, then whoever created it. Inactive users are skipped at each step — assigning work to somebody who cannot sign in is the same as not assigning it.
+
+### Deadlines
+
+A task type may carry a default deadline, so "call back" can mean "in two hours" without anyone typing it. An `all_day` task is interpreted in the **owner's** timezone: "due today" has to mean their today.
+
+## List Tasks
+
+```bash
+GET /api/tasks
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `view` | string | `mine` (default), `all` or `overdue` |
+| `status` | string | `open`, `completed` or `cancelled` |
+| `contact_id` | uuid | Only this contact's tasks |
+| `deal_id` | uuid | Only this deal's tasks |
+| `limit` | integer | Page size |
+| `offset` | integer | Rows to skip |
+
+`mine` is the default deliberately: a task list that opens on everyone's work is a list nobody acts on.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "tasks": [
+      {
+        "id": "…",
+        "contact_id": "…",
+        "contact_name": "Ayesha",
+        "conversation_id": "…",
+        "type_id": "…",
+        "type_key": "call_back",
+        "type_label": "Call back",
+        "title": "Call back about the quote",
+        "description": "",
+        "owner_id": "…",
+        "priority": "normal",
+        "status": "open",
+        "due_at": "2026-09-18T09:00:00Z",
+        "all_day": false,
+        "remind_at": "2026-09-18T08:30:00Z",
+        "overdue": false,
+        "completed_at": null,
+        "source": "manual",
+        "created_at": "2026-09-17T09:00:00Z"
+      }
+    ],
+    "total": 1,
+    "view": "mine",
+    "overdue": 2,
+    "due_today": 5
+  }
+}
+```
+
+`overdue` and `due_today` are the viewer's own counts, returned alongside the page so a sidebar badge does not need a second request.
+
+## Create Task
+
+```bash
+POST /api/tasks
+```
+
+### Request Body
+
+```json
+{
+  "contact_id": "…",
+  "type_key": "call_back",
+  "title": "Call back about the quote",
+  "description": "",
+  "owner_id": "",
+  "priority": "normal",
+  "due_at": "2026-09-18T09:00:00Z",
+  "all_day": false,
+  "remind_at": "2026-09-18T08:30:00Z",
+  "conversation_id": "",
+  "message_id": ""
+}
+```
+
+Name the type by `type_key` or by `type_id`. Leave `owner_id` empty to use the resolution order above, and `due_at` empty to use the type's default deadline.
+
+`conversation_id` and `message_id` are optional provenance: a task created from a message keeps the link back to it.
+
+## Update Task
+
+```bash
+PUT /api/tasks/{id}
+```
+
+Every field is optional; only what is present is changed.
+
+```json
+{
+  "title": "Call back about the renewal",
+  "due_at": "2026-09-19T09:00:00Z",
+  "clear_remind": true
+}
+```
+
+`clear_remind` removes the reminder, which sending `remind_at: null` cannot express.
+
+## Complete, Cancel, Reopen
+
+```bash
+POST /api/tasks/{id}/complete
+POST /api/tasks/{id}/cancel
+POST /api/tasks/{id}/reopen
+```
+
+Completing is idempotent: completing an already-completed task is a success, not an error, because two clicks on a slow connection should not produce a failure.
+
+Reopening clears the completion and puts the task back in the owner's list — a follow-up that turned out not to be finished is a normal thing, and forcing a duplicate task loses the history.
+
+## Reassign
+
+```bash
+POST /api/tasks/{id}/reassign
+```
+
+```json
+{ "owner_id": "…" }
+```
+
+## Task Types
+
+```bash
+GET /api/task-types
+```
+
+Returns the organization's types with their keys, labels and default deadlines. Every organization is seeded with a built-in set when it is created.
+
+## Reminders
+
+A task with a `remind_at` notifies its owner once. The reminder is claimed by stamping the column before the notification is sent, so a scheduler that runs twice does not remind twice.
+
+Tasks belonging to a deleted contact are not reminded about: the contact is gone, and a notification about them is noise.
+
+## Events
+
+| Event | Fires when |
+|---|---|
+| `task.created` | A task is created |
+| `task.completed` | A task is completed |
+| `task.overdue` | A task passes its deadline |
+
+`task.overdue` fires once per task, not once per sweep.

@@ -456,7 +456,8 @@ type ListOpts struct {
 
 // List returns deals for a board.
 func (s *Service) List(ctx context.Context, orgID uuid.UUID, opts ListOpts) ([]models.Deal, error) {
-	q := s.DB.WithContext(ctx).Where("deals.organization_id = ?", orgID)
+	q := s.DB.WithContext(ctx).Where("deals.organization_id = ?", orgID).
+		Where(liveDealContactOnly())
 
 	status := opts.Status
 	if status == "" {
@@ -513,6 +514,7 @@ func (s *Service) Totals(ctx context.Context, orgID, pipelineID uuid.UUID) ([]St
 		Joins("JOIN pipeline_stages ON pipeline_stages.id = deals.stage_id").
 		Where("deals.organization_id = ? AND deals.pipeline_id = ? AND deals.status = ?",
 			orgID, pipelineID, models.DealOpen).
+		Where(liveDealContactOnly()).
 		Group("deals.stage_id").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -553,4 +555,13 @@ func actorFor(userID *uuid.UUID) crmevents.Actor {
 		return crmevents.SystemActor()
 	}
 	return crmevents.UserActor(*userID, "")
+}
+
+// liveDealContactOnly hides deals whose contact was deleted (plan 10, S2).
+//
+// The deal is kept — a closed sale is a record, not a convenience — but a card
+// for a customer who no longer exists must not sit on the board inflating the
+// forecast. Restoring the contact brings the card back.
+func liveDealContactOnly() string {
+	return "EXISTS (SELECT 1 FROM contacts c WHERE c.id = deals.contact_id AND c.deleted_at IS NULL)"
 }

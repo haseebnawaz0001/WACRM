@@ -11,9 +11,9 @@ import (
 
 // Relay defaults.
 const (
-	DefaultBatchSize = 500
-	DefaultInterval  = time.Second
-	DefaultRetention = 7 * 24 * time.Hour
+	DefaultBatchSize  = 500
+	DefaultInterval   = time.Second
+	DefaultRetention  = 7 * 24 * time.Hour
 	defaultPruneEvery = time.Hour
 )
 

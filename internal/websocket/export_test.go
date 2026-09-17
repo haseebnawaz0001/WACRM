@@ -53,3 +53,9 @@ func ClientDrainOne(c *Client) []byte {
 		return nil
 	}
 }
+
+// ClientHandleMessage exposes the client's inbound message handling, so tests
+// exercise the wire format rather than an internal shortcut.
+func ClientHandleMessage(c *Client, data []byte) {
+	c.handleMessage(data)
+}

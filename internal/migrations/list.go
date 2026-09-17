@@ -5,6 +5,7 @@ import (
 
 	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/deals"
+	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/tasks"
 	"gorm.io/gorm"
 )
@@ -60,6 +61,18 @@ func init() {
 	Register(Migration{
 		Name: "2026_09_23_normalize_audit_resource_types",
 		Run:  normalizeAuditResourceTypes,
+	})
+	Register(Migration{
+		Name: "2026_09_24_backfill_custom_role_crm_permissions",
+		Run:  backfillCustomRoleCRMPermissions,
+	})
+	Register(Migration{
+		Name: "2026_09_25_backfill_conversation_handling",
+		Run:  backfillConversationHandling,
+	})
+	Register(Migration{
+		Name: "2026_09_26_seed_crm_default_widgets",
+		Run:  seedCRMDefaultWidgets,
 	})
 }
 
@@ -142,4 +155,29 @@ func backfillMessageSenderType(tx *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// backfillConversationHandling derives the new handling column from the
+// boolean it replaces (plan 10, S5).
+//
+// bot_active could say only "the chatbot is answering" or "it is not". The
+// second case covered two different situations — an agent owns it, and nobody
+// does — so the column is rebuilt from the state that actually exists: an
+// assignee means a person has it, the old flag means the bot has it, and
+// anything else is nobody.
+func backfillConversationHandling(tx *gorm.DB) error {
+	if !tx.Migrator().HasColumn(&models.Conversation{}, "bot_active") {
+		// A database created after the column was removed has nothing to
+		// derive from; AutoMigrate already gave every row the 'bot' default.
+		return nil
+	}
+
+	return tx.Exec(`
+		UPDATE conversations
+		SET handling = CASE
+			WHEN assignee_id IS NOT NULL THEN 'human'
+			WHEN bot_active THEN 'bot'
+			ELSE 'none'
+		END
+		WHERE handling IS NULL OR handling = 'bot'`).Error
 }

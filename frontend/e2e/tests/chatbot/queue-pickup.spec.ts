@@ -32,7 +32,7 @@ async function execSQL(sql: string): Promise<Record<string, unknown>[]> {
   }
 }
 
-// Navigates to /chatbot/transfers and waits for the transfers list GET to
+// Navigates to the transfers SLA view and waits for the transfers list GET to
 // resolve before returning. Plain `waitForLoadState('networkidle')` is
 // unreliable here — Vue's lazy-loaded view can fire the GET after the
 // network appears idle, so the queue-counter / button-enabled assertions
@@ -43,11 +43,22 @@ async function gotoTransfersAndWaitLoad(page: import('@playwright/test').Page): 
     r => r.url().includes('/api/chatbot/transfers') && r.request().method() === 'GET' && r.ok(),
     { timeout: 15_000 },
   )
-  await page.goto('/chatbot/transfers')
+  await page.goto('/chatbot/transfers/sla')
   await transfersListed
 }
 
 async function seedQueuedTransfer(orgId: string, contactId: string, phone: string, contactName: string, accountName: string): Promise<string> {
+  // A contact may hold only one active transfer — idx_agent_transfers_one_active
+  // enforces it, which is the point of the index. Seeding a second one for the
+  // same contact is a unique violation, and that is what happens as soon as an
+  // earlier test in this file successfully picks one up. Ending whatever is
+  // there first makes the seed say what it means: "this contact is waiting in
+  // the queue now."
+  await execSQL(`
+    UPDATE agent_transfers SET status = 'expired'
+    WHERE contact_id = '${contactId}' AND status = 'active'
+  `)
+
   const rows = await execSQL(`
     INSERT INTO agent_transfers (id, organization_id, contact_id, whats_app_account, phone_number, status, source, transferred_at, created_at, updated_at)
     VALUES (gen_random_uuid(), '${orgId}', '${contactId}', '${accountName}', '${phone}', 'active', 'manual', NOW(), NOW(), NOW())
@@ -181,6 +192,17 @@ test.describe('Pick from queue — agent flow', () => {
 
   test('Pick Next assigns the queued transfer and navigates to the chat', async ({ page }) => {
     const reseed = () => seedQueuedTransfer(orgId, contactId, phone, contactName, accountName).then(() => {})
+
+    // Pick Next is first-in-first-out, so anything already waiting in this
+    // organization's queue is what an agent gets — including transfers left
+    // behind by earlier runs on a shared development database. Clearing them
+    // makes the test about the pick rather than about how much history the
+    // database happens to be carrying.
+    await execSQL(`
+      UPDATE agent_transfers SET status = 'expired'
+      WHERE organization_id = '${orgId}' AND status = 'active' AND agent_id IS NULL
+        AND contact_id <> '${contactId}'`)
+
     await reseed()
 
     await loginAs(page, agent)

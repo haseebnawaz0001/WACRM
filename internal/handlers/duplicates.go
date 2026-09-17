@@ -229,7 +229,7 @@ func (a *App) MergeContacts(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
-	a.logAudit(orgID, userID, models.ResourceContacts, primaryID, models.AuditActionUpdated, nil,
+	a.logAudit(orgID, userID, models.ResourceContacts, primaryID, models.AuditActionMerged, nil,
 		map[string]any{"merged_from": secondaryID.String()})
 
 	return r.SendEnvelope(map[string]any{"merge": record})

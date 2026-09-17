@@ -1,0 +1,177 @@
+---
+title: Contact Fields
+description: Custom field definitions and values on contacts
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Reading definitions requires `contact_fields:read`; creating, editing and deleting them requires `contact_fields:write` and `contact_fields:delete`. Reading and writing the **values** on a contact goes through the contacts API and needs `contacts:read` / `contacts:write`.
+</Aside>
+
+## Overview
+
+A contact field is a column an organization adds to its own contacts — `company`, `policy_number`, `lifecycle_stage`. Each field has a stable `key` that everything else refers to: filters, templates, automation configs and exports. The `label` is what people see and can change freely; the key cannot change once the field exists, because changing it would break every reference to it silently.
+
+Every organization is seeded with a set of built-in fields. Those can be relabelled and reordered but not deleted, since product features refer to them by key.
+
+### Types
+
+| Type | Stored as | Notes |
+|---|---|---|
+| `text` | string | Optional `max_length` validation |
+| `number` | numeric(20,6) | Optional `min` / `max` |
+| `date` | date | Interpreted in the organization's timezone |
+| `dropdown` | one of `options` | A value outside `options` is rejected |
+| `email` | string | Validated as an address |
+| `phone` | string | Normalised the way contact numbers are |
+
+## List Contact Fields
+
+```bash
+GET /api/contact-fields
+```
+
+Returns every definition the organization has, in display order, archived ones included — a client rendering a record still needs the definition behind a value that was set before the field was archived. The `archived` flag says which are which.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "fields": [
+      {
+        "id": "8f14e45f-ceea-467a-9a3c-1f2b0c5c0a01",
+        "key": "company",
+        "label": "Company",
+        "description": "Where they work",
+        "type": "text",
+        "options": [],
+        "validation": { "max_length": 120 },
+        "is_required": false,
+        "is_system": true,
+        "show_in_list": true,
+        "show_in_chat_panel": true,
+        "group_label": "Business",
+        "position": 1,
+        "archived": false
+      }
+    ]
+  }
+}
+```
+
+## Create Contact Field
+
+```bash
+POST /api/contact-fields
+```
+
+### Request Body
+
+```json
+{
+  "key": "policy_number",
+  "label": "Policy number",
+  "type": "text",
+  "group_label": "Insurance",
+  "is_required": false,
+  "show_in_list": true,
+  "show_in_chat_panel": true,
+  "validation": { "max_length": 32 }
+}
+```
+
+`key` must be lowercase letters, digits and underscores, and must be unique within the organization. A `dropdown` field must also carry `options`.
+
+## Update Contact Field
+
+```bash
+PUT /api/contact-fields/{id}
+```
+
+The `key` and the `type` are immutable: a key change breaks the filters and templates that name it, and a type change cannot convert the values already stored. Both are refused with `400`.
+
+### Removing a dropdown option
+
+Removing an option that a saved segment or automation still names is refused with `409` and the dependents are listed:
+
+```json
+{
+  "status": "error",
+  "message": "The option \"bronze\" is still used by automation \"Bronze welcome\", segment \"Bronze tier\"",
+  "data": { "removed_options": ["bronze"] }
+}
+```
+
+Pass `?force=1` to remove it anyway. The rules keep running; they simply stop matching.
+
+### Renaming a dropdown option
+
+A rename is not a removal, and has to be declared as one — otherwise it is indistinguishable from removing one option and adding another, and every contact set to the old value would be left holding something the field no longer offers:
+
+```json
+{
+  "options": ["Bronze", "silver"],
+  "option_renames": [{ "from": "bronze", "to": "Bronze" }]
+}
+```
+
+The stored values move with the rename, and so do the segment filters and automation configs that name this field. Configs that mention the same word for a *different* field are left alone.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "field": { "id": "…", "key": "policy_number", "label": "Policy number" },
+    "options_renamed": 1
+  }
+}
+```
+
+## Delete Contact Field
+
+```bash
+DELETE /api/contact-fields/{id}
+```
+
+Deletes the definition **and every value stored against it** — a value whose definition is gone is data nothing can interpret. Built-in fields are refused with `400`; archive them instead by sending `{"archived": true}` to the update endpoint.
+
+## Reading and writing values
+
+Values live on the contact, not on the definition.
+
+`GET /api/contacts/{id}` returns them under `fields`, keyed by field key:
+
+```json
+{
+  "id": "…",
+  "profile_name": "Ayesha",
+  "fields": { "company": "Acme", "lifecycle_stage": "customer" }
+}
+```
+
+`PUT /api/contacts/{id}` accepts the same shape. Only the keys present are written, so two agents editing different fields on the same contact do not overwrite each other. Each changed field emits a `contact.field_changed` activity, which is what puts the change on the contact's timeline.
+
+## Filtering by a field
+
+Custom fields are filterable wherever the contact filter AST is accepted (search, segments, automation conditions, campaign audiences) under the name `field.<key>`:
+
+```json
+{
+  "op": "and",
+  "children": [
+    { "field": "field.lifecycle_stage", "operator": "is", "value": "customer" },
+    { "field": "field.company", "operator": "contains", "value": "Acme" }
+  ]
+}
+```
+
+`GET /api/contacts/filter-fields` returns every filterable field with its type and operators, including the custom ones, so a filter builder never has to hardcode the list.
+
+## Exporting
+
+`GET /api/export/contacts/config` lists `field.<key>` columns alongside the built-in ones, and the export accepts them in `columns`. Archived fields are not offered: their values are still readable on a record, but offering them as an export column would suggest they are still part of the shape of a contact.

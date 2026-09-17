@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -450,4 +452,28 @@ func SystemRolePermissions() map[string][]string {
 		"manager": managerPermissions,
 		"agent":   agentPermissions,
 	}
+}
+
+// RolePermissionRevocation records a permission a person deliberately took
+// away from a role (plan 10, S1).
+//
+// Permission backfills add what new features need to roles that already exist.
+// Without a record of removals, every backfill would undo an administrator's
+// decision: an admin who took `contacts:delete` away from a role would find it
+// back after the next upgrade, with nothing in the product to say why. A
+// revocation is a standing instruction — "do not grant this again" — and only
+// re-granting the permission explicitly clears it.
+type RolePermissionRevocation struct {
+	CustomRoleID uuid.UUID `gorm:"type:uuid;primaryKey" json:"custom_role_id"`
+	PermissionID uuid.UUID `gorm:"type:uuid;primaryKey" json:"permission_id"`
+
+	// RevokedByID is the user who removed it, kept for the audit trail. It is
+	// nullable because a revocation may be recorded by a migration that is
+	// reconciling state rather than by a person.
+	RevokedByID *uuid.UUID `gorm:"type:uuid" json:"revoked_by_id,omitempty"`
+	RevokedAt   time.Time  `gorm:"not null;default:now()" json:"revoked_at"`
+}
+
+func (RolePermissionRevocation) TableName() string {
+	return "role_permission_revocations"
 }

@@ -15,7 +15,8 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/customfields"
+	"github.com/shridarpatil/whatomate/internal/crmcontext"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templating"
 	"github.com/valyala/fasthttp"
@@ -323,25 +324,22 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
-	// Get user details
-	var user models.User
-	a.DB.First(&user, userID)
-
-	// Get organization details
-	var org models.Organization
-	a.DB.First(&org, orgID)
-
-	// Build context for variable replacement
-	// Custom field values are loaded here rather than inside the builder so a
-	// failure degrades to "no fields" instead of failing the action.
-	fieldValues, err := customfields.New(a.DB).Values(
-		context.Background(), orgID, contact.ID, models.FieldEntityContact)
+	// One namespace, built by one component (plan 10, S6). Custom actions used
+	// to assemble their own `contact.*` map, which is how they ended up the
+	// only screen in the product where `contact.fields.company` worked.
+	actionContext, err := a.CRMContext().Build(context.Background(), orgID, crmcontext.Opts{
+		ContactID:     contact.ID,
+		UserID:        &userID,
+		IncludeFields: true,
+		MaskPhone:     a.phoneMasker(orgID, userID),
+	})
 	if err != nil {
-		a.Log.Error("load contact fields for custom action", "error", err, "contact", contact.ID)
-		fieldValues = map[string]any{}
+		a.Log.Error("build custom action context", "error", err, "contact", contact.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to build action context", nil, "")
 	}
-
-	actionContext := buildActionContext(contact, user, org, fieldValues)
+	// `organization` is the spelling custom-action templates have always used.
+	// Both work; removing the old one would break every template in the field.
+	actionContext["organization"] = actionContext["org"]
 
 	// Execute based on action type
 	var result *ActionResult
@@ -366,6 +364,20 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	}
 
 	a.Log.Info("Custom action executed", "action_id", actionID, "contact_id", contactID)
+
+	// The timeline has to show it (plan 10, 4.6). A custom action can charge a
+	// card or cancel an order; a record that says only "an agent opened the
+	// chat" is not a history of what happened to this customer.
+	//
+	// Not a webhook: the action usually *is* the call to the external system,
+	// so delivering it back out would be telling them what they just did.
+	a.PublishEvent(crmevents.New(orgID, "custom_action.executed",
+		crmevents.UserActor(userID, ""), map[string]any{
+			"action_id":   action.ID.String(),
+			"action_name": action.Name,
+			"action_type": action.ActionType,
+		}).ForContact(contact.ID))
+
 	return r.SendEnvelope(result)
 }
 
@@ -600,35 +612,6 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 	}
 
 	return result, nil
-}
-
-// buildActionContext builds the context object for variable replacement
-func buildActionContext(contact models.Contact, user models.User, org models.Organization,
-	fields map[string]any) map[string]any {
-	return map[string]any{
-		"contact": map[string]any{
-			"id":           contact.ID.String(),
-			"phone_number": contact.PhoneNumber,
-			"name":         contact.ProfileName,
-			"profile_name": contact.ProfileName,
-			"tags":         contact.Tags,
-			"metadata":     contact.Metadata,
-			// The typed custom fields (plan 01): {{contact.fields.company}}.
-			// metadata above is the untyped blob those fields replaced, kept
-			// so templates written against it keep working.
-			"fields": fields,
-		},
-		"user": map[string]any{
-			"id":    user.ID.String(),
-			"name":  user.FullName,
-			"email": user.Email,
-			"role":  user.Role,
-		},
-		"organization": map[string]any{
-			"id":   org.ID.String(),
-			"name": org.Name,
-		},
-	}
 }
 
 // replaceVariables replaces {{variable}} placeholders with context values,

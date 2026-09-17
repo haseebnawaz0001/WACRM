@@ -12,7 +12,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,7 +26,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader, ErrorState } from '@/components/shared'
-import { inboxService, type InboxRow, type InboxCounts } from '@/services/api'
+import { chatbotService, inboxService, type InboxRow, type InboxCounts } from '@/services/api'
+import { unwrapResponse, unwrapListResponse } from '@/lib/api-utils'
 import { useAuthStore } from '@/stores/auth'
 import { wsService } from '@/services/websocket'
 import { toast } from 'vue-sonner'
@@ -40,8 +41,19 @@ type InboxViewKey = 'mine' | 'unassigned' | 'bot' | 'all'
 
 const rows = ref<InboxRow[]>([])
 const counts = ref<InboxCounts | null>(null)
-const view = ref<InboxViewKey>('mine')
+
+/**
+ * The tab comes from the URL so a view is shareable and survives a reload —
+ * and so `/chatbot/transfers` can redirect straight into the queue rather than
+ * dropping a supervisor on somebody else's inbox (plan 03, plan 10 §4.2).
+ */
+const route = useRoute()
+const initialView = (route.query.view as InboxViewKey) || 'mine'
+const view = ref<InboxViewKey>(
+  ['mine', 'unassigned', 'bot', 'all'].includes(initialView) ? initialView : 'mine'
+)
 const status = ref('')
+const isPicking = ref(false)
 
 const isLoading = ref(true)
 const fetchError = ref(false)
@@ -54,8 +66,11 @@ async function fetchInbox() {
       inboxService.list({ view: view.value, status: status.value, limit: 100 }),
       inboxService.counts()
     ])
-    rows.value = listResult.data.conversations || []
-    counts.value = countsResult.data
+    // Every response is { status, data: … }: reading `.data` off the axios
+    // response yields the envelope, so the list was always empty and every
+    // badge always zero.
+    rows.value = unwrapListResponse<InboxRow>(listResult, 'conversations')
+    counts.value = unwrapResponse<InboxCounts>(countsResult)
     fetchError.value = false
   } catch {
     fetchError.value = true
@@ -65,6 +80,37 @@ async function fetchInbox() {
 }
 
 watch([view, status], fetchInbox)
+
+// replace, not push: switching tabs is refining one view, and pushing would
+// make Back walk through every tab the agent glanced at.
+watch(view, value => {
+  void router.replace({ query: { ...route.query, view: value } })
+})
+
+/**
+ * Take the next conversation from the queue (plan 10 §4.2).
+ *
+ * The Transfers page had this and the inbox did not, so an agent who wanted
+ * work had to go to a different screen to ask for it. The pick itself is the
+ * transfer service's, which serialises two agents pressing this at once.
+ */
+async function pickNext() {
+  isPicking.value = true
+  try {
+    const { data } = await chatbotService.pickNextTransfer()
+    const payload = (data as any)?.data ?? data
+    if (!payload?.transfer) {
+      toast.info(t('inbox.queueEmpty'))
+      return
+    }
+    await fetchInbox()
+    void router.push(`/chat/${payload.transfer.contact_id}`)
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || t('common.error'))
+  } finally {
+    isPicking.value = false
+  }
+}
 
 async function resolve(row: InboxRow) {
   // Optimistic: the row leaves the list immediately, because the point of
@@ -124,15 +170,26 @@ function lastMessage(row: InboxRow): string {
 
 let unsubscribe: (() => void) | null = null
 
+const stopWatching: Array<() => void> = []
+
 onMounted(async () => {
   await fetchInbox()
   // A shared inbox that only updates on reload has two people answering the
   // same customer.
   unsubscribe = wsService.subscribe('crm_event', fetchInbox)
+
+  // The typed events too (plan 10, S10). crm_event is a firehose the list has
+  // to match on by string; these say plainly that a conversation or a contact
+  // in this list changed.
+  for (const event of ['conversation_updated', 'contact_updated', 'contact_merged']) {
+    stopWatching.push(wsService.subscribe(event, () => void fetchInbox()))
+  }
 })
 
 onUnmounted(() => {
   unsubscribe?.()
+  stopWatching.forEach(stop => stop())
+  stopWatching.length = 0
 })
 </script>
 
@@ -170,6 +227,20 @@ onUnmounted(() => {
           <SelectItem value="resolved">{{ t('inbox.statusResolved') }}</SelectItem>
         </SelectContent>
       </Select>
+
+      <!-- The queue's own control, on the queue (plan 10 §4.2). It lived on a
+           separate Transfers page, so an agent who wanted work had to go to a
+           different screen to ask for it. -->
+      <Button
+        v-if="view === 'unassigned' && canAssign"
+        variant="outline"
+        size="sm"
+        class="ml-auto"
+        :disabled="isPicking"
+        @click="pickNext"
+      >
+        {{ t('inbox.pickNext') }}
+      </Button>
     </div>
 
     <ErrorState v-if="fetchError" :message="t('inbox.loadFailed')" @retry="fetchInbox" />
@@ -191,7 +262,14 @@ onUnmounted(() => {
         <button class="min-w-0 flex-1 text-left" @click="router.push(`/chat?contact=${row.contact_id}`)">
           <div class="flex items-center gap-2">
             <span class="truncate font-medium">{{ row.contact_name || row.contact_phone }}</span>
-            <Bot v-if="row.bot_active" class="h-3.5 w-3.5 text-muted-foreground" :aria-label="t('inbox.botHandled')" />
+            <Bot v-if="row.handling === 'bot'" class="h-3.5 w-3.5 text-muted-foreground" :aria-label="t('inbox.botHandled')" />
+            <Badge
+              v-else-if="row.handling === 'handoff_pending'"
+              variant="outline"
+              class="px-1.5 py-0 text-[11px] text-amber-600 dark:text-amber-500"
+            >
+              {{ t('inbox.handoffPending') }}
+            </Badge>
             <Badge v-if="row.reopened_count" variant="outline" class="px-1.5 py-0 text-[11px]">
               {{ t('inbox.reopened', { count: row.reopened_count }) }}
             </Badge>

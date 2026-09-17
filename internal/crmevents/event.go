@@ -25,6 +25,11 @@ const (
 	ActorAutomation = "automation"
 	ActorContact    = "contact"
 	ActorAPI        = "api"
+	// ActorBot is the chatbot acting on its own, as distinct from an agent or
+	// a rule (plan 02). Without it a flow's edits to a record were logged as
+	// "system", which reads as "the product did this" when the truthful answer
+	// is "the chatbot did, while talking to them".
+	ActorBot = "bot"
 )
 
 // Subject types.
@@ -58,6 +63,9 @@ func UserActor(id uuid.UUID, name string) Actor {
 func ContactActor(id uuid.UUID, name string) Actor {
 	return Actor{Type: ActorContact, ID: &id, Name: name}
 }
+
+// BotActor is the chatbot acting while talking to somebody.
+func BotActor() Actor { return Actor{Type: ActorBot} }
 
 // Subject identifies the record an event is about.
 type Subject struct {

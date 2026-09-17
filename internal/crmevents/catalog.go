@@ -85,10 +85,52 @@ var catalog = map[string]Spec{
 	"deal.updated": {Type: "deal.updated", RecordActivity: true, Webhook: true},
 	"deal.deleted": {Type: "deal.deleted", RecordActivity: true, Webhook: true},
 
-	// Agent transfers.
+	// Agent transfers. Expiry is new: a transfer that timed out is a customer
+	// nobody answered, which is exactly what a subscriber wants to hear about.
 	"transfer.created":  {Type: "transfer.created", RecordActivity: true, Webhook: true},
 	"transfer.assigned": {Type: "transfer.assigned", RecordActivity: true, Webhook: true},
 	"transfer.resumed":  {Type: "transfer.resumed", RecordActivity: true, Webhook: true},
+	"transfer.expired":  {Type: "transfer.expired", RecordActivity: true, Webhook: true},
+
+	// Lifecycle stage is the one contact field worth its own event (plan 01):
+	// "became a customer" is the change reporting counts and automation reacts
+	// to, and digging it out of a generic field_changed payload made every
+	// consumer re-implement the same filter.
+	"contact.lifecycle_stage_changed": {Type: "contact.lifecycle_stage_changed", RecordActivity: true, Webhook: true, Automatable: true},
+
+	// Marketing preference. Not a trigger: the only sensible reaction to
+	// someone opting out is to stop, which the send path already enforces.
+	"contact.opt_out_changed": {Type: "contact.opt_out_changed", RecordActivity: true},
+
+	// Calls (plan 10, §4.4). A missed call is the canonical reason to want a
+	// callback task created automatically.
+	"call.missed":             {Type: "call.missed", RecordActivity: true, Webhook: true, Automatable: true},
+	"call.completed":          {Type: "call.completed", RecordActivity: true, Webhook: true, Automatable: true},
+	"call.transfer_no_answer": {Type: "call.transfer_no_answer", RecordActivity: true, Webhook: true},
+
+	// Chatbot. flow_completed is how a qualification flow tells the rest of
+	// the product it finished, which is when the CRM work starts.
+	"chatbot.flow_completed": {Type: "chatbot.flow_completed", RecordActivity: true, Webhook: true, Automatable: true},
+
+	// Campaigns (plan 10, §4.5). A reply to a campaign is the moment a blast
+	// becomes a conversation, and the one campaign event worth automating.
+	"campaign.replied": {Type: "campaign.replied", RecordActivity: true, Webhook: true, Automatable: true},
+	// Per-recipient sends are recorded against the campaign, not the timeline:
+	// a timeline row per recipient would bury the contact's own history.
+	"campaign.sent_to_contact": {Type: "campaign.sent_to_contact", Webhook: false},
+
+	// SLA (plan 03). A breach is a promise the organization made and missed,
+	// so it is both a webhook and something rules escalate on.
+	"conversation.sla_breached":  {Type: "conversation.sla_breached", RecordActivity: true, Webhook: true, Automatable: true},
+	"conversation.sla_escalated": {Type: "conversation.sla_escalated", RecordActivity: true, Webhook: true},
+
+	// Notes. Timeline only: a note is internal commentary, and delivering it
+	// to an external subscriber would leak what agents say about customers.
+	"note.created": {Type: "note.created", RecordActivity: true},
+
+	// Custom actions. Recorded so "who ran what against this contact" is
+	// answerable; not exposed, because the action's own webhook already fired.
+	"custom_action.executed": {Type: "custom_action.executed", RecordActivity: true},
 }
 
 // Lookup returns the spec for an event type.
@@ -124,6 +166,19 @@ func AutomatableEventTypes() []string {
 	for t, s := range catalog {
 		if s.Automatable {
 			out = append(out, t)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ActivityEventTypes lists the events the catalog records on a contact's
+// timeline, sorted.
+func ActivityEventTypes() []string {
+	out := make([]string, 0, len(catalog))
+	for key, spec := range catalog {
+		if spec.RecordActivity {
+			out = append(out, key)
 		}
 	}
 	sort.Strings(out)

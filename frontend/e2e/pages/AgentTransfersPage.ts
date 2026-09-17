@@ -29,7 +29,9 @@ export class AgentTransfersPage extends BasePage {
   }
 
   async goto() {
-    await this.page.goto('/chatbot/transfers')
+    // The queue moved into the Inbox's Unassigned view (plan 03); this page
+    // is now the supervisor's SLA view and lives at its own path.
+    await this.page.goto('/chatbot/transfers/sla')
     await this.page.waitForLoadState('networkidle')
   }
 

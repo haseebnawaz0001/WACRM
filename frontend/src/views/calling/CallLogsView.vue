@@ -14,6 +14,10 @@ import type { Column } from '@/components/shared/types'
 import SearchInput from '@/components/shared/SearchInput.vue'
 import { ErrorState } from '@/components/shared'
 import IVRPathTree from '@/components/calling/IVRPathTree.vue'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { toast } from 'vue-sonner'
+import { getErrorMessage } from '@/lib/api-utils'
 
 const { t } = useI18n()
 const store = useCallingStore()
@@ -34,6 +38,35 @@ const error = ref<string | null>(null)
 // Detail dialog
 const showDetail = ref(false)
 const selectedLog = ref<CallLog | null>(null)
+
+// The call outcome (plan 10, 4.4). The telephony records that a call was
+// answered for forty seconds; it cannot record what the call was about or what
+// happens next, which is the part anybody reads a week later.
+const outcome = ref({ disposition: '', notes: '', follow_up: false, follow_up_note: '' })
+const savingOutcome = ref(false)
+const DISPOSITIONS = ['answered', 'no_answer', 'voicemail', 'wrong_number', 'call_back', 'resolved', 'not_resolved']
+
+async function saveOutcome() {
+  if (!selectedLog.value) return
+  savingOutcome.value = true
+  try {
+    await callLogsService.recordOutcome(selectedLog.value.id, {
+      disposition: outcome.value.disposition,
+      notes: outcome.value.notes,
+      follow_up: outcome.value.follow_up,
+      follow_up_note: outcome.value.follow_up_note || undefined
+    })
+    selectedLog.value.disposition = outcome.value.disposition
+    selectedLog.value.notes = outcome.value.notes
+    toast.success(t('calling.outcomeSaved'))
+    outcome.value.follow_up = false
+    outcome.value.follow_up_note = ''
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('calling.outcomeFailed')))
+  } finally {
+    savingOutcome.value = false
+  }
+}
 const selectedTransfers = ref<CallTransfer[]>([])
 const recordingURL = ref<string | null>(null)
 const recordingLoading = ref(false)
@@ -86,6 +119,12 @@ function handlePageChange(page: number) {
 
 async function viewDetail(log: CallLog) {
   selectedLog.value = log
+  outcome.value = {
+    disposition: log.disposition || '',
+    notes: log.notes || '',
+    follow_up: false,
+    follow_up_note: ''
+  }
   selectedTransfers.value = []
   showDetail.value = true
   recordingURL.value = null
@@ -480,6 +519,41 @@ watch(phoneSearch, () => {
           <div v-if="selectedLog.error_message">
             <p class="text-sm text-muted-foreground mb-1">{{ t('calling.error') }}</p>
             <p class="text-sm text-destructive">{{ selectedLog.error_message }}</p>
+          </div>
+
+          <div class="space-y-3 border-t pt-4">
+            <p class="text-sm font-medium">{{ t('calling.outcome') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <Button
+                v-for="option in DISPOSITIONS"
+                :key="option"
+                :variant="outcome.disposition === option ? 'secondary' : 'outline'"
+                size="sm"
+                class="h-7 text-xs"
+                @click="outcome.disposition = option"
+              >
+                {{ t(`calling.disposition.${option}`) }}
+              </Button>
+            </div>
+            <Textarea
+              v-model="outcome.notes"
+              :rows="3"
+              :placeholder="t('calling.outcomeNotesPlaceholder')"
+            />
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="outcome.follow_up" type="checkbox" class="h-3.5 w-3.5" />
+              {{ t('calling.createFollowUp') }}
+            </label>
+            <Input
+              v-if="outcome.follow_up"
+              v-model="outcome.follow_up_note"
+              :placeholder="t('calling.followUpPlaceholder')"
+            />
+            <div class="flex justify-end">
+              <Button size="sm" :disabled="savingOutcome || !outcome.disposition" @click="saveOutcome">
+                {{ t('common.save') }}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

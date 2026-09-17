@@ -127,6 +127,35 @@ function parseOptions() {
     })
 }
 
+/**
+ * Works out which option values were renamed rather than replaced.
+ *
+ * Editing the textarea, a rename is editing a line in place — so a line whose
+ * value changed, where the old value is gone from the list and the new one was
+ * not in it before, is a rename. Without this the server sees one option
+ * removed and another added, and everything already set to the old value is
+ * orphaned: it renders as empty and filters skip it.
+ *
+ * Only when the list is the same length, because adding or removing a line
+ * shifts the rest and the positions stop meaning anything.
+ */
+function detectRenames(before: { value: string }[], after: { value: string }[]) {
+  if (before.length !== after.length) return []
+
+  const wasThere = new Set(before.map((o) => o.value))
+  const stillThere = new Set(after.map((o) => o.value))
+
+  const renames: { from: string; to: string }[] = []
+  for (let i = 0; i < before.length; i++) {
+    const from = before[i].value
+    const to = after[i].value
+    if (from !== to && !stillThere.has(from) && !wasThere.has(to)) {
+      renames.push({ from, to })
+    }
+  }
+  return renames
+}
+
 /** Suggests a key from the label, so the common case needs no thought. */
 function suggestKey() {
   if (isEditing.value || form.value.key) return
@@ -150,7 +179,12 @@ async function save() {
       position: form.value.position
     }
     if (form.value.type === 'dropdown') {
-      payload.options = parseOptions()
+      const options = parseOptions()
+      payload.options = options
+      if (isEditing.value && editing.value) {
+        const renames = detectRenames(editing.value.options || [], options)
+        if (renames.length) payload.option_renames = renames
+      }
     }
 
     if (isEditing.value && editing.value) {

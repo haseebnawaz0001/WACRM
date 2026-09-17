@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -822,6 +823,77 @@ func TestApp_GetCampaignRecipients_Success(t *testing.T) {
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, 2, resp.Data.Total)
+}
+
+// A campaign can hold hundreds of thousands of recipients. Returning all of
+// them served one screen by sending the whole table to the browser.
+func TestApp_GetCampaignRecipients_IsPaged(t *testing.T) {
+	app := newTestApp(t, withQueue(testutil.NewMockQueue()))
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID,
+		testutil.WithEmail(testutil.UniqueEmail("recipients-paged")), testutil.WithPassword("password"),
+		testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
+	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("recipients-paged-account"))
+	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
+	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
+
+	for i := 0; i < 5; i++ {
+		createTestRecipient(t, app, campaign.ID, fmt.Sprintf("+1234567%03d", i), models.MessageStatusPending)
+	}
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+	req.RequestCtx.QueryArgs().Set("limit", "2")
+
+	require.NoError(t, app.GetCampaignRecipients(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Recipients []models.BulkMessageRecipient `json:"recipients"`
+			Total      int                           `json:"total"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Len(t, resp.Data.Recipients, 2, "the page holds what was asked for")
+	assert.Equal(t, 5, resp.Data.Total, "the total counts everything, not the page")
+}
+
+// The list is read to answer "who did not get it", so the status filter has to
+// narrow the count as well as the rows — a total that ignores the filter makes
+// the pager point at pages that are not there.
+func TestApp_GetCampaignRecipients_FiltersByStatus(t *testing.T) {
+	app := newTestApp(t, withQueue(testutil.NewMockQueue()))
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID,
+		testutil.WithEmail(testutil.UniqueEmail("recipients-filtered")), testutil.WithPassword("password"),
+		testutil.WithRoleID(&testutil.CreateAdminRole(t, app.DB, org.ID).ID))
+	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("recipients-filtered-account"))
+	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
+	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
+
+	createTestRecipient(t, app, campaign.ID, "+12340000001", models.MessageStatusFailed)
+	createTestRecipient(t, app, campaign.ID, "+12340000002", models.MessageStatusSent)
+	createTestRecipient(t, app, campaign.ID, "+12340000003", models.MessageStatusSent)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+	req.RequestCtx.QueryArgs().Set("status", string(models.MessageStatusFailed))
+
+	require.NoError(t, app.GetCampaignRecipients(req))
+
+	var resp struct {
+		Data struct {
+			Recipients []models.BulkMessageRecipient `json:"recipients"`
+			Total      int                           `json:"total"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	require.Len(t, resp.Data.Recipients, 1)
+	assert.Equal(t, 1, resp.Data.Total)
+	assert.Equal(t, models.MessageStatusFailed, resp.Data.Recipients[0].Status)
 }
 
 func TestApp_GetCampaignRecipients_CampaignNotFound(t *testing.T) {

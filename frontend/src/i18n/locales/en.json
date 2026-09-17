@@ -118,7 +118,15 @@
     "unsavedChangesDesc": "You have unsaved changes. Are you sure you want to leave?",
     "unsavedChangesTitle": "Unsaved Changes",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "unknown": "Unknown",
+    "ownerInactive": "Owner inactive",
+    "openFullPage": "Open full page",
+    "related": "Related",
+    "activity": "Activity",
+    "nothingHere": "Nothing here yet",
+    "viewAll": "View all",
+    "somethingWentWrong": "Something went wrong"
   },
   "auth": {
     "login": "Login",
@@ -295,7 +303,9 @@
     "crmReports": "CRM Reports",
     "inbox": "Inbox",
     "tasks": "Follow-ups",
-    "segments": "Segments"
+    "segments": "Segments",
+    "home": "Home",
+    "transferSla": "Transfer SLA"
   },
   "userMenu": {
     "myAccount": "My Account",
@@ -459,7 +469,34 @@
     "urlButtonParamPlaceholder": "Enter dynamic URL value",
     "preview": "Preview",
     "serviceWindowExpired": "The 24-hour messaging window has expired. Only template messages can be sent until the customer replies.",
-    "sendTemplateAction": "Send Template"
+    "sendTemplateAction": "Send Template",
+    "headerParamBadge": "Header",
+    "windowClosesInHours": "The 24-hour reply window closes in {hours}h {minutes}m",
+    "windowClosesInMinutes": "The 24-hour reply window closes in {minutes}m",
+    "showActivity": "Show activity",
+    "commandTask": "create a follow-up",
+    "commandNote": "add an internal note",
+    "commandAssign": "take this conversation",
+    "commandSnooze": "park it until tomorrow morning",
+    "commandResolve": "close the conversation",
+    "commandEnter": "Enter to run",
+    "commandNeedsText": "Type what you want after the command",
+    "commandFailed": "That command did not run",
+    "commandTaskDone": "Follow-up created",
+    "commandNoteDone": "Note added",
+    "commandAssignDone": "This conversation is yours",
+    "commandSnoozeDone": "Parked until tomorrow morning",
+    "commandResolveDone": "Conversation resolved",
+    "messageActions": "Do something with this",
+    "messageActionTask": "Create a follow-up",
+    "messageActionNote": "Add a note about it",
+    "messageActionDeal": "Create a deal",
+    "messageActionCopyTo": "Copy into",
+    "messageActionUntitled": "About a message",
+    "messageActionNoteBody": "About their message: “{text}”",
+    "messageActionFailed": "That did not work",
+    "messageActionDealDone": "Deal created",
+    "messageActionCopied": "Copied into {field}"
   },
   "contacts": {
     "title": "Contacts",
@@ -505,7 +542,9 @@
     "searchTags": "Search tags...",
     "noTagsFound": "No tags found",
     "whatsappAccount": "WhatsApp Account",
-    "selectAccount": "Select account..."
+    "selectAccount": "Select account...",
+    "contact": "Contact",
+    "lastMessageAt": "Last message"
   },
   "importExport": {
     "title": "Import/Export {resource}",
@@ -622,7 +661,20 @@
     "metaAppSecret": "Meta App Secret",
     "myTimezone": "My timezone",
     "myTimezoneDesc": "Overrides the organization timezone for dates you see. Leave unset to follow the organization.",
-    "useOrgTimezone": "Use the organization's timezone"
+    "useOrgTimezone": "Use the organization's timezone",
+    "inbox": "Inbox",
+    "inboxDesc": "When conversations reopen, and when they close on their own",
+    "inboxSaved": "Inbox settings saved",
+    "reopenWindow": "Reopen window (hours)",
+    "reopenWindowDesc": "A reply this soon after resolving continues the same conversation instead of starting a new one.",
+    "autoResolveIdle": "Close after inactivity (hours)",
+    "autoResolveIdleDesc": "Close a conversation nothing has happened in. 0 never closes one automatically.",
+    "pendingTimeout": "Close pending after (hours)",
+    "pendingTimeoutDesc": "Close a conversation waiting on the customer. 0 never closes one automatically.",
+    "autoPending": "Mark pending when an agent replies",
+    "autoPendingDesc": "Open then means “waiting on us”, so the count is work an agent can act on.",
+    "marketingFrequencyCap": "Marketing frequency cap (hours)",
+    "marketingFrequencyCapDesc": "Skip contacts who received a marketing campaign in the last N hours. 0 turns the cap off."
   },
   "users": {
     "title": "User Management",
@@ -1278,7 +1330,7 @@
     "goBack": "Go Back",
     "goHome": "Go Home"
   },
-  "profile": {
+  "contactProfile": {
     "loadFailed": "This contact could not be loaded.",
     "openChat": "Open chat",
     "timeline": "History",
@@ -1296,6 +1348,25 @@
     "merges": "Merged records",
     "mergedOn": "Another record was merged in on {when}.",
     "noFields": "No details recorded yet."
+  },
+  "profile": {
+    "title": "Profile",
+    "description": "Manage your account settings",
+    "accountInfo": "Account Information",
+    "accountInfoDesc": "Your account details",
+    "changePassword": "Change Password",
+    "changePasswordDesc": "Update your account password",
+    "currentPassword": "Current Password",
+    "currentPasswordPlaceholder": "Enter current password",
+    "newPassword": "New Password",
+    "newPasswordPlaceholder": "Enter new password",
+    "confirmNewPassword": "Confirm New Password",
+    "confirmNewPasswordPlaceholder": "Confirm new password",
+    "passwordMinLength": "Must be at least 6 characters",
+    "passwordMismatch": "New passwords do not match",
+    "passwordTooShort": "New password must be at least 6 characters",
+    "passwordChanged": "Password changed successfully",
+    "passwordChangeFailed": "Failed to change password"
   },
   "accounts": {
     "metaConnectionDetails": "Details",
@@ -1759,7 +1830,22 @@
     "startConfirm": "Are you sure you want to start this campaign?",
     "statistics": "Statistics",
     "template": "Template",
-    "totalRecipients": "Total Recipients"
+    "totalRecipients": "Total Recipients",
+    "paramMapping": "Template variables",
+    "paramMappingDesc": "Where each variable's value comes from for the contacts in this segment.",
+    "paramSource": "Source",
+    "paramStatic": "The same text for everyone",
+    "paramValue": "Text",
+    "paramFallback": "Used when empty",
+    "paramsSaved": "Template variables saved",
+    "paramsUnmapped": "These variables have no value yet: {names}",
+    "createFailed": "Failed to create campaign",
+    "deleteFailed": "Failed to delete campaign",
+    "deleted": "Campaign deleted",
+    "downloadSampleCsv": "Download sample CSV",
+    "nameRequired": "A campaign name is required",
+    "updateFailed": "Failed to update campaign",
+    "updated": "Campaign updated"
   },
   "chatbotSettings": {
     "title": "Chatbot Settings",
@@ -2005,7 +2091,16 @@
     "deleteContextLabel": "Delete context",
     "details": "Details",
     "newContext": "New Context",
-    "notFound": "AI context not found"
+    "notFound": "AI context not found",
+    "contactProfile": "Contact profile",
+    "contactProfileDesc": "Give the assistant what the CRM already knows about the person it is talking to. Nothing is sent unless you name it here.",
+    "profileFields": "Contact fields to include",
+    "profileFieldsHint": "Comma-separated field keys. Leave empty to send none; use * for every field.",
+    "profileTags": "Tags",
+    "profileLifecycle": "Lifecycle stage",
+    "profileTasks": "Open follow-ups",
+    "profileDeals": "Open deals",
+    "profileConversation": "Conversation status"
   },
   "keywords": {
     "title": "Keyword Rules",
@@ -2525,7 +2620,22 @@
     "deleteNodeConfirmTitle": "Delete Node",
     "deleteNodeConfirmDesc": "Are you sure you want to delete this node? All connected edges will also be removed.",
     "flowSaving": "Saving...",
-    "flowSave": "Save"
+    "flowSave": "Save",
+    "outcome": "Outcome",
+    "outcomeSaved": "Outcome saved",
+    "outcomeFailed": "Could not save the outcome",
+    "outcomeNotesPlaceholder": "What was said?",
+    "createFollowUp": "Create a follow-up",
+    "followUpPlaceholder": "Call back about…",
+    "disposition": {
+      "answered": "Answered",
+      "no_answer": "No answer",
+      "voicemail": "Voicemail",
+      "wrong_number": "Wrong number",
+      "call_back": "Call back",
+      "resolved": "Resolved",
+      "not_resolved": "Not resolved"
+    }
   },
   "callTransfers": {
     "title": "Call Transfers",
@@ -2945,7 +3055,13 @@
     "seconds": "{count}s",
     "minutes": "{count}m",
     "hoursMinutes": "{hours}h {minutes}m",
-    "days": "{count}d"
+    "days": "{count}d",
+    "campaignReplies": "Campaign replies",
+    "noCampaigns": "No campaigns went out in this period.",
+    "campaign": "Campaign",
+    "delivered": "Delivered",
+    "replied": "Replied",
+    "replyRate": "Reply rate"
   },
   "tasks": {
     "title": "Follow-ups",
@@ -2988,6 +3104,8 @@
     "statusSnoozed": "Snoozed",
     "statusResolved": "Resolved",
     "botHandled": "The chatbot is handling this",
+    "handoffPending": "Out of hours",
+    "handoffPendingHint": "This customer asked for a person while the office was closed",
     "waitingMinutes": "waiting {count}m",
     "waitingHours": "waiting {count}h",
     "waitingDays": "waiting {count}d",
@@ -2998,7 +3116,13 @@
     "snoozeUntil": "Until",
     "snoozeHint": "It comes back to the inbox then, and whoever snoozed it is told.",
     "resolve": "Resolve",
-    "reopened": "reopened {count}×"
+    "reopened": "reopened {count}×",
+    "unassigned": "Unassigned",
+    "assignToMe": "Assign to me",
+    "returnToQueue": "Return to queue",
+    "handBackToBot": "Hand back to the chatbot",
+    "pickNext": "Take the next one",
+    "queueEmpty": "Nothing waiting in the queue"
   },
   "segments": {
     "title": "Segments",
@@ -3046,7 +3170,10 @@
     "merge": "Merge",
     "merged": "Merged",
     "confirmTitle": "Merge these contacts?",
-    "confirmBody": "“{drop}” is folded into “{keep}”. Their messages, tasks and deals move across. This cannot be undone."
+    "confirmBody": "“{drop}” is folded into “{keep}”. Their messages, tasks and deals move across. This cannot be undone.",
+    "bannerText": "This may be the same person as {name}",
+    "notADuplicate": "Not a duplicate",
+    "mergeFailed": "Could not merge these contacts"
   },
   "campaignAudience": {
     "title": "Audience",
@@ -3073,5 +3200,25 @@
     "minutesAgo": "{n}m ago",
     "hoursAgo": "{n}h ago",
     "daysAgo": "{n}d ago"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "showHelp": "Show keyboard shortcuts",
+    "commandPalette": "Open the command palette",
+    "commandPlaceholder": "Search contacts and pages…",
+    "pages": "Pages",
+    "noneHere": "No shortcuts are available on this page."
+  },
+  "home": {
+    "greeting": "Welcome back",
+    "greetingNamed": "Welcome back, {name}",
+    "subtitle": "What is waiting for you, and what you promised",
+    "myConversations": "My conversations",
+    "myTasks": "My follow-ups",
+    "inboxClear": "Nothing waiting on you",
+    "tasksClear": "Nothing due",
+    "overdue": "Overdue",
+    "overdueCount": "{count} overdue",
+    "dueTodayCount": "{count} due today"
   }
 }

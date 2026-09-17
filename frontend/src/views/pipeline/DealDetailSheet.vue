@@ -66,7 +66,8 @@ function duration(seconds: number): string {
 
 async function loadHistory() {
   try {
-    const { data } = await dealsService.history(props.deal.id)
+    const { data: envelope } = await dealsService.history(props.deal.id)
+    const data = (envelope as any)?.data ?? envelope
     history.value = data.history || []
   } catch {
     history.value = []
@@ -75,7 +76,8 @@ async function loadHistory() {
 
 async function loadOwners() {
   try {
-    const { data } = await usersService.list()
+    const { data: envelope } = await usersService.list()
+    const data = (envelope as any)?.data ?? envelope
     owners.value = (data.users || data || []).map((u: any) => ({
       id: u.id,
       name: u.name || u.email
@@ -88,7 +90,7 @@ async function loadOwners() {
 async function save() {
   isSaving.value = true
   try {
-    const { data } = await dealsService.update(props.deal.id, {
+    const { data: envelope } = await dealsService.update(props.deal.id, {
       title: draft.value.title,
       value: Number(draft.value.value) || 0,
       owner_id: draft.value.owner_id || '',
@@ -96,6 +98,7 @@ async function save() {
       clear_close_date: !draft.value.expected_close_date,
       lost_reason: draft.value.lost_reason
     })
+    const data = (envelope as any)?.data ?? envelope
     draft.value = { ...data.deal }
     toast.success(t('common.savedSuccess'))
     emit('changed')
@@ -108,7 +111,8 @@ async function save() {
 
 async function moveTo(stageId: string) {
   try {
-    const { data } = await dealsService.move(props.deal.id, { stage_id: stageId })
+    const { data: envelope } = await dealsService.move(props.deal.id, { stage_id: stageId })
+    const data = (envelope as any)?.data ?? envelope
     draft.value = { ...data.deal }
     await loadHistory()
     emit('changed')

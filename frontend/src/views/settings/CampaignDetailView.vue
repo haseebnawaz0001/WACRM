@@ -16,6 +16,7 @@ import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import { ConfirmDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
 import CampaignAudience from '@/components/campaigns/CampaignAudience.vue'
+import CampaignParamMapping from '@/components/campaigns/CampaignParamMapping.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Badge } from '@/components/ui/badge'
@@ -189,6 +190,11 @@ const canRetryFailed = computed(() => {
 
 // --- Recipients state ---
 const recipients = ref<Recipient[]>([])
+const recipientsTotal = ref(0)
+const recipientsPage = ref(1)
+const recipientsStatus = ref('')
+const RECIPIENTS_PER_PAGE = 50
+const recipientsPages = computed(() => Math.max(1, Math.ceil(recipientsTotal.value / RECIPIENTS_PER_PAGE)))
 const isLoadingRecipients = ref(false)
 const deletingRecipientId = ref<string | null>(null)
 const showAddRecipientsDialog = ref(false)
@@ -557,13 +563,33 @@ async function loadRecipients() {
   if (isNew.value || !campaign.value) return
   isLoadingRecipients.value = true
   try {
-    const response = await campaignsService.getRecipients(campaign.value.id)
-    recipients.value = (response.data as any).data?.recipients || []
+    const response = await campaignsService.getRecipients(campaign.value.id, {
+      page: recipientsPage.value,
+      limit: RECIPIENTS_PER_PAGE,
+      status: recipientsStatus.value || undefined
+    })
+    const data = (response.data as any).data
+    recipients.value = data?.recipients || []
+    recipientsTotal.value = data?.total ?? recipients.value.length
   } catch {
     recipients.value = []
+    recipientsTotal.value = 0
   } finally {
     isLoadingRecipients.value = false
   }
+}
+
+/** A page is a window onto the list, so the page resets when the filter does. */
+function filterRecipients(status: string) {
+  recipientsStatus.value = status
+  recipientsPage.value = 1
+  void loadRecipients()
+}
+
+function goToRecipientsPage(page: number) {
+  if (page < 1 || page > recipientsPages.value) return
+  recipientsPage.value = page
+  void loadRecipients()
 }
 
 async function deleteRecipient(recipientId: string) {
@@ -1203,14 +1229,25 @@ onUnmounted(() => {
       @changed="loadCampaign"
     />
 
+    <!-- Where the template's variables get their values. Only for a segment:
+         a pasted list already carries them, column by column (plan 05). -->
+    <CampaignParamMapping
+      v-if="!isNew && campaign && campaign.audience_type === 'segment' && templateParamNames.length"
+      :campaign-id="campaign.id"
+      :param-names="templateParamNames"
+      :existing="(campaign as any).param_mappings"
+      :editable="campaign.status === 'draft' || campaign.status === 'scheduled'"
+      @saved="loadCampaign"
+    />
+
     <!-- Recipients Card (collapsible) -->
     <Card v-if="!isNew && campaign">
-      <Collapsible :default-open="recipients.length > 0 && recipients.length <= 20">
+      <Collapsible :default-open="recipientsTotal > 0 && recipientsTotal <= 20">
         <CardHeader class="pb-3 flex flex-row items-center justify-between">
           <CollapsibleTrigger class="flex items-center gap-2 cursor-pointer hover:opacity-80">
             <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform [[data-state=closed]_&]:rotate-[-90deg]" />
             <CardTitle class="text-sm font-medium">
-              {{ $t('campaigns.recipients', 'Recipients') }} ({{ recipients.length }})
+              {{ $t('campaigns.recipients', 'Recipients') }} ({{ recipientsTotal }})
             </CardTitle>
           </CollapsibleTrigger>
           <Button v-if="isDraft" variant="outline" size="sm" @click="openAddRecipientsDialog">
@@ -1277,6 +1314,29 @@ onUnmounted(() => {
               </TableRow>
             </TableBody>
           </Table>
+        </div>
+        <div v-if="recipientsTotal > 0" class="flex flex-wrap items-center justify-between gap-2 pt-3">
+          <div class="flex items-center gap-1">
+            <Button
+              v-for="option in ['', 'pending', 'sent', 'delivered', 'read', 'failed']"
+              :key="option || 'all'"
+              :variant="recipientsStatus === option ? 'secondary' : 'ghost'"
+              size="sm"
+              class="h-7 text-xs"
+              @click="filterRecipients(option)"
+            >
+              {{ option || $t('common.all', 'All') }}
+            </Button>
+          </div>
+          <div v-if="recipientsPages > 1" class="flex items-center gap-2">
+            <Button variant="outline" size="sm" class="h-7" :disabled="recipientsPage <= 1" @click="goToRecipientsPage(recipientsPage - 1)">
+              {{ $t('common.previous', 'Previous') }}
+            </Button>
+            <span class="text-xs text-muted-foreground">{{ recipientsPage }} / {{ recipientsPages }}</span>
+            <Button variant="outline" size="sm" class="h-7" :disabled="recipientsPage >= recipientsPages" @click="goToRecipientsPage(recipientsPage + 1)">
+              {{ $t('common.next', 'Next') }}
+            </Button>
+          </div>
         </div>
       </CardContent>
         </CollapsibleContent>

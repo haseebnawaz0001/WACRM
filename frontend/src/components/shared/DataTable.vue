@@ -36,12 +36,43 @@ const props = withDefaults(defineProps<{
   // Optional max height for the table area (e.g., 'calc(100vh - 320px)')
   // When set, the table body becomes scrollable while header and pagination stay fixed
   maxHeight?: string
+
+  // --- v2 (plan 10, S12) ---
+
+  /**
+   * Sorting is the server's.
+   *
+   * The table sorted in the browser even while emitting a sort event, so a
+   * paginated list re-ordered the twenty rows on screen and called it sorted —
+   * the row that should have come first was on page four. With serverSort the
+   * table only asks; the parent answers.
+   */
+  serverSort?: boolean
+
+  /** Rows respond to a click. Emits `row-click`. */
+  rowClick?: boolean
+
+  /** Show a checkbox column and a bulk action bar. */
+  selectable?: boolean
+  /** Selected row keys, for `v-model:selected`. */
+  selected?: string[]
+
+  /** Column keys currently hidden, for `v-model:hiddenColumns`. */
+  hiddenColumns?: string[]
+
+  /** When set, the table shows an error instead of rows. */
+  error?: string | null
 }>(), {
   rowKey: 'id',
   serverPagination: false,
   currentPage: 1,
   totalItems: 0,
-  pageSize: 10
+  pageSize: 10,
+  serverSort: false,
+  rowClick: false,
+  selectable: false,
+  selected: () => [],
+  hiddenColumns: () => []
 })
 
 const emit = defineEmits<{
@@ -50,12 +81,18 @@ const emit = defineEmits<{
   'sort': [key: string, direction: 'asc' | 'desc']
   'update:currentPage': [page: number]
   'page-change': [page: number]
+  'update:selected': [keys: string[]]
+  'row-click': [item: T, index: number]
+  'retry': []
 }>()
 
 defineSlots<{
   [key: `cell-${string}`]: (props: { item: T; index: number }) => any
   empty: () => any
   'empty-action': () => any
+  /** Rendered above the table while rows are selected. */
+  'bulk-bar': (props: { selected: string[]; clear: () => void }) => any
+  error: (props: { message: string }) => any
 }>()
 
 const hasSortableColumns = computed(() => props.columns.some(col => col.sortable))
@@ -82,7 +119,9 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
 
 // For client-side sorting (when server doesn't handle sorting)
 const sortedItems = computed(() => {
-  if (!props.sortKey || !hasSortableColumns.value) {
+  // serverSort means the order on screen is the order the server sent. Sorting
+  // again here would re-order one page of a paginated list and call it sorted.
+  if (props.serverSort || !props.sortKey || !hasSortableColumns.value) {
     return props.items
   }
 
@@ -143,15 +182,98 @@ function handlePageChange(page: number) {
 function getRowKey(item: T, index: number): string {
   return item[props.rowKey] ?? `row-${index}`
 }
+
+// Columns the viewer has hidden. Hiding is a display choice, so it never
+// changes what the parent fetched.
+const visibleColumns = computed(() =>
+  props.columns.filter(col => !props.hiddenColumns.includes(col.key))
+)
+
+const selectedSet = computed(() => new Set(props.selected))
+
+const allVisibleSelected = computed(() =>
+  displayItems.value.length > 0 &&
+  displayItems.value.every((item, i) => selectedSet.value.has(getRowKey(item, i)))
+)
+
+function toggleRow(item: T, index: number) {
+  const key = getRowKey(item, index)
+  const next = new Set(props.selected)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  emit('update:selected', [...next])
+}
+
+/**
+ * Select-all covers the rows on screen, not every row matching the filter.
+ *
+ * A checkbox that silently selected forty thousand contacts because the
+ * filter matched them is how a bulk action becomes an incident. A caller that
+ * wants "everything matching" asks for it explicitly, in its own bulk bar.
+ */
+function toggleAllVisible() {
+  const next = new Set(props.selected)
+  const keys = displayItems.value.map((item, i) => getRowKey(item, i))
+  if (allVisibleSelected.value) {
+    keys.forEach(k => next.delete(k))
+  } else {
+    keys.forEach(k => next.add(k))
+  }
+  emit('update:selected', [...next])
+}
+
+function clearSelection() {
+  emit('update:selected', [])
+}
+
+function handleRowClick(item: T, index: number, event: MouseEvent) {
+  if (!props.rowClick) return
+  // A click on a control inside the row belongs to that control. Without this
+  // every menu button and link would also open the row.
+  const target = event.target as HTMLElement | null
+  if (target?.closest('button, a, input, [role="menuitem"], [data-no-row-click]')) return
+  emit('row-click', item, index)
+}
+
+const columnCount = computed(() => visibleColumns.value.length + (props.selectable ? 1 : 0))
 </script>
 
 <template>
+  <!-- Bulk bar: only while something is selected, so it never takes space it
+       has no use for. -->
+  <div
+    v-if="selectable && selected.length"
+    class="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-4 py-2"
+  >
+    <span class="text-sm font-medium">{{ selected.length }}</span>
+    <slot name="bulk-bar" :selected="selected" :clear="clearSelection" />
+    <button
+      type="button"
+      class="ml-auto text-sm text-muted-foreground underline-offset-2 hover:underline"
+      @click="clearSelection"
+    >
+      &times;
+    </button>
+  </div>
+
   <div :class="maxHeight ? 'overflow-auto' : ''" :style="maxHeight ? { maxHeight } : {}">
   <Table>
     <TableHeader>
       <TableRow>
+        <TableHead v-if="selectable" class="w-10">
+          <input
+            type="checkbox"
+            class="h-4 w-4 cursor-pointer rounded border-input"
+            :checked="allVisibleSelected"
+            :aria-label="String(selected.length)"
+            @change="toggleAllVisible"
+          />
+        </TableHead>
         <TableHead
-          v-for="col in columns"
+          v-for="col in visibleColumns"
           :key="col.key"
           :class="[
             col.width,
@@ -188,7 +310,8 @@ function getRowKey(item: T, index: number): string {
       <!-- Loading State - Skeleton Rows -->
       <template v-if="isLoading">
         <TableRow v-for="row in 5" :key="`skeleton-${row}`">
-          <TableCell v-for="col in columns" :key="`skeleton-${row}-${col.key}`">
+          <TableCell v-if="selectable" />
+          <TableCell v-for="col in visibleColumns" :key="`skeleton-${row}-${col.key}`">
             <Skeleton
               :class="[
                 'h-4 skeleton-shimmer',
@@ -199,9 +322,27 @@ function getRowKey(item: T, index: number): string {
         </TableRow>
       </template>
 
+      <!-- Error state: a failed load is not an empty list, and telling the
+           viewer "no results" when the request failed sends them hunting for a
+           filter that is not the problem. -->
+      <TableRow v-else-if="error">
+        <TableCell :colspan="columnCount" class="h-24 text-center">
+          <slot name="error" :message="error">
+            <p class="text-sm text-destructive">{{ error }}</p>
+            <button
+              type="button"
+              class="mt-2 text-sm underline underline-offset-2"
+              @click="emit('retry')"
+            >
+              &#8635;
+            </button>
+          </slot>
+        </TableCell>
+      </TableRow>
+
       <!-- Empty State -->
       <TableRow v-else-if="sortedItems.length === 0">
-        <TableCell :colspan="columns.length" class="h-24 text-center text-muted-foreground">
+        <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
           <slot name="empty">
             <div v-if="emptyIcon" class="mb-3 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/10">
               <component :is="emptyIcon" class="h-7 w-7 text-primary/60" />
@@ -216,9 +357,24 @@ function getRowKey(item: T, index: number): string {
       </TableRow>
 
       <!-- Data Rows -->
-      <TableRow v-else v-for="(item, index) in displayItems" :key="getRowKey(item, index)">
+      <TableRow
+        v-else
+        v-for="(item, index) in displayItems"
+        :key="getRowKey(item, index)"
+        :class="rowClick && 'cursor-pointer hover:bg-accent/40'"
+        @click="handleRowClick(item, index, $event)"
+      >
+        <TableCell v-if="selectable" class="w-10">
+          <input
+            type="checkbox"
+            class="h-4 w-4 cursor-pointer rounded border-input"
+            :checked="selectedSet.has(getRowKey(item, index))"
+            data-no-row-click
+            @change="toggleRow(item, index)"
+          />
+        </TableCell>
         <TableCell
-          v-for="col in columns"
+          v-for="col in visibleColumns"
           :key="col.key"
           :class="[
             col.align === 'right' && 'text-right',

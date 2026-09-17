@@ -90,7 +90,14 @@ This is the complete seeded catalogue — exactly the permissions returned by `G
 | `chat` | read, write | View conversations (`read`) and send messages (`write`) |
 | `chat.assign` | write | Assign conversations to agents |
 | `contacts` | read, write, delete, import, export | Contact management and bulk import/export |
-| `tags` | read, write, delete | Contact tag management |
+| `tags` | read, write, delete, import, export | Contact tag management and bulk import/export |
+| `contact_fields` | read, write, delete | The custom fields an organization adds to its contacts |
+| `segments` | read, write, delete | Saved contact filters |
+| `tasks` | read, write, delete | Follow-ups attached to contacts |
+| `pipelines` | read, write, delete | Pipelines and their stages |
+| `deals` | read, write, delete | Deals moving through a pipeline |
+| `automations` | read, write, delete | Rules and their run history |
+| `reports` | read, export | CRM reports; `export` allows the CSV download |
 | `analytics` | read, write, delete | View the analytics dashboard (`read`); `write`/`delete` govern dashboard widgets |
 | `analytics.agents` | read | Agent performance analytics |
 | `transfers` | read, write, pickup | Chatbot-to-agent transfer queue |

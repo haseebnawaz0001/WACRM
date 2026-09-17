@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"gorm.io/gorm"
 )
@@ -35,6 +36,13 @@ const (
 	TypeAssignment   = "assignment"
 	TypeTransfer     = "transfer"
 	TypeLifecycle    = "lifecycle_stage"
+	// TypeCampaignSend is a bulk message this contact received (plan 02).
+	// Read straight from the recipients table rather than copied into the
+	// activity log: a campaign to forty thousand people would otherwise write
+	// forty thousand activity rows to be read one contact at a time.
+	TypeCampaignSend = "campaign_send"
+	// TypeChatbotSession is a run of a chatbot flow.
+	TypeChatbotSession = "chatbot_session"
 )
 
 // BurstGap is how long a pause has to be before messages stop counting as one
@@ -145,6 +153,20 @@ func (s *Service) Build(ctx context.Context, orgID, contactID uuid.UUID, opts Op
 			return nil, err
 		}
 		items = append(items, notes...)
+	}
+	if include(TypeCampaignSend) {
+		sends, err := s.campaignSends(ctx, orgID, contactID, opts, limit)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, sends...)
+	}
+	if include(TypeChatbotSession) {
+		sessions, err := s.chatbotSessions(ctx, orgID, contactID, opts, limit)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, sessions...)
 	}
 
 	activities, err := s.activities(ctx, orgID, contactID, opts, limit)
@@ -374,7 +396,21 @@ func itemTypeForActivity(activityType string) string {
 func summaryForActivity(row models.ContactActivity) string {
 	who := row.ActorName
 	if who == "" {
-		who = "System"
+		// Name the actor by what it is rather than calling everything
+		// "System": a customer reading "changed by System" when the chatbot
+		// did it learns nothing (plan 02).
+		switch row.ActorType {
+		case crmevents.ActorBot:
+			who = "the chatbot"
+		case crmevents.ActorAutomation:
+			who = "an automation"
+		case crmevents.ActorContact:
+			who = "the customer"
+		case crmevents.ActorAPI:
+			who = "the API"
+		default:
+			who = "System"
+		}
 	}
 
 	switch row.Type {
@@ -432,6 +468,154 @@ func summaryForActivity(row models.ContactActivity) string {
 		return "Transferred to an agent"
 	case "transfer.resumed":
 		return "Handed back to the bot"
+	case "custom_action.executed":
+		// The name is carried on the event rather than looked up: an action
+		// deleted since would otherwise render as a blank line in a history
+		// that is meant to say what was done.
+		if name, ok := row.Data["action_name"]; ok && name != "" {
+			return fmt.Sprintf("%v run by %s", name, who)
+		}
+		return fmt.Sprintf("Custom action run by %s", who)
+	case "contact.lifecycle_stage_changed":
+		if to, ok := row.Data["to"]; ok {
+			return fmt.Sprintf("Lifecycle stage set to %v by %s", to, who)
+		}
+		return fmt.Sprintf("Lifecycle stage changed by %s", who)
+	case "contact.opt_out_changed":
+		if optedOut, ok := row.Data["opted_out"].(bool); ok && optedOut {
+			return "Opted out of marketing"
+		}
+		return "Opted back in to marketing"
+	case "campaign.replied":
+		return "Replied to a campaign"
+	case "chatbot.flow_completed":
+		if name, ok := row.Data["flow_name"]; ok && name != "" {
+			return fmt.Sprintf("Completed the %v flow", name)
+		}
+		return "Completed a chatbot flow"
+	case "call.missed":
+		return "Call missed"
+	case "call.completed":
+		return "Call completed"
+	case "transfer.expired":
+		return "Transfer expired before anyone picked it up"
+	case "note.created":
+		return fmt.Sprintf("Note added by %s", who)
+	case "task.updated":
+		return fmt.Sprintf("Task %q changed by %s", row.Data["title"], who)
+	case "deal.updated":
+		return fmt.Sprintf("Deal %q changed by %s", row.Data["title"], who)
+	case "deal.deleted":
+		return fmt.Sprintf("Deal %q deleted by %s", row.Data["title"], who)
+	case "transfer.assigned":
+		if agent, ok := row.Data["agent_name"]; ok && agent != "" {
+			return fmt.Sprintf("Picked up by %v", agent)
+		}
+		return "Picked up by an agent"
+	case "call.transfer_no_answer":
+		return "Call transfer went unanswered"
+	case "conversation.sla_breached":
+		return "Response deadline passed"
+	case "conversation.sla_escalated":
+		return "Escalated after going unanswered"
 	}
 	return row.Type
+}
+
+// campaignSends reads the bulk messages this contact received.
+//
+// Read directly from the recipients table rather than copied into the activity
+// log (plan 02): a campaign to forty thousand people would otherwise write
+// forty thousand activity rows, each of which is only ever read one contact at
+// a time. The recipients row is already the record.
+func (s *Service) campaignSends(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
+	type row struct {
+		ID           uuid.UUID
+		CampaignID   uuid.UUID
+		CampaignName string
+		Status       string
+		SentAt       time.Time
+	}
+
+	q := s.DB.WithContext(ctx).
+		Table("bulk_message_recipients r").
+		Select("r.id, r.campaign_id, c.name AS campaign_name, r.status, r.sent_at").
+		Joins("JOIN bulk_message_campaigns c ON c.id = r.campaign_id").
+		Where("c.organization_id = ? AND r.contact_id = ? AND r.sent_at IS NOT NULL", orgID, contactID).
+		Where("r.deleted_at IS NULL")
+	if opts.Before != nil {
+		q = q.Where("r.sent_at < ?", *opts.Before)
+	}
+
+	var rows []row
+	if err := q.Order("r.sent_at DESC").Limit(limit).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]Item, 0, len(rows))
+	for _, send := range rows {
+		out = append(out, Item{
+			ID:         "campaign_send:" + send.ID.String(),
+			Type:       TypeCampaignSend,
+			OccurredAt: send.SentAt,
+			Actor:      Actor{Type: "system"},
+			Summary:    "Campaign: " + send.CampaignName,
+			Data: map[string]any{
+				"campaign_id":   send.CampaignID.String(),
+				"campaign_name": send.CampaignName,
+				"status":        send.Status,
+			},
+		})
+	}
+	return out, nil
+}
+
+// chatbotSessions reads the flow runs this contact went through.
+//
+// A session says what the automated part of the conversation did, which is
+// otherwise invisible: the messages are in the thread, but "the qualification
+// flow ran and finished" is the thing somebody reading the history wants.
+func (s *Service) chatbotSessions(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
+	q := s.DB.WithContext(ctx).Model(&models.ChatbotSession{}).
+		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
+	if opts.Before != nil {
+		q = q.Where("started_at < ?", *opts.Before)
+	}
+
+	var rows []models.ChatbotSession
+	if err := q.Order("started_at DESC").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]Item, 0, len(rows))
+	for _, session := range rows {
+		data := map[string]any{"status": string(session.Status)}
+		if session.CurrentFlowID != nil {
+			data["flow_id"] = session.CurrentFlowID.String()
+		}
+		out = append(out, Item{
+			ID:         "chatbot_session:" + session.ID.String(),
+			Type:       TypeChatbotSession,
+			OccurredAt: session.StartedAt,
+			Actor:      Actor{Type: "bot"},
+			Summary:    chatbotSessionSummary(session.Status),
+			Data:       data,
+		})
+	}
+	return out, nil
+}
+
+// chatbotSessionSummary describes a session in the words a person reading a
+// history would use.
+func chatbotSessionSummary(status models.SessionStatus) string {
+	switch status {
+	case models.SessionStatusCompleted:
+		return "Chatbot flow completed"
+	case models.SessionStatusCancelled:
+		return "Chatbot flow ended early"
+	case models.SessionStatusTimeout:
+		return "Chatbot flow timed out"
+	default:
+		return "Chatbot flow started"
+	}
 }

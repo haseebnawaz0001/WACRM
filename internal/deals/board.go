@@ -123,7 +123,8 @@ func (s *Service) StageDeals(ctx context.Context, orgID, pipelineID, stageID uui
 
 func (s *Service) filtered(ctx context.Context, orgID, pipelineID uuid.UUID, f BoardFilter) *gorm.DB {
 	q := s.DB.WithContext(ctx).Model(&models.Deal{}).
-		Where("deals.organization_id = ? AND deals.pipeline_id = ?", orgID, pipelineID)
+		Where("deals.organization_id = ? AND deals.pipeline_id = ?", orgID, pipelineID).
+		Where(liveDealContactOnly())
 
 	status := f.Status
 	if status == "" {

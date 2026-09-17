@@ -91,7 +91,11 @@ test.describe('Queue Tab', () => {
   })
 
   test('should show team queue counts', async ({ page }) => {
-    await expect(page.getByText(/General/i)).toBeVisible()
+    // The count badge, not "anything containing General": the queue rows say
+    // "General Queue" too, so a loose match resolves to one element or four
+    // depending on how much is waiting — which made this pass or fail on the
+    // state of the database rather than on the badge being there.
+    await expect(page.getByText(/^General: \d+$/)).toBeVisible()
   })
 })
 
@@ -115,8 +119,11 @@ test.describe('All Active Tab', () => {
   test('should show table headers', async ({ page }) => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
-      await expect(page.getByText('Contact')).toBeVisible()
-      await expect(page.getByText('Phone')).toBeVisible()
+      // Scoped to the header row: "Contact" and "Phone" also appear in every
+      // body row, so a page-wide match is ambiguous the moment there is data.
+      const headers = page.locator('thead')
+      await expect(headers.getByText('Contact', { exact: true })).toBeVisible()
+      await expect(headers.getByText('Phone', { exact: true })).toBeVisible()
     }
   })
 })
@@ -284,14 +291,14 @@ test.describe('SLA Indicators', () => {
   test('should show SLA column in queue', async ({ page }) => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
-      await expect(page.getByText('SLA')).toBeVisible()
+      await expect(page.locator('thead').getByText('SLA', { exact: true })).toBeVisible()
     }
   })
 
   test('should show waiting time column', async ({ page }) => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
-      await expect(page.getByText('Waiting')).toBeVisible()
+      await expect(page.locator('thead').getByText(/Waiting/i).first()).toBeVisible()
     }
   })
 })

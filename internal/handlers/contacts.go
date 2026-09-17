@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/customfields"
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -248,7 +250,7 @@ func (a *App) queueVisibleContactIDs(userID, orgID uuid.UUID) *gorm.DB {
 		Where("organization_id = ?", orgID).
 		Where("assignee_id IS NULL").
 		// A conversation the bot still holds is not waiting for a human.
-		Where("bot_active = false").
+		Where("handling <> ?", models.HandlingBot).
 		Where("status <> ?", models.ConversationResolved).
 		// Either the general queue, or one of the agent's own team queues.
 		Where("team_id IS NULL OR team_id IN (?)", myTeams)
@@ -358,18 +360,22 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 		msgQuery = msgQuery.Where("whats_app_account = ?", accountFilter)
 	}
 
-	// Check if user without contacts:read should only see current conversation
+	// An agent without contacts:read may be limited to the conversation they
+	// are actually handling, rather than the customer's whole history.
+	//
+	// The boundary is the conversation's opened_at, not the last chatbot
+	// session's start (plan 10, S5). A session starts and ends many times
+	// inside one conversation — every flow the customer walks through is
+	// another one — so keying on it cut the thread mid-exchange and hid the
+	// customer's own earlier messages from the agent answering them. A
+	// conversation is the unit the product means by "this conversation".
 	if !hasContactsReadPermission {
 		settings, err := a.getChatbotSettingsCached(orgID, "")
-		if err == nil {
-			if settings.AgentAssignment.CurrentConversationOnly {
-				// Find the most recent session for this contact
-				var session models.ChatbotSession
-				if err := a.DB.Where("contact_id = ? AND organization_id = ?", contactID, orgID).
-					Order("started_at DESC").First(&session).Error; err == nil {
-					// Filter messages to only those from this session onwards
-					msgQuery = msgQuery.Where("created_at >= ?", session.StartedAt)
-				}
+		if err == nil && settings.AgentAssignment.CurrentConversationOnly {
+			var conv models.Conversation
+			if err := a.DB.Where("contact_id = ? AND organization_id = ?", contactID, orgID).
+				Order("opened_at DESC").First(&conv).Error; err == nil {
+				msgQuery = msgQuery.Where("created_at >= ?", conv.OpenedAt)
 			}
 		}
 	}
@@ -377,6 +383,16 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	// Count total messages (with session filter if applied)
 	var total int64
 	msgQuery.Model(&models.Message{}).Count(&total)
+
+	// Deep link: centre the page on one message (plan 02).
+	//
+	// Clicking a burst on the timeline has to land on the messages it
+	// describes. Paging back from the newest message until the right one
+	// appears is not a substitute — on a contact with fifty thousand messages
+	// the thing you clicked is two hundred requests away.
+	if aroundStr := string(r.RequestCtx.QueryArgs().Peek("around")); aroundStr != "" {
+		return a.messagesAround(r, msgQuery, aroundStr, limit, total)
+	}
 
 	// Cursor-based pagination: load messages before a specific ID
 	if beforeIDStr != "" {
@@ -531,8 +547,45 @@ func (a *App) MarkContactRead(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
-	a.markMessagesAsRead(orgID, contactID, &contact)
+	// Peek mode: a supervisor looking at somebody else's queue (plan 10, S5).
+	// Opening a chat to see what is going on must not clear the agent's badge
+	// or tell the customer their message was read, because neither is true.
+	if boolParam(r, "peek") {
+		return r.SendEnvelope(map[string]any{"status": "ok", "peek": true})
+	}
+
+	a.markConversationRead(orgID, contactID, userID, &contact)
 	return r.SendEnvelope(map[string]any{"status": "ok"})
+}
+
+// markConversationRead records this user's read position and, only when they
+// are the person handling the conversation, sends WhatsApp read receipts.
+//
+// Read state is per user (plan 10, S5): a colleague opening the chat clears
+// their own badge and nobody else's. The blue ticks the customer sees are a
+// stronger claim — "somebody has this" — so they are reserved for the
+// assignee, or for anyone able to take an unassigned conversation.
+func (a *App) markConversationRead(orgID, contactID, userID uuid.UUID, contact *models.Contact) {
+	now := time.Now().UTC()
+
+	conv, err := a.Conversations().Active(context.Background(), orgID, contactID)
+	if err != nil && !errors.Is(err, conversation.ErrNotFound) {
+		a.Log.Error("Failed to load conversation for read state",
+			"error", err, "contact_id", contactID)
+	}
+	if conv != nil {
+		if err := a.Conversations().MarkRead(context.Background(), conv.ID, userID, now); err != nil {
+			a.Log.Error("Failed to record read position",
+				"error", err, "contact_id", contactID, "user_id", userID)
+		}
+	}
+
+	canWrite := a.HasPermission(userID, models.ResourceChat, models.ActionWrite, orgID)
+	if !conversation.MaySendReadReceipts(conv, userID, canWrite) {
+		return
+	}
+
+	a.markMessagesAsRead(orgID, contactID, contact)
 }
 
 // markMessagesAsRead marks messages as read and sends read receipts
@@ -1357,6 +1410,12 @@ func (a *App) UpdateContactTags(r *fastglue.Request) error {
 		return nil
 	}
 
+	// What is changing, before it changes. Tagging one contact used to emit
+	// nothing while tagging a hundred in bulk emitted an event each, so the
+	// same change was on the timeline, the webhook and the automation trigger
+	// only when it was done the less common way (plan 10, 4.1).
+	added, removed := tagDifference(contact.Tags, req.Tags)
+
 	// Convert tags to JSONBArray
 	tagsArray := make(models.JSONBArray, len(req.Tags))
 	for i, tag := range req.Tags {
@@ -1367,6 +1426,15 @@ func (a *App) UpdateContactTags(r *fastglue.Request) error {
 	if err := a.DB.Model(contact).Update("tags", tagsArray).Error; err != nil {
 		a.Log.Error("Failed to update contact tags", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact tags", nil, "")
+	}
+
+	for _, tag := range added {
+		a.PublishEvent(crmevents.New(orgID, "contact.tag_added",
+			crmevents.UserActor(userID, ""), map[string]any{"tag": tag}).ForContact(contactID))
+	}
+	for _, tag := range removed {
+		a.PublishEvent(crmevents.New(orgID, "contact.tag_removed",
+			crmevents.UserActor(userID, ""), map[string]any{"tag": tag}).ForContact(contactID))
 	}
 
 	// Reload contact to get updated tags
@@ -1388,6 +1456,34 @@ func (a *App) UpdateContactTags(r *fastglue.Request) error {
 		"message": "Contact tags updated",
 		"tags":    tags,
 	})
+}
+
+// tagDifference reports which tags a change adds and which it removes.
+//
+// The stored list is []any because it comes back from JSONB; the requested one
+// is []string. Comparing them as sets means reordering the same tags is not
+// reported as a change, which it is not.
+func tagDifference(before models.JSONBArray, after []string) (added, removed []string) {
+	had := make(map[string]bool, len(before))
+	for _, raw := range before {
+		if tag, ok := raw.(string); ok {
+			had[tag] = true
+		}
+	}
+	wants := make(map[string]bool, len(after))
+	for _, tag := range after {
+		wants[tag] = true
+		if !had[tag] {
+			added = append(added, tag)
+		}
+	}
+	for tag := range had {
+		if !wants[tag] {
+			removed = append(removed, tag)
+		}
+	}
+	sort.Strings(removed)
+	return added, removed
 }
 
 // CreateContactRequest represents the request body for creating a contact
@@ -1613,6 +1709,15 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 			crmevents.UserActor(userID, ""), map[string]any{
 				"field": key,
 			}).ForContact(contact.ID))
+
+		// Lifecycle stage gets its own event as well (plan 01). "Became a
+		// customer" is the change reporting counts and automation reacts to,
+		// and digging it out of a generic field_changed payload meant every
+		// consumer re-implemented the same filter — and the funnel report and
+		// the automation trigger disagreed about what counted.
+		if key == models.FieldKeyLifecycleStage {
+			a.publishLifecycleStageChanged(orgID, userID, contact.ID)
+		}
 	}
 
 	// One contact.updated for subscribers, carrying the record and its typed
@@ -1747,4 +1852,91 @@ func (a *App) publishContactUpdated(orgID, userID uuid.UUID, contact *models.Con
 			"fields":         fields,
 			"changed_fields": changed,
 		}).ForContact(contact.ID))
+}
+
+// publishLifecycleStageChanged emits the dedicated lifecycle event, carrying
+// the new stage so a subscriber does not have to fetch the contact to learn
+// what it became.
+func (a *App) publishLifecycleStageChanged(orgID, userID, contactID uuid.UUID) {
+	values, err := customfields.New(a.DB).Values(
+		context.Background(), orgID, contactID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("Failed to read lifecycle stage for event", "error", err, "contact_id", contactID)
+		return
+	}
+
+	a.PublishEvent(crmevents.New(orgID, "contact.lifecycle_stage_changed",
+		crmevents.UserActor(userID, ""), map[string]any{
+			"stage": values[models.FieldKeyLifecycleStage],
+		}).ForContact(contactID))
+}
+
+// messagesAround returns the page containing one message, with context on both
+// sides of it (plan 02).
+//
+// `around` accepts a message id or an RFC3339 timestamp, because a timeline
+// burst knows the instant it covers but not necessarily a specific message id.
+func (a *App) messagesAround(r *fastglue.Request, base *gorm.DB, around string, limit int, total int64) error {
+	anchor, ok := a.resolveAnchor(base, around)
+	if !ok {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"around must be a message id or an RFC3339 timestamp", nil, "")
+	}
+
+	// Half the page on each side, so the message you clicked is in the middle
+	// rather than clinging to an edge with nothing above it.
+	half := limit / 2
+	if half < 1 {
+		half = 1
+	}
+
+	var older []models.Message
+	if err := base.Session(&gorm.Session{}).
+		Where("created_at < ?", anchor).
+		Preload("ReplyToMessage").
+		Order("created_at DESC").Limit(half).Find(&older).Error; err != nil {
+		a.Log.Error("Failed to load messages before anchor", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list messages", nil, "")
+	}
+
+	var newer []models.Message
+	if err := base.Session(&gorm.Session{}).
+		Where("created_at >= ?", anchor).
+		Preload("ReplyToMessage").
+		Order("created_at ASC").Limit(limit - len(older)).Find(&newer).Error; err != nil {
+		a.Log.Error("Failed to load messages after anchor", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list messages", nil, "")
+	}
+
+	// older came back newest-first; flip it so the page reads chronologically.
+	for i, j := 0, len(older)-1; i < j; i, j = i+1, j-1 {
+		older[i], older[j] = older[j], older[i]
+	}
+	messages := append(older, newer...)
+
+	return r.SendEnvelope(map[string]any{
+		"messages": a.buildMessagesResponse(messages),
+		"total":    total,
+		// There is more in both directions; the client pages with before/after
+		// from the ends of what it got.
+		"has_more": true,
+		"anchor":   anchor.Format(time.RFC3339Nano),
+	})
+}
+
+// resolveAnchor turns an `around` parameter into an instant.
+func (a *App) resolveAnchor(base *gorm.DB, around string) (time.Time, bool) {
+	if id, err := uuid.Parse(around); err == nil {
+		var msg models.Message
+		// Through the scoped query, so a message id from a contact the viewer
+		// cannot see does not become a way to read their thread.
+		if err := base.Session(&gorm.Session{}).Where("id = ?", id).First(&msg).Error; err != nil {
+			return time.Time{}, false
+		}
+		return msg.CreatedAt, true
+	}
+	if at, err := time.Parse(time.RFC3339, around); err == nil {
+		return at, true
+	}
+	return time.Time{}, false
 }

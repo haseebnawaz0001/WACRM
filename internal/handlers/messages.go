@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
+	"github.com/shridarpatil/whatomate/internal/messaging"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/internal/utils"
@@ -977,9 +978,15 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 	}
 
-	// Check marketing opt-out
-	if contact.MarketingOptOut && strings.EqualFold(template.Category, "MARKETING") {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Contact has opted out of marketing messages", nil, "")
+	// Approval, marketing consent and a reachable address, from the one place
+	// that decides them (plan 00, F10). This handler used to check only the
+	// opt-out, so a template Meta had unapproved reached Meta and came back as
+	// an API error the agent could not act on.
+	//
+	// Parameters are checked further down, after the OTP auto-fill below has
+	// had its chance to supply them.
+	if err := messaging.CheckTemplate(&template, contact, nil); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// For authentication templates with OTP COPY_CODE buttons, Meta expects

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/crmactions"
+	"github.com/shridarpatil/whatomate/internal/messaging"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/internal/transfers"
@@ -20,7 +21,10 @@ import (
 
 // ServiceWindow is how long after a customer's last message WhatsApp allows a
 // free-form reply. Outside it, only an approved template may be sent.
-const ServiceWindow = 24 * time.Hour
+//
+// Re-exported from internal/messaging, which owns the rule now (plan 00, F10):
+// four send paths each had their own copy, and they disagreed.
+const ServiceWindow = messaging.ServiceWindow
 
 // automationMessenger sends on behalf of automation rules.
 type automationMessenger struct{ app *App }
@@ -35,9 +39,8 @@ func (m automationMessenger) SendText(ctx context.Context, orgID, contactID uuid
 
 	// The window is checked here rather than left to Meta, so the run log says
 	// "outside the 24-hour window" instead of relaying an opaque API error.
-	if !withinServiceWindow(contact, time.Now().UTC()) {
-		return uuid.Nil, fmt.Errorf(
-			"the 24-hour service window has closed for this contact; use a template instead")
+	if err := messaging.CheckFreeText(contact, time.Now().UTC()); err != nil {
+		return uuid.Nil, err
 	}
 
 	message, err := m.app.SendOutgoingMessage(ctx, OutgoingMessageRequest{
@@ -64,15 +67,11 @@ func (m automationMessenger) SendTemplate(ctx context.Context, orgID, contactID,
 		First(&template).Error; err != nil {
 		return uuid.Nil, fmt.Errorf("that template no longer exists")
 	}
-	if template.Status != "APPROVED" {
-		return uuid.Nil, fmt.Errorf("template %q is not approved (status %s)", template.Name, template.Status)
-	}
-
-	// A contact who has opted out of marketing must not receive marketing,
-	// however the send was triggered. Consent is about the message, not the
-	// mechanism that sent it.
-	if strings.EqualFold(template.Category, "MARKETING") && contact.MarketingOptOut {
-		return uuid.Nil, fmt.Errorf("this contact has opted out of marketing messages")
+	// Approval and marketing consent are the same rules every other send path
+	// applies (plan 00, F10). Consent in particular is about the message, not
+	// the mechanism that sent it.
+	if err := messaging.CheckTemplate(&template, contact, nil); err != nil {
+		return uuid.Nil, err
 	}
 
 	// The template's own account wins over the contact's: a template is
@@ -139,14 +138,6 @@ func (a *App) automationTarget(orgID, contactID uuid.UUID) (*models.Contact, *mo
 		return nil, nil, err
 	}
 	return &contact, account, nil
-}
-
-// withinServiceWindow reports whether a free-form reply is still allowed.
-func withinServiceWindow(contact *models.Contact, now time.Time) bool {
-	if contact.LastMessageAt == nil {
-		return false
-	}
-	return now.Sub(*contact.LastMessageAt) < ServiceWindow
 }
 
 func toStringMap(params map[string]any) map[string]string {

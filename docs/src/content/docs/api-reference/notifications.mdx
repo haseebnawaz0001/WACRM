@@ -1,0 +1,128 @@
+---
+title: Notifications
+description: A user's own in-app notifications
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  Notification endpoints need no permission. They act only on the caller's own notifications, and no request can reach anybody else's.
+</Aside>
+
+## Overview
+
+A notification is the product telling one person something they need to act on: a task falling due, a conversation assigned to them, a snooze ending, an automation they wrote switching itself off.
+
+They are deliberately not a feed of everything that happens. Every type here is something with an owner and an action.
+
+### Types
+
+| Type | Raised when |
+|---|---|
+| `task_due` | A task the user owns reaches its reminder |
+| `task_overdue` | A task the user owns passes its deadline |
+| `task_assigned` | A task is reassigned to them |
+| `conversation_assigned` | A conversation is assigned to them |
+| `conversation_snooze_ended` | A conversation they snoozed has come back |
+| `automation` | A rule they wrote disabled itself after repeated failures |
+| `campaign_paused` | A campaign stopped because its template stopped being usable |
+
+`sla_escalation`, `merge_suggestions` and `deal_rotting` are reserved: the constants exist and a client may receive them, but nothing raises them yet. They are listed here so an integration that switches on `type` is not surprised later, not because they arrive today.
+
+## List Notifications
+
+```bash
+GET /api/notifications
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `unread_only` | boolean | `true` for unread only |
+| `limit` | integer | Page size |
+| `cursor` | string | Opaque cursor from the previous page |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "notifications": [
+      {
+        "id": "…",
+        "type": "task_due",
+        "title": "Call back about the quote",
+        "body": "Due at 09:00",
+        "link": "/tasks?task=…",
+        "entity_type": "task",
+        "entity_id": "…",
+        "data": {},
+        "read_at": null,
+        "created_at": "2026-09-17T08:30:00Z"
+      }
+    ],
+    "next_cursor": "2026-09-17T08:30:00.123456Z|…"
+  }
+}
+```
+
+Paging is keyset, not offset. A notification arriving while someone is reading page two must not shift page three, which is exactly what an offset does.
+
+`next_cursor` is opaque — pass it back as `cursor`. Its absence means there is nothing older.
+
+`link` is where the notification goes when clicked, so a client does not need a `type` → route table that drifts.
+
+## Unread Count
+
+```bash
+GET /api/notifications/unread-count
+```
+
+```json
+{ "status": "success", "data": { "count": 3 } }
+```
+
+## Mark Read
+
+```bash
+POST /api/notifications/{id}/read
+POST /api/notifications/read-all
+```
+
+## Preferences
+
+Preferences live on the user, not on the organization, and are edited through the caller's own settings:
+
+```bash
+PUT /api/me/settings
+```
+
+```json
+{
+  "email_notifications": true,
+  "new_message_alerts": true,
+  "campaign_updates": false,
+  "timezone": "Asia/Karachi"
+}
+```
+
+Per-type preferences are stored under `settings.notifications`, keyed by notification type, with `in_app` and `sound` flags:
+
+```json
+{
+  "notifications": {
+    "task_due": { "in_app": true, "sound": false },
+    "deal_rotting": { "in_app": false, "sound": false }
+  }
+}
+```
+
+**A type with no entry is on.** A new notification type must reach people who set their preferences before it existed; defaulting to off would make it invisible to exactly the users who care enough to have configured anything.
+
+`timezone` is a pointer in the request: omitting it leaves any override alone, and sending `null` clears it back to the organization's. A client that predates the field cannot silently wipe what a user set.
+
+## Realtime
+
+A new notification is also pushed over the websocket as `notification_created`, carrying the same object. A client that is already open does not need to poll; one that has been closed reads the list on load.

@@ -80,6 +80,62 @@ func (a *App) RegisterJobs(s *scheduler.Scheduler) {
 		Timeout:  2 * time.Minute,
 		Run:      a.TimeoutStaleChatSessions,
 	})
+	// SLA deadlines (plan 03). Under the scheduler's leader lock, so three
+	// replicas produce one pass rather than three sets of warnings.
+	sla := NewSLAProcessor(a, time.Minute)
+	s.Register(scheduler.Job{
+		Name:     "sla_processor",
+		Interval: time.Minute,
+		Timeout:  2 * time.Minute,
+		Run:      sla.RunOnce,
+	})
+	// Conversations that quietly ended (plan 10, S5). Independent of the SLA
+	// feature: an organization that does not want response-time alerting still
+	// needs an inbox that finishes things. Quarter-hourly is fine for a rule
+	// measured in hours.
+	s.Register(scheduler.Job{
+		Name:     "conversation_idle_sweep",
+		Interval: 15 * time.Minute,
+		Timeout:  10 * time.Minute,
+		Run:      a.sweepIdleConversations,
+	})
+}
+
+// sweepIdleConversations closes conversations nothing has happened in.
+//
+// It walks organizations one at a time because the thresholds are per
+// organization, and skips the ones that have switched both rules off before
+// touching the conversations table at all.
+func (a *App) sweepIdleConversations(ctx context.Context) error {
+	var orgIDs []uuid.UUID
+	if err := a.DB.WithContext(ctx).Model(&models.Organization{}).
+		Pluck("id", &orgIDs).Error; err != nil {
+		return err
+	}
+
+	conversations := a.Conversations()
+	now := time.Now().UTC()
+
+	for _, orgID := range orgIDs {
+		set := a.inboxSettings(orgID)
+		if set.AutoResolveIdle <= 0 && set.PendingTimeout <= 0 {
+			continue
+		}
+
+		result, err := conversations.SweepIdle(ctx, orgID, now)
+		if err != nil {
+			// One organization's failure must not stop the rest: a bad
+			// setting or a lock timeout in one tenant would otherwise leave
+			// every other tenant's inbox growing.
+			a.Log.Error("Idle conversation sweep failed", "error", err, "org_id", orgID)
+			continue
+		}
+		if result.Idle > 0 || result.Pending > 0 {
+			a.Log.Info("Closed idle conversations",
+				"org_id", orgID, "idle", result.Idle, "pending", result.Pending)
+		}
+	}
+	return nil
 }
 
 // SegmentCountStaleAfter is how recently a segment must have been used for the
@@ -194,6 +250,11 @@ func (a *App) notifyDueTasks(ctx context.Context) error {
 // notifyTaskBatch notifies the owners of one batch and stamps the claim column.
 func (a *App) notifyTaskBatch(ctx context.Context, now time.Time, query *gorm.DB, claimColumn, notificationType, title, body string) error {
 	var due []models.Task
+	// A follow-up for a deleted contact is nobody's work (plan 10, S2).
+	// Chasing the owner about it would be asking them to call a customer the
+	// organization has removed.
+	query = query.Where(
+		"EXISTS (SELECT 1 FROM contacts c WHERE c.id = tasks.contact_id AND c.deleted_at IS NULL)")
 	if err := query.WithContext(ctx).Limit(500).Find(&due).Error; err != nil {
 		return err
 	}

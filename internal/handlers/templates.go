@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -335,6 +336,19 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
 	if err != nil {
 		return nil
+	}
+
+	// Rules that send this template would keep "running" with an id that
+	// resolves to nothing: the send fails per contact, the failure counter
+	// climbs, and the reason lives in a run record nobody opens (plan 10, S8).
+	// Naming the dependents lets the admin decide rather than discover.
+	dependents, depErr := entityrefs.FindDependents(a.DB, orgID, id.String())
+	if depErr != nil {
+		a.Log.Error("Failed to check template references", "error", depErr, "template_id", id)
+	} else if len(dependents) > 0 && !boolParam(r, "force") {
+		return r.SendErrorEnvelope(fasthttp.StatusConflict,
+			"This template is still used by "+entityrefs.DescribeDependents(dependents),
+			map[string]any{"dependents": dependents}, "")
 	}
 
 	// If template exists on Meta, delete it there too

@@ -21,7 +21,7 @@ func waitingConversation(t *testing.T, db *gorm.DB, orgID, contactID uuid.UUID, 
 		OrganizationID:     orgID,
 		ContactID:          contactID,
 		Status:             models.ConversationOpen,
-		BotActive:          false,
+		Handling:           models.HandlingNone,
 		WhatsAppAccount:    "acct",
 		LastAgentMessageAt: &agentAt,
 	}
@@ -133,7 +133,7 @@ func TestRunTimeTriggers_NoAgentReplySkipsBotHandledConversations(t *testing.T) 
 		OrganizationID:  org.ID,
 		ContactID:       contact.ID,
 		Status:          models.ConversationOpen,
-		BotActive:       true,
+		Handling:        models.HandlingBot,
 		WhatsAppAccount: "acct",
 		WaitingSince:    &waiting,
 	}
@@ -144,7 +144,7 @@ func TestRunTimeTriggers_NoAgentReplySkipsBotHandledConversations(t *testing.T) 
 	assert.Equal(t, 0, fired)
 
 	require.NoError(t, db.Model(&models.Conversation{}).Where("id = ?", row.ID).
-		Update("bot_active", false).Error)
+		Update("handling", models.HandlingHuman).Error)
 
 	fired, err = engine.RunTimeTriggers(ctx())
 	require.NoError(t, err)

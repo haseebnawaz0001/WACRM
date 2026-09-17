@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/phoneutil"
 	"gorm.io/gorm"
@@ -284,22 +285,19 @@ func (s *Service) Merge(ctx context.Context, in MergeInput) (*models.ContactMerg
 
 		// Re-point everything that referenced the secondary. Moving rows keeps
 		// one history rather than leaving half of it unreachable.
-		for table, column := range map[string]string{
-			"messages":           "contact_id",
-			"conversation_notes": "contact_id",
-			"call_logs":          "contact_id",
-			"agent_transfers":    "contact_id",
-			"contact_activities": "contact_id",
-			"tasks":              "contact_id",
-			"deals":              "contact_id",
-		} {
-			result := tx.Exec(
-				fmt.Sprintf(`UPDATE %s SET %s = ? WHERE %s = ?`, table, column, column),
-				in.PrimaryID, in.SecondaryID)
-			if result.Error != nil {
-				return result.Error
-			}
-			moved[table] = result.RowsAffected
+		//
+		// Through the reference registry (plan 10, S8) rather than a literal
+		// list: this used to name seven tables, and everything else — campaign
+		// recipients, chatbot sessions, automation runs and per-contact state,
+		// notifications — stayed pointing at a record nobody could open. The
+		// registry discovers them from the live schema, so a table added later
+		// is covered the day it exists.
+		repointed, err := entityrefs.RepointContact(tx, in.SecondaryID, in.PrimaryID)
+		if err != nil {
+			return err
+		}
+		for table, count := range repointed {
+			moved[table] = count
 		}
 
 		// Conversations are special: the primary may already have an active

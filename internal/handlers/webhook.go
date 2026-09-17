@@ -717,6 +717,27 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 		return
 	}
 
+	// Record the echo against the conversation (plan 10, S4).
+	//
+	// This path inserted a message row and told the conversation nothing, so a
+	// reply somebody sent from the WhatsApp Business app left the conversation
+	// showing the customer's message as the latest and the counters short. The
+	// thread and the conversation disagreed, and the conversation is what the
+	// inbox, the SLA job and every report read.
+	//
+	// sender_type stays `echo`, so it still never counts as an agent reply in
+	// response-time metrics — somebody answering from their phone is not the
+	// product's first response.
+	if conv, err := a.Conversations().RecordOutbound(context.Background(),
+		account.OrganizationID, contact.ID, models.SenderEcho, nil, now); err != nil {
+		a.Log.Error("Failed to record echoed message against the conversation",
+			"error", err, "contact_id", contact.ID)
+	} else if conv != nil {
+		a.DB.Model(&models.Message{}).Where("id = ?", message.ID).
+			Update("conversation_id", conv.ID.String())
+		message.ConversationID = conv.ID.String()
+	}
+
 	// Update contact's last message info
 	preview := messageText
 	if len(preview) > 100 {

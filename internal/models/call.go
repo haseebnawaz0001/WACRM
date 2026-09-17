@@ -39,6 +39,33 @@ const (
 )
 
 // CallLog represents a voice call record
+// Call dispositions: what the agent says happened.
+//
+// A short closed list rather than free text, because it is reported on. The
+// notes field is where the specifics go.
+const (
+	DispositionAnswered    = "answered"
+	DispositionNoAnswer    = "no_answer"
+	DispositionVoicemail   = "voicemail"
+	DispositionWrongNumber = "wrong_number"
+	DispositionCallBack    = "call_back"
+	DispositionResolved    = "resolved"
+	DispositionNotResolved = "not_resolved"
+)
+
+// KnownDisposition reports whether a disposition is one the product offers.
+// An empty disposition is allowed: a call that nobody has classified yet is a
+// normal state, not a bad one.
+func KnownDisposition(value string) bool {
+	switch value {
+	case "", DispositionAnswered, DispositionNoAnswer, DispositionVoicemail,
+		DispositionWrongNumber, DispositionCallBack, DispositionResolved,
+		DispositionNotResolved:
+		return true
+	}
+	return false
+}
+
 type CallLog struct {
 	BaseModel
 	OrganizationID    uuid.UUID      `gorm:"type:uuid;not null;index" json:"organization_id"`
@@ -60,6 +87,14 @@ type CallLog struct {
 	RecordingS3Key    string         `gorm:"size:500" json:"recording_s3_key,omitempty"`
 	RecordingDuration int            `gorm:"default:0" json:"recording_duration,omitempty"`
 	RecordingError    string         `gorm:"type:text" json:"recording_error,omitempty"`
+
+	// Disposition is what the agent says happened, as opposed to what the
+	// telephony reports (plan 10, 4.4). "answered, 40 seconds" and "they
+	// wanted to cancel" are different facts, and only the second one is worth
+	// reading a week later.
+	Disposition string `gorm:"size:40;index" json:"disposition,omitempty"`
+	// Notes is what was said. Free text, because a call is.
+	Notes string `gorm:"type:text" json:"notes,omitempty"`
 
 	// Relations
 	Contact *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`

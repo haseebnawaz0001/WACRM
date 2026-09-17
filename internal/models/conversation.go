@@ -27,6 +27,33 @@ func (s ConversationStatus) IsActive() bool {
 	return s != ConversationResolved
 }
 
+// ConversationHandling says who is dealing with a conversation (plan 10, S5).
+//
+// It is derived from real state rather than set independently: an active
+// transfer or assignee means human, an active chatbot session means bot, and a
+// handoff the product could not complete means handoff_pending.
+type ConversationHandling string
+
+const (
+	// HandlingBot: the chatbot is answering, with no human involved.
+	HandlingBot ConversationHandling = "bot"
+	// HandlingHuman: an agent or team owns it.
+	HandlingHuman ConversationHandling = "human"
+	// HandlingHandoffPending: a handoff was requested and suppressed — out of
+	// hours, or no agent available. These appear in Unassigned with a chip
+	// saying why, because a customer who asked for a person is waiting for one.
+	HandlingHandoffPending ConversationHandling = "handoff_pending"
+	// HandlingNone: nobody is handling it. Reached when the bot is off and no
+	// handoff has been asked for.
+	HandlingNone ConversationHandling = "none"
+)
+
+// NeedsAHuman reports whether the conversation is waiting for a person, either
+// because one was asked for or because nothing else is handling it.
+func (h ConversationHandling) NeedsAHuman() bool {
+	return h == HandlingHandoffPending || h == HandlingNone
+}
+
 // Resolution reasons, recorded so reporting can tell an agent resolving a
 // conversation apart from a timeout closing it.
 const (
@@ -62,12 +89,28 @@ type Conversation struct {
 	AssigneeID *uuid.UUID `gorm:"type:uuid;index" json:"assignee_id,omitempty"`
 	TeamID     *uuid.UUID `gorm:"type:uuid;index" json:"team_id,omitempty"`
 
-	// BotActive means the chatbot is handling this with no human transfer.
-	BotActive bool `gorm:"not null;default:true" json:"bot_active"`
+	// Handling says who is dealing with this conversation right now.
+	//
+	// It replaces the boolean bot_active (plan 10, S5), which could not
+	// express the state that matters most operationally: a handoff was asked
+	// for and did not happen. Out of hours, or with no agent available, the
+	// old code left bot_active false and no assignee, which looked exactly
+	// like an ordinary unassigned conversation — so nobody could tell the
+	// difference between "waiting in the queue" and "the customer asked for a
+	// human and the request evaporated".
+	Handling ConversationHandling `gorm:"size:20;not null;default:'bot';index" json:"handling"`
 
 	// The column is pinned: GORM would derive "whats_app_account" from the
 	// field name, and plan 03 specifies whatsapp_account.
 	WhatsAppAccount string `gorm:"column:whatsapp_account;size:100;not null;default:''" json:"whatsapp_account"`
+
+	// OriginCampaignID attributes a conversation to the campaign that started
+	// it (plan 10, §4.5).
+	//
+	// Without it a campaign could report how many messages went out and
+	// nothing about what came back, so "did that blast work?" was unanswerable
+	// — which is the only question anybody asks about a campaign.
+	OriginCampaignID *uuid.UUID `gorm:"type:uuid;index" json:"origin_campaign_id,omitempty"`
 
 	SnoozedUntil *time.Time `json:"snoozed_until,omitempty"`
 	SnoozedByID  *uuid.UUID `gorm:"type:uuid" json:"snoozed_by_id,omitempty"`
@@ -106,7 +149,33 @@ func (Conversation) TableName() string {
 	return "conversations"
 }
 
+// IsBotHandled reports whether the chatbot is dealing with this conversation.
+func (c Conversation) IsBotHandled() bool { return c.Handling == HandlingBot }
+
 // IsWaitingOnUs reports whether a customer message is still unanswered.
 func (c Conversation) IsWaitingOnUs() bool {
 	return c.WaitingSince != nil
+}
+
+// ConversationRead is one user's read position in one conversation
+// (plan 10, S5).
+//
+// Read state used to be a single flag on the contact, which meant it belonged
+// to whoever opened the chat last. A supervisor glancing at a queue cleared the
+// badge for the agent who owned it, and an agent could not tell an unanswered
+// customer from one a colleague had already picked up. Read is a fact about a
+// person, not about a conversation, so it is stored per person.
+type ConversationRead struct {
+	ConversationID uuid.UUID `gorm:"type:uuid;primaryKey" json:"conversation_id"`
+	UserID         uuid.UUID `gorm:"type:uuid;primaryKey" json:"user_id"`
+
+	// LastReadAt is the timestamp of the newest message this user has seen.
+	// Messages after it are unread for them and nobody else.
+	LastReadAt time.Time `gorm:"not null" json:"last_read_at"`
+
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (ConversationRead) TableName() string {
+	return "conversation_reads"
 }

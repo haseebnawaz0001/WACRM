@@ -7,11 +7,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
-import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse } from '@/services/api'
+import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, timelineService, tasksService, inboxService, contactFieldsService, dealsService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse, type TimelineItem, type ContactField } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
-import { getErrorMessage } from '@/lib/api-utils'
+import { getErrorMessage, unwrapResponse } from '@/lib/api-utils'
 import { compressImage } from '@/lib/imageCompression'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -99,13 +99,14 @@ import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonG
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import MediaViewerDialog from '@/components/chat/MediaViewerDialog.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
+import DuplicateBanner from '@/components/chat/DuplicateBanner.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { CreateContactDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
-import { Info } from 'lucide-vue-next'
+import { Info, Activity } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -119,6 +120,8 @@ const notesStore = useNotesStore()
 const { isDark } = useColorMode()
 
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
+// Raising a deal from a message needs the permission to have deals at all.
+const canSeeDealsFromChat = authStore.hasPermission('deals', 'write')
 
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
@@ -213,11 +216,371 @@ const executingActionId = ref<string | null>(null)
 // Tags filter state
 const isTagFilterOpen = ref(false)
 
-// Service window state
+// Message actions (plan 10, 4.1).
+//
+// The thing worth acting on is usually a sentence the customer just wrote —
+// an address, an order number, a promise to call back. Retyping it into a
+// task, a note or a field is how it gets typed wrong, so the actions start
+// from the message itself.
+const messageActionFields = ref<ContactField[]>([])
+const messageActionsFor = ref<string | null>(null)
+
+async function loadMessageActionFields() {
+  try {
+    const payload = unwrapResponse<any>(await contactFieldsService.list())
+    // Only fields free text can land in. Offering a date or a dropdown would
+    // promise a copy that the server is right to reject.
+    messageActionFields.value = (payload?.fields || []).filter(
+      (field: ContactField) => !field.archived_at && ['text', 'email', 'phone'].includes(field.type)
+    )
+  } catch {
+    messageActionFields.value = []
+  }
+}
+
+/** The message as a line of text, trimmed to something a title can hold. */
+function messageAsTitle(message: Message): string {
+  const text = getMessageContent(message).trim()
+  if (!text) return t('chat.messageActionUntitled')
+  return text.length > 120 ? text.slice(0, 117) + '…' : text
+}
+
+async function runMessageAction(label: string, work: () => Promise<unknown>) {
+  messageActionsFor.value = null
+  try {
+    await work()
+    toast.success(label)
+    void loadActivity()
+  } catch (error) {
+    toast.error(getErrorMessage(error, t('chat.messageActionFailed')))
+  }
+}
+
+function createTaskFromMessage(message: Message) {
+  const contact = contactsStore.currentContact
+  if (!contact) return
+  void runMessageAction(t('chat.commandTaskDone'), () =>
+    tasksService.create({
+      contact_id: contact.id,
+      title: messageAsTitle(message),
+      message_id: message.id
+    })
+  )
+}
+
+function noteAboutMessage(message: Message) {
+  const contact = contactsStore.currentContact
+  if (!contact) return
+  // Quoted, so the note still makes sense once the thread has moved on.
+  const body = t('chat.messageActionNoteBody', { text: getMessageContent(message).trim() })
+  void runMessageAction(t('chat.commandNoteDone'), () =>
+    notesStore.createNote(contact.id, body)
+  )
+}
+
+function createDealFromMessage(message: Message) {
+  const contact = contactsStore.currentContact
+  if (!contact) return
+  // No pipeline or stage: the server puts it on the default pipeline's first
+  // open stage, which is what somebody raising a deal from a chat means.
+  void runMessageAction(t('chat.messageActionDealDone'), () =>
+    dealsService.create({ contact_id: contact.id, title: messageAsTitle(message) })
+  )
+}
+
+function copyMessageToField(message: Message, field: ContactField) {
+  const contact = contactsStore.currentContact
+  if (!contact) return
+  const text = getMessageContent(message).trim()
+  if (!text) return
+  void runMessageAction(t('chat.messageActionCopied', { field: field.label }), async () => {
+    await contactsService.update(contact.id, { fields: { [field.key]: text } })
+    await contactsStore.refreshContactRow(contact.id)
+  })
+}
+
+// Composer commands (plan 10, 4.1).
+//
+// The actions an agent takes mid-conversation — promise a follow-up, note what
+// was said, take the chat, park it, close it — all lived in different corners
+// of the screen, so doing them meant leaving the sentence half-typed. A command
+// is typed where the thought already is.
+//
+// Enter runs the command rather than sending it: a message beginning with a
+// slash was never a message anybody meant to send.
+interface SlashCommand {
+  name: string
+  hint: string
+  /** The rest of the line is the command's argument. */
+  takesText: boolean
+  run: (rest: string) => Promise<void>
+}
+
+const slashCommands: SlashCommand[] = [
+  {
+    name: 'task',
+    hint: 'chat.commandTask',
+    takesText: true,
+    run: async (rest) => {
+      const contact = contactsStore.currentContact
+      if (!contact) return
+      if (!rest) {
+        toast.error(t('chat.commandNeedsText'))
+        return
+      }
+      await tasksService.create({ contact_id: contact.id, title: rest })
+      toast.success(t('chat.commandTaskDone'))
+      void loadActivity()
+    }
+  },
+  {
+    name: 'note',
+    hint: 'chat.commandNote',
+    takesText: true,
+    run: async (rest) => {
+      const contact = contactsStore.currentContact
+      if (!contact) return
+      if (!rest) {
+        toast.error(t('chat.commandNeedsText'))
+        return
+      }
+      await notesStore.createNote(contact.id, rest)
+      toast.success(t('chat.commandNoteDone'))
+    }
+  },
+  {
+    name: 'assign',
+    hint: 'chat.commandAssign',
+    takesText: false,
+    run: async () => {
+      const contact = contactsStore.currentContact
+      const me = authStore.user?.id
+      if (!contact || !me) return
+      await inboxService.assign(contact.id, me)
+      toast.success(t('chat.commandAssignDone'))
+      void loadActivity()
+    }
+  },
+  {
+    name: 'snooze',
+    hint: 'chat.commandSnooze',
+    takesText: false,
+    run: async () => {
+      const contact = contactsStore.currentContact
+      if (!contact) return
+      // Tomorrow morning, in the reader's own timezone. An agent parking a
+      // chat at six in the evening means "not tonight", and asking them for a
+      // timestamp is asking them to do arithmetic mid-conversation.
+      const until = new Date()
+      until.setDate(until.getDate() + 1)
+      until.setHours(9, 0, 0, 0)
+      await inboxService.snooze(contact.id, until.toISOString())
+      toast.success(t('chat.commandSnoozeDone'))
+      void loadActivity()
+    }
+  },
+  {
+    name: 'resolve',
+    hint: 'chat.commandResolve',
+    takesText: false,
+    run: async () => {
+      const contact = contactsStore.currentContact
+      if (!contact) return
+      await inboxService.resolve(contact.id)
+      toast.success(t('chat.commandResolveDone'))
+      void loadActivity()
+    }
+  }
+]
+
+/** The word after the slash, and whatever follows it. */
+function parseCommand(input: string): { word: string; rest: string } | null {
+  if (!input.startsWith('/')) return null
+  const trimmed = input.slice(1)
+  const space = trimmed.indexOf(' ')
+  if (space === -1) return { word: trimmed.toLowerCase(), rest: '' }
+  return { word: trimmed.slice(0, space).toLowerCase(), rest: trimmed.slice(space + 1).trim() }
+}
+
+/** Commands whose name the typed word is a prefix of. */
+const commandMatches = computed<SlashCommand[]>(() => {
+  const parsed = parseCommand(messageInput.value)
+  if (!parsed) return []
+  // A word with a space after it has been chosen; only an exact name counts.
+  if (messageInput.value.includes(' ')) {
+    const exact = slashCommands.find(c => c.name === parsed.word)
+    return exact ? [exact] : []
+  }
+  return slashCommands.filter(c => c.name.startsWith(parsed.word))
+})
+
+const isCommanding = computed(() => commandMatches.value.length > 0)
+
+/** Runs the command on the line, if it is one. Returns whether it handled it. */
+async function runCommandLine(): Promise<boolean> {
+  const parsed = parseCommand(messageInput.value)
+  if (!parsed) return false
+
+  const command = slashCommands.find(c => c.name === parsed.word)
+  if (!command) return false
+
+  const line = messageInput.value
+  messageInput.value = ''
+  resetTextareaHeight()
+  try {
+    await command.run(parsed.rest)
+  } catch (error) {
+    // Put the line back: an agent who typed it should not have to type it
+    // again to find out what went wrong.
+    messageInput.value = line
+    toast.error(getErrorMessage(error, t('chat.commandFailed')))
+  }
+  return true
+}
+
+// Thread activity pills (plan 10, 4.1).
+//
+// The chat and the contact's timeline were telling different stories: an agent
+// reading a thread could not see that the conversation had been reassigned
+// twice, a task had been raised off it, or an automation had set a field —
+// all of which the customer's next message is a reply to.
+//
+// The wording is the server's: the timeline API already renders each entry as
+// a sentence, so the pill shows `summary` rather than a second renderer that
+// would drift from the profile page.
+const showActivity = ref(false)
+const activityItems = ref<TimelineItem[]>([])
+
+// Messages are the thread itself; notes have their own panel. What is left is
+// what happened *around* the conversation, which is the point of the pills.
+const PILL_EXCLUDED = new Set(['message_burst', 'note'])
+
+try {
+  showActivity.value = localStorage.getItem('chat-show-activity') === 'true'
+} catch {
+  // Private windows and blocked site data: the default is simply off.
+}
+
+async function loadActivity() {
+  const contactId = contactsStore.currentContact?.id
+  if (!contactId || !showActivity.value) {
+    activityItems.value = []
+    return
+  }
+  try {
+    const payload = unwrapResponse<any>(
+      await timelineService.forContact(contactId, { limit: 100 })
+    )
+    activityItems.value = (payload?.items || []).filter(
+      (item: TimelineItem) => !PILL_EXCLUDED.has(item.type)
+    )
+  } catch {
+    // A thread that loads without its pills is still a thread.
+    activityItems.value = []
+  }
+}
+
+function toggleActivity() {
+  showActivity.value = !showActivity.value
+  try {
+    localStorage.setItem('chat-show-activity', String(showActivity.value))
+  } catch {
+    // Not remembering the choice is survivable; refusing to make it is not.
+  }
+  void loadActivity()
+}
+
+/**
+ * Which pills belong above which message.
+ *
+ * Built once per change rather than filtered per row: a long thread with a
+ * busy history would otherwise be O(messages x activity) on every render.
+ * Anything older than the first loaded message is dropped — the thread is
+ * paged, and a pile of pills at the top would claim a history the reader
+ * cannot see the messages for.
+ */
+const activityPills = computed<Map<string, TimelineItem[]>>(() => {
+  const byMessage = new Map<string, TimelineItem[]>()
+  const messages = contactsStore.messages
+  if (!showActivity.value || !messages.length || !activityItems.value.length) {
+    return byMessage
+  }
+
+  const ordered = [...activityItems.value].sort(
+    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
+  )
+
+  let cursor = 0
+  for (const message of messages) {
+    const at = new Date(message.created_at).getTime()
+    const bucket: TimelineItem[] = []
+    while (cursor < ordered.length && new Date(ordered[cursor].occurred_at).getTime() <= at) {
+      bucket.push(ordered[cursor])
+      cursor++
+    }
+    if (bucket.length) byMessage.set(message.id, bucket)
+  }
+  return byMessage
+})
+
+/** Anything that happened after the last message in the thread. */
+const trailingPills = computed<TimelineItem[]>(() => {
+  const messages = contactsStore.messages
+  if (!showActivity.value || !activityItems.value.length) return []
+  if (!messages.length) return activityItems.value
+  const last = new Date(messages[messages.length - 1].created_at).getTime()
+  return activityItems.value
+    .filter(item => new Date(item.occurred_at).getTime() > last)
+    .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
+})
+
+// Service window state (plan 10, 4.1).
+//
+// The server says whether the window was open when the contact was serialised.
+// An agent can sit on a chat for hours, so the countdown is computed from
+// last_inbound_at against a ticking clock: the banner flips while the chat is
+// open rather than the next time something happens to refetch.
+const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000
+const WINDOW_WARNING_MS = 3 * 60 * 60 * 1000
+
+const clockTick = ref(Date.now())
+let windowTicker: ReturnType<typeof setInterval> | undefined
+
+onMounted(() => {
+  // A minute is fine: the number shown is hours and minutes.
+  windowTicker = setInterval(() => { clockTick.value = Date.now() }, 60_000)
+})
+onUnmounted(() => { if (windowTicker) clearInterval(windowTicker) })
+
+/** Milliseconds left in the 24-hour window, or null when there is no inbound. */
+const serviceWindowRemaining = computed<number | null>(() => {
+  const at = contactsStore.currentContact?.last_inbound_at
+  if (!at) return null
+  const closesAt = new Date(at).getTime() + SERVICE_WINDOW_MS
+  return closesAt - clockTick.value
+})
+
 const isServiceWindowExpired = computed(() => {
   const contact = contactsStore.currentContact
   if (!contact) return false
+  const remaining = serviceWindowRemaining.value
+  if (remaining !== null) return remaining <= 0
+  // No inbound message recorded: fall back to what the server decided.
   return contact.service_window_open === false
+})
+
+/** True while the window is open but close enough to matter. */
+const isServiceWindowClosing = computed(() => {
+  const remaining = serviceWindowRemaining.value
+  return remaining !== null && remaining > 0 && remaining <= WINDOW_WARNING_MS
+})
+
+const serviceWindowCountdown = computed(() => {
+  const remaining = serviceWindowRemaining.value ?? 0
+  const minutes = Math.max(0, Math.floor(remaining / 60_000))
+  const hours = Math.floor(minutes / 60)
+  if (hours >= 1) return t('chat.windowClosesInHours', { hours, minutes: minutes % 60 })
+  return t('chat.windowClosesInMinutes', { minutes })
 })
 
 function openTemplatePicker() {
@@ -496,7 +859,41 @@ function onUserActive() {
   })
 }
 
+/**
+ * Watch the open contact's topic, replacing whatever was watched before.
+ *
+ * Switching chats has to unsubscribe the old one: a panel that accumulated
+ * subscriptions would be refetching for every contact an agent had visited.
+ */
+let stopWatchingContact: (() => void) | null = null
+
+function watchContactTopic(id: string) {
+  stopWatchingContact?.()
+
+  const stops = [wsService.subscribeTopics([`contact:${id}`])]
+  const refresh = (payload: any) => {
+    if (payload?.contact_id === id) void contactsStore.refreshContactRow(id)
+  }
+  for (const event of ['contact_updated', 'custom_fields_updated']) {
+    stops.push(wsService.subscribe(event, refresh))
+  }
+
+  // A pill describes something that just happened, so the thread has to hear
+  // about it. Without this the activity only appears on the next reload, by
+  // which time the agent has usually stopped wondering.
+  const refreshPills = (payload: any) => {
+    if (payload?.contact_id === id) void loadActivity()
+  }
+  for (const event of ['crm_event', 'conversation_updated', 'contact_updated']) {
+    stops.push(wsService.subscribe(event, refreshPills))
+  }
+
+  stopWatchingContact = () => stops.forEach(stop => stop())
+}
+
 onUnmounted(() => {
+  stopWatchingContact?.()
+  stopWatchingContact = null
   wsService.setCurrentContact(null)
   // Clear current contact when leaving chat view so notifications work on other pages
   contactsStore.setCurrentContact(null)
@@ -615,6 +1012,17 @@ async function selectContact(id: string) {
 
     // Tell WebSocket server which contact we're viewing
     wsService.setCurrentContact(id)
+    // And subscribe to its topic (plan 10, S10), so a field edited on the
+    // profile in another tab, or a merge, reaches this panel. set_contact
+    // above is the older single-valued mechanism and stays until every
+    // client is on topics.
+    watchContactTopic(id)
+    // The pills describe this contact, so they are refetched with them. A
+    // no-op when the toggle is off.
+    void loadActivity()
+    // The fields a message can be copied into (plan 10, 4.1). Read once per
+    // contact rather than per hover.
+    void loadMessageActionFields()
     // Wait for DOM to render messages before scrolling
     await nextTick()
     // Load media for messages after messages are fetched
@@ -703,6 +1111,10 @@ function handleContactClick(contact: Contact) {
 
 async function sendMessage() {
   if (!messageInput.value.trim() || !contactsStore.currentContact) return
+
+  // A line beginning with a known command is not a message anybody meant to
+  // send to the customer (plan 10, 4.1).
+  if (await runCommandLine()) return
 
   isSending.value = true
   try {
@@ -855,15 +1267,23 @@ function resolveCannedTokens(text: string): string {
   })
 }
 
-const cannedPreview = computed(() =>
-  selectedCannedResponse.value ? resolveCannedTokens(selectedCannedResponse.value.content) : '',
-)
+// What the server said this renders to, or null while it is being fetched or
+// if the request failed.
+const cannedResolved = ref<{ content: string; buttons?: Record<string, any>[] } | null>(null)
+
+const cannedPreview = computed(() => {
+  if (!selectedCannedResponse.value) return ''
+  // The author's own placeholders are still filled here: only the person
+  // typing knows what goes in them.
+  const base = cannedResolved.value?.content ?? selectedCannedResponse.value.content
+  return resolveCannedTokens(base)
+})
 
 // Resolved buttons (with {{...}} substitution applied) for the dialog preview.
 // Empty array when no response is selected or it has no buttons.
 const cannedPreviewButtons = computed(() => {
-  const raw = selectedCannedResponse.value?.buttons || []
-  return raw.map(b => ({
+  const raw: any[] = (cannedResolved.value?.buttons as any[]) ?? selectedCannedResponse.value?.buttons ?? []
+  return raw.map((b: any) => ({
     ...b,
     title: resolveCannedTokens(b.title),
     ...(b.url !== undefined ? { url: resolveCannedTokens(b.url) } : {}),
@@ -878,12 +1298,43 @@ function handleCannedSelect(response: CannedResponse) {
   )
   cannedParamNames.value = tokens
   cannedParamValues.value = Object.fromEntries(tokens.map(t => [t, '']))
+  cannedResolved.value = null
+
   // Drop the slash command (or any stray text) so the textarea starts clean.
   messageInput.value = ''
   resetTextareaHeight()
   cannedPickerOpen.value = false
   cannedSearchQuery.value = ''
   cannedDialogOpen.value = true
+
+  // The server's answer fills in when it arrives. The dialog opens first on
+  // purpose: the agent has already chosen, and making them wait on a round
+  // trip to see the response they picked is a worse trade than a preview that
+  // sharpens a moment later — the client-side resolver covers the common
+  // tokens in the meantime.
+  void resolveCannedOnServer(response)
+}
+
+/**
+ * Ask the server what this canned response says for this contact (plan 10, S6).
+ *
+ * The browser knows four token names; the server knows the whole namespace —
+ * owners, custom fields, the team the conversation sits in. A failure leaves
+ * the client-side resolution in place rather than blanking the preview.
+ */
+async function resolveCannedOnServer(response: CannedResponse) {
+  const contactId = contactsStore.currentContact?.id
+  if (!contactId) return
+
+  try {
+    const { data } = await cannedResponsesService.resolve(response.id, { contact_id: contactId })
+    // Guard against a slow answer for a response the agent has since changed
+    // away from, which would otherwise overwrite the newer preview.
+    if (selectedCannedResponse.value?.id !== response.id) return
+    cannedResolved.value = (data as any)?.data ?? data
+  } catch {
+    cannedResolved.value = null
+  }
 }
 
 async function sendCannedResponse() {
@@ -1190,6 +1641,13 @@ function replyToMessage(message: Message) {
 
 // Watch for slash commands in message input
 watch(messageInput, (val) => {
+  // A command takes the slash; canned responses keep it otherwise. Both on
+  // screen at once would be two menus fighting over one keystroke.
+  if (isCommanding.value) {
+    cannedPickerOpen.value = false
+    cannedSearchQuery.value = ''
+    return
+  }
   if (val.startsWith('/')) {
     const query = val.slice(1) // Remove the leading /
     cannedSearchQuery.value = query
@@ -1984,6 +2442,21 @@ async function sendMediaMessage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  id="activity-toggle"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :class="showActivity && 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'"
+                  @click="toggleActivity"
+                >
+                  <Activity class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.showActivity') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   id="info-button"
                   class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                   :class="isInfoPanelOpen && 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'"
@@ -2046,6 +2519,14 @@ async function sendMediaMessage() {
           </div>
         </div>
 
+        <!-- "This may be the same person" (plan 06). Under the header, where
+             an agent reading a thread that looks oddly short will see it —
+             a data-quality page nobody opens is the wrong place for it. -->
+        <DuplicateBanner
+          :contact-id="contactsStore.currentContact?.id"
+          @merged="contactsStore.fetchContacts()"
+        />
+
         <!-- Messages -->
         <div class="relative flex-1 min-h-0 overflow-hidden">
           <!-- Loading overlay while switching contacts / loading the first page -->
@@ -2082,6 +2563,21 @@ async function sendMediaMessage() {
                 >
                   <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
                     {{ getDateLabel(message.created_at) }}
+                  </div>
+                </div>
+
+                <!-- What happened around the conversation since the previous
+                     message (plan 10, 4.1). The wording is the timeline's, so
+                     the thread and the profile cannot disagree. -->
+                <div
+                  v-for="pill in activityPills.get(message.id) || []"
+                  :key="`pill-${pill.id}`"
+                  class="flex items-center justify-center my-2"
+                  data-activity-pill
+                >
+                  <div class="max-w-[80%] px-3 py-1 rounded-full bg-white/[0.04] light:bg-gray-100 text-[11px] text-white/45 light:text-gray-600 flex items-center gap-1.5">
+                    <Activity class="h-3 w-3 shrink-0" />
+                    <span class="truncate">{{ pill.summary }}</span>
                   </div>
                 </div>
 
@@ -2407,6 +2903,52 @@ async function sendMediaMessage() {
                 >
                   <Reply class="h-3 w-3" />
                 </Button>
+                <!-- A Popover, matching the reaction picker beside it: the
+                     same component in the same place behaves the same way. -->
+                <Popover
+                  :open="messageActionsFor === message.id"
+                  @update:open="(open: boolean) => messageActionsFor = open ? message.id : null"
+                >
+                  <PopoverTrigger as-child>
+                    <Button variant="ghost" size="icon" class="h-6 w-6" data-message-actions>
+                      <MoreVertical class="h-3 w-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="end" class="w-56 p-1">
+                    <p class="px-2 py-1.5 text-xs text-muted-foreground">{{ $t('chat.messageActions') }}</p>
+                    <button
+                      class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                      @click="createTaskFromMessage(message)"
+                    >
+                      {{ $t('chat.messageActionTask') }}
+                    </button>
+                    <button
+                      class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                      @click="noteAboutMessage(message)"
+                    >
+                      {{ $t('chat.messageActionNote') }}
+                    </button>
+                    <button
+                      v-if="canSeeDealsFromChat"
+                      class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                      @click="createDealFromMessage(message)"
+                    >
+                      {{ $t('chat.messageActionDeal') }}
+                    </button>
+                    <template v-if="messageActionFields.length">
+                      <div class="my-1 h-px bg-border" />
+                      <p class="px-2 py-1.5 text-xs text-muted-foreground">{{ $t('chat.messageActionCopyTo') }}</p>
+                      <button
+                        v-for="field in messageActionFields"
+                        :key="field.id"
+                        class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                        @click="copyMessageToField(message, field)"
+                      >
+                        {{ field.label }}
+                      </button>
+                    </template>
+                  </PopoverContent>
+                </Popover>
               </div>
               <!-- Reply button for outgoing messages (shown on hover) -->
               <div v-if="message.direction === 'outgoing'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
@@ -2437,6 +2979,52 @@ async function sendMediaMessage() {
                 >
                   <Reply class="h-3 w-3" />
                 </Button>
+                <!-- A Popover, matching the reaction picker beside it: the
+                     same component in the same place behaves the same way. -->
+                <Popover
+                  :open="messageActionsFor === message.id"
+                  @update:open="(open: boolean) => messageActionsFor = open ? message.id : null"
+                >
+                  <PopoverTrigger as-child>
+                    <Button variant="ghost" size="icon" class="h-6 w-6" data-message-actions>
+                      <MoreVertical class="h-3 w-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="end" class="w-56 p-1">
+                    <p class="px-2 py-1.5 text-xs text-muted-foreground">{{ $t('chat.messageActions') }}</p>
+                    <button
+                      class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                      @click="createTaskFromMessage(message)"
+                    >
+                      {{ $t('chat.messageActionTask') }}
+                    </button>
+                    <button
+                      class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                      @click="noteAboutMessage(message)"
+                    >
+                      {{ $t('chat.messageActionNote') }}
+                    </button>
+                    <button
+                      v-if="canSeeDealsFromChat"
+                      class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                      @click="createDealFromMessage(message)"
+                    >
+                      {{ $t('chat.messageActionDeal') }}
+                    </button>
+                    <template v-if="messageActionFields.length">
+                      <div class="my-1 h-px bg-border" />
+                      <p class="px-2 py-1.5 text-xs text-muted-foreground">{{ $t('chat.messageActionCopyTo') }}</p>
+                      <button
+                        v-for="field in messageActionFields"
+                        :key="field.id"
+                        class="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted"
+                        @click="copyMessageToField(message, field)"
+                      >
+                        {{ field.label }}
+                      </button>
+                    </template>
+                  </PopoverContent>
+                </Popover>
                 <Button
                   v-if="message.status === 'failed' && message.message_type !== 'template'"
                   variant="ghost"
@@ -2452,9 +3040,32 @@ async function sendMediaMessage() {
               </div>
             </div>
             </template>
+
+            <!-- Anything that happened after the last message. -->
+            <div
+              v-for="pill in trailingPills"
+              :key="`pill-tail-${pill.id}`"
+              class="flex items-center justify-center my-2"
+              data-activity-pill
+            >
+              <div class="max-w-[80%] px-3 py-1 rounded-full bg-white/[0.04] light:bg-gray-100 text-[11px] text-white/45 light:text-gray-600 flex items-center gap-1.5">
+                <Activity class="h-3 w-3 shrink-0" />
+                <span class="truncate">{{ pill.summary }}</span>
+              </div>
+            </div>
+
             <div ref="messagesEndRef" />
           </div>
         </ScrollArea>
+        </div>
+
+        <!-- Service window closing soon -->
+        <div
+          v-if="isServiceWindowClosing"
+          class="px-4 py-2 border-t border-amber-500/20 bg-amber-500/10 flex items-center gap-2"
+        >
+          <Clock class="h-4 w-4 text-amber-500 shrink-0" />
+          <span class="text-sm text-amber-600 dark:text-amber-400 flex-1">{{ serviceWindowCountdown }}</span>
         </div>
 
         <!-- Service window expired banner -->
@@ -2467,6 +3078,26 @@ async function sendMediaMessage() {
           <Button variant="outline" size="sm" class="border-red-500/30 text-red-500 hover:bg-red-500/10 shrink-0" @click="openTemplatePicker">
             {{ $t('chat.sendTemplateAction') }}
           </Button>
+        </div>
+
+        <!-- Commands the typed slash matches (plan 10, 4.1). A list rather
+             than a menu: the agent is already typing, and the only thing they
+             need is to know the command exists and what it will do. -->
+        <div
+          v-if="isCommanding"
+          class="px-4 py-2 border-t border-white/[0.08] light:border-gray-200 bg-white/[0.04] light:bg-gray-50 flex flex-wrap items-center gap-x-4 gap-y-1"
+          data-command-hints
+        >
+          <span
+            v-for="command in commandMatches"
+            :key="command.name"
+            class="text-[11px] text-white/50 light:text-gray-600"
+          >
+            <span class="font-mono text-white/80 light:text-gray-900">/{{ command.name }}</span>
+            <span v-if="command.takesText" class="font-mono text-white/30 light:text-gray-400"> …</span>
+            — {{ $t(command.hint) }}
+          </span>
+          <span class="text-[11px] text-white/30 light:text-gray-400 ml-auto">{{ $t('chat.commandEnter') }}</span>
         </div>
 
         <!-- Reply indicator -->

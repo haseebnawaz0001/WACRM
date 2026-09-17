@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Save, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Clock, PhoneOff } from 'lucide-vue-next'
+import { ArrowLeft, Save, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Clock, PhoneOff, UserCheck } from 'lucide-vue-next'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -26,6 +26,7 @@ import HTTPCallbackNode from '@/components/calling/nodes/HTTPCallbackNode.vue'
 import TransferNode from '@/components/calling/nodes/TransferNode.vue'
 import GotoFlowNode from '@/components/calling/nodes/GotoFlowNode.vue'
 import TimingNode from '@/components/calling/nodes/TimingNode.vue'
+import CRMConditionNode from '@/components/calling/nodes/CRMConditionNode.vue'
 import HangupNode from '@/components/calling/nodes/HangupNode.vue'
 
 const { t } = useI18n()
@@ -60,6 +61,7 @@ const nodeTypes: any = {
   transfer: markRaw(TransferNode),
   goto_flow: markRaw(GotoFlowNode),
   timing: markRaw(TimingNode),
+  crm_condition: markRaw(CRMConditionNode),
   hangup: markRaw(HangupNode),
 }
 
@@ -72,6 +74,7 @@ const palette: { type: IVRNodeType; label: string; icon: any; color: string }[] 
   { type: 'transfer', label: 'Transfer', icon: Users, color: 'bg-amber-600' },
   { type: 'goto_flow', label: 'Goto Flow', icon: ExternalLink, color: 'bg-teal-600' },
   { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
+  { type: 'crm_condition', label: 'CRM Condition', icon: UserCheck, color: 'bg-indigo-600' },
   { type: 'hangup', label: 'Hangup', icon: PhoneOff, color: 'bg-red-600' },
 ]
 
@@ -127,6 +130,7 @@ function addNodeFromPalette(type: IVRNodeType) {
       { day: 'saturday', enabled: false, start_time: '09:00', end_time: '17:00' },
       { day: 'sunday', enabled: false, start_time: '09:00', end_time: '17:00' },
     ]},
+    crm_condition: { filter: { op: 'and', children: [] } },
     hangup: { audio_file: '' },
   }
 

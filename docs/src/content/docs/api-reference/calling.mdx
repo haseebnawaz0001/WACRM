@@ -186,6 +186,63 @@ POST /api/call-logs/{id}/resume
 
 ---
 
+## Record a Call Outcome
+
+```bash
+POST /api/call-logs/{id}/outcome
+```
+
+The telephony records what happened to the connection — answered, forty seconds, hung up by the caller. It cannot record what the call was *about* or what happens next, which a week later is the only part anybody wants.
+
+### Request Body
+
+```json
+{
+  "disposition": "call_back",
+  "notes": "Wanted to cancel; talked them through the renewal instead.",
+  "follow_up": true,
+  "follow_up_at": "2026-09-18T09:00:00Z",
+  "follow_up_note": "Call back about the renewal",
+  "complete_task_id": "…"
+}
+```
+
+| Field | Description |
+|---|---|
+| `disposition` | `answered`, `no_answer`, `voicemail`, `wrong_number`, `call_back`, `resolved`, `not_resolved` |
+| `notes` | Free text — a call is |
+| `follow_up` | Create a call-back task |
+| `follow_up_at` | When it is due. Omit for the task type's own default |
+| `follow_up_note` | The task's title |
+| `complete_task_id` | Close the call-back this call was made for |
+
+The disposition is a short closed list rather than free text, because it is reported on. The notes are where the specifics go.
+
+Recording the outcome is also where the follow-up is created, because that is the moment somebody knows there is one. The task carries `call_log_id`, so the call and the follow-up read as one thread on the contact's timeline rather than two unrelated rows.
+
+`complete_task_id` closes the follow-up this call was made *for*, so an agent working from their task list does not close the same thing twice.
+
+### Access
+
+The agent who took the call may record its outcome. Anybody else needs `call_logs:read`, the same rule as reading the call in the first place.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "recorded": true,
+    "task_completed": true,
+    "task_id": "…"
+  }
+}
+```
+
+If the outcome saves but the follow-up cannot be created, the outcome is still saved and `follow_up_error` says why — losing what the agent typed over a failed task would be the worse outcome.
+
+---
+
 ## Call Transfers
 
 Call transfers move a live call from the IVR (or from another agent) to an agent or team. See [IVR Flows](/whatomate/api-reference/ivr-flows) for how transfers are triggered from a flow.

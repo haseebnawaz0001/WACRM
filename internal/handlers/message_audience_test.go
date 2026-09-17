@@ -70,7 +70,7 @@ func TestFilterUsersWhoCanSeeContact_IncludesEveryoneForTheGeneralQueue(t *testi
 		OpenedAt:       time.Now(),
 	}
 	require.NoError(t, app.DB.Create(conv).Error)
-	require.NoError(t, app.DB.Model(conv).Update("bot_active", false).Error)
+	require.NoError(t, app.DB.Model(conv).Update("handling", models.HandlingNone).Error)
 
 	audience := app.FilterUsersWhoCanSeeContact(org.ID, contact, []uuid.UUID{agent.ID})
 	assert.Contains(t, audience, agent.ID)
@@ -96,7 +96,7 @@ func TestFilterUsersWhoCanSeeContact_TeamQueueReachesOnlyThatTeam(t *testing.T) 
 		OpenedAt:       time.Now(),
 	}
 	require.NoError(t, app.DB.Create(conv).Error)
-	require.NoError(t, app.DB.Model(conv).Update("bot_active", false).Error)
+	require.NoError(t, app.DB.Model(conv).Update("handling", models.HandlingNone).Error)
 
 	audience := app.FilterUsersWhoCanSeeContact(org.ID, contact, []uuid.UUID{member.ID, outsider.ID})
 	assert.Contains(t, audience, member.ID)
@@ -114,7 +114,7 @@ func TestFilterUsersWhoCanSeeContact_BotHeldConversationReachesNobodyExtra(t *te
 		OrganizationID: org.ID,
 		ContactID:      contact.ID,
 		Status:         models.ConversationOpen,
-		BotActive:      true,
+		Handling:       models.HandlingBot,
 		OpenedAt:       time.Now(),
 	}).Error)
 

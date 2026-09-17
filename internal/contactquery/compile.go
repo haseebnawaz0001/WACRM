@@ -96,7 +96,7 @@ func Scope(v Viewer) Compiled {
 			WHERE c.contact_id = contacts.id
 			  AND c.organization_id = contacts.organization_id
 			  AND c.assignee_id IS NULL
-			  AND c.bot_active = false
+			  AND c.handling <> 'bot'
 			  AND c.status <> 'resolved'
 			  AND c.deleted_at IS NULL
 			  AND (c.team_id IS NULL OR c.team_id IN (

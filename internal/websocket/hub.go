@@ -149,11 +149,7 @@ func (h *Hub) broadcastMessage(msg BroadcastMessage) {
 	for _, userClients := range orgClients {
 		// Iterate through all clients (tabs) for each user
 		for client := range userClients {
-			// If ContactID is specified, only send to clients viewing that contact
-			// Read through the accessor: currentContact is written on the
-			// client's own goroutine.
-			viewing := client.CurrentContact()
-			if msg.ContactID != uuid.Nil && viewing != nil && *viewing != msg.ContactID {
+			if !client.wants(msg) {
 				continue
 			}
 
@@ -332,4 +328,29 @@ func (h *Hub) Register(client *Client) {
 // Unregister removes a client from the hub via the unregister channel
 func (h *Hub) Unregister(client *Client) {
 	h.unregister <- client
+}
+
+// wants reports whether one client should receive a broadcast.
+//
+// A client that has subscribed to topics is taken at its word: it receives a
+// topic message it asked for and nothing else addressed by topic. Clients that
+// have not subscribed fall back to the old "currently viewing" rule, so an
+// older frontend keeps working while both models are live.
+func (c *Client) wants(msg BroadcastMessage) bool {
+	if msg.Topic != "" {
+		return c.Subscribed(msg.Topic)
+	}
+
+	if msg.ContactID == uuid.Nil {
+		return true
+	}
+	// currentContact is written on the client's own goroutine; read it
+	// through the accessor.
+	viewing := c.CurrentContact()
+	return viewing == nil || *viewing == msg.ContactID
+}
+
+// BroadcastToTopic delivers to the clients watching one topic (plan 10, S10).
+func (h *Hub) BroadcastToTopic(orgID uuid.UUID, topic string, msg WSMessage) {
+	h.Broadcast(BroadcastMessage{OrgID: orgID, Topic: topic, Message: msg})
 }

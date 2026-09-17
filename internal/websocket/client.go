@@ -56,7 +56,23 @@ type Client struct {
 	mu sync.RWMutex
 	// Current contact being viewed (nil if none)
 	currentContact *uuid.UUID
+
+	// topics this client has subscribed to (plan 10, S10).
+	//
+	// A single "current contact" could describe only one thing at a time,
+	// which is why notes for a contact the agent was not looking at arrived in
+	// the singleton notes store, and why a split view — profile beside chat —
+	// could not work: opening the second view silently unsubscribed the first.
+	// A set of topics describes what a client is actually watching.
+	topics map[string]bool
 }
+
+// maxTopicsPerClient bounds what one connection may watch.
+//
+// Subscriptions are client-controlled, so without a cap a single socket could
+// ask the server to remember an unbounded list. Fifty is far more than a real
+// screen needs — a board, a conversation and a handful of contacts.
+const maxTopicsPerClient = 50
 
 // setCurrentContact records which contact this client is looking at.
 func (c *Client) setCurrentContact(contactID *uuid.UUID) {
@@ -261,6 +277,10 @@ func (c *Client) handleMessage(data []byte) {
 	switch msg.Type {
 	case TypeSetContact:
 		c.handleSetContact(msg.Payload)
+	case TypeSubscribe:
+		c.handleSubscribe(msg.Payload, true)
+	case TypeUnsubscribe:
+		c.handleSubscribe(msg.Payload, false)
 	case TypePing:
 		c.sendPong()
 	}
@@ -291,6 +311,64 @@ func (c *Client) handleSetContact(payload any) {
 			"user_id", c.userID,
 			"contact_id", contactID)
 	}
+}
+
+// handleSubscribe adds or removes topics this client is watching.
+//
+// Unknown topic shapes are ignored rather than rejected: a newer client
+// subscribing to something this server does not serve yet should degrade to
+// receiving nothing for it, not have its connection treated as broken.
+func (c *Client) handleSubscribe(payload any, add bool) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	var sub SubscribePayload
+	if err := json.Unmarshal(data, &sub); err != nil {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.topics == nil {
+		c.topics = make(map[string]bool, len(sub.Topics))
+	}
+	for _, topic := range sub.Topics {
+		if topic == "" {
+			continue
+		}
+		if !add {
+			delete(c.topics, topic)
+			continue
+		}
+		if len(c.topics) >= maxTopicsPerClient {
+			c.hub.log.Warn("Client reached its topic limit; ignoring the rest",
+				"user_id", c.userID, "limit", maxTopicsPerClient)
+			break
+		}
+		c.topics[topic] = true
+	}
+}
+
+// Subscribed reports whether this client is watching a topic.
+func (c *Client) Subscribed(topic string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.topics[topic]
+}
+
+// Topics returns a copy of what this client is watching, for tests and
+// diagnostics.
+func (c *Client) Topics() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]string, 0, len(c.topics))
+	for topic := range c.topics {
+		out = append(out, topic)
+	}
+	return out
 }
 
 // SendChan returns the client's send channel for use in tests.

@@ -11,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/notify"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
@@ -34,13 +35,16 @@ const (
 
 // ConversationResponse is the API shape of a conversation.
 type ConversationResponse struct {
-	ID              string     `json:"id"`
-	ContactID       string     `json:"contact_id"`
-	ContactName     string     `json:"contact_name"`
-	ContactPhone    string     `json:"contact_phone"`
-	Status          string     `json:"status"`
-	AssigneeID      string     `json:"assignee_id,omitempty"`
-	TeamID          string     `json:"team_id,omitempty"`
+	ID           string `json:"id"`
+	ContactID    string `json:"contact_id"`
+	ContactName  string `json:"contact_name"`
+	ContactPhone string `json:"contact_phone"`
+	Status       string `json:"status"`
+	AssigneeID   string `json:"assignee_id,omitempty"`
+	TeamID       string `json:"team_id,omitempty"`
+	Handling     string `json:"handling"`
+	// BotActive is kept for clients written before handling existed. It is
+	// derived, never stored (plan 10, S5).
 	BotActive       bool       `json:"bot_active"`
 	WhatsAppAccount string     `json:"whatsapp_account,omitempty"`
 	SnoozedUntil    *time.Time `json:"snoozed_until,omitempty"`
@@ -98,9 +102,13 @@ func (a *App) ListInbox(r *fastglue.Request) error {
 	case InboxViewUnassigned:
 		// The queue is unassigned conversations that a human should pick up.
 		// Bot-handled ones are excluded: nobody is waiting on a person there.
-		query = query.Where("conversations.assignee_id IS NULL AND conversations.bot_active = false")
+		// A suppressed handoff is included — the customer asked for a person
+		// and the request went nowhere, which is precisely a queue item.
+		query = query.Where("conversations.assignee_id IS NULL AND conversations.handling <> ?",
+			models.HandlingBot)
 	case InboxViewBot:
-		query = query.Where("conversations.bot_active = true AND conversations.assignee_id IS NULL")
+		query = query.Where("conversations.handling = ? AND conversations.assignee_id IS NULL",
+			models.HandlingBot)
 	case InboxViewAll:
 		// No extra predicate; the visibility scope below still applies.
 	default:
@@ -160,7 +168,8 @@ func (a *App) toConversationResponse(orgID uuid.UUID, c models.Conversation, sho
 		ID:              c.ID.String(),
 		ContactID:       c.ContactID.String(),
 		Status:          string(c.Status),
-		BotActive:       c.BotActive,
+		Handling:        string(c.Handling),
+		BotActive:       c.IsBotHandled(),
 		WhatsAppAccount: c.WhatsAppAccount,
 		SnoozedUntil:    c.SnoozedUntil,
 		OpenedAt:        c.OpenedAt,
@@ -210,8 +219,8 @@ func (a *App) GetInboxCounts(r *fastglue.Request) error {
 	err = a.DB.Model(&models.Conversation{}).
 		Select(`
 			count(*) FILTER (WHERE assignee_id = ?) AS mine,
-			count(*) FILTER (WHERE assignee_id IS NULL AND bot_active = false) AS unassigned,
-			count(*) FILTER (WHERE assignee_id IS NULL AND bot_active = true) AS bot,
+			count(*) FILTER (WHERE assignee_id IS NULL AND handling <> 'bot') AS unassigned,
+			count(*) FILTER (WHERE assignee_id IS NULL AND handling = 'bot') AS bot,
 			count(*) AS all`, userID).
 		Where("organization_id = ? AND status <> ?", orgID, models.ConversationResolved).
 		Scan(&out).Error
@@ -376,9 +385,66 @@ func (a *App) AssignConversation(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign conversation", nil, "")
 	}
 
+	// Who handed this conversation to whom. Assignment decides who is
+	// accountable for a customer, and "updated" does not say that (plan 10,
+	// 4.10).
+	a.logAudit(orgID, userID, models.ResourceChat, conv.ID, models.AuditActionAssigned, nil,
+		map[string]any{
+			"contact_id":  contactID.String(),
+			"assignee_id": uuidOrEmpty(assignee),
+			"team_id":     uuidOrEmpty(teamID),
+		})
+
+	// Tell them. Being handed a customer and finding out only when you next
+	// happen to open the inbox is how a conversation sits unanswered for an
+	// afternoon (plan 00, F5). Assigning to yourself is not news.
+	if assignee != nil && *assignee != userID {
+		a.notifyAssignee(orgID, *assignee, contactID, conv.ID)
+	}
+
 	return r.SendEnvelope(map[string]any{
 		"conversation": a.toConversationResponse(orgID, *conv, false),
 	})
+}
+
+// notifyAssignee tells somebody a conversation is now theirs.
+//
+// A failure here never fails the assignment: the conversation has moved, and
+// refusing the request would leave the caller believing it had not.
+func (a *App) notifyAssignee(orgID, assigneeID, contactID, conversationID uuid.UUID) {
+	name := "A conversation"
+	var contact models.Contact
+	if err := a.DB.Select("profile_name", "phone_number").
+		Where("id = ?", contactID).First(&contact).Error; err == nil {
+		if contact.ProfileName != "" {
+			name = contact.ProfileName
+		} else if contact.PhoneNumber != "" {
+			name = contact.PhoneNumber
+		}
+	}
+
+	err := a.Notify().Send(context.Background(), notify.Input{
+		OrgID:   orgID,
+		UserIDs: []uuid.UUID{assigneeID},
+		Type:    models.NotificationConversationAssigned,
+		Title:   "Conversation assigned to you",
+		Body:    name + " is now yours.",
+		Link:    "/chat?contact=" + contactID.String(),
+		Entity:  notify.Entity{Type: "conversation", ID: &conversationID},
+	})
+	if err != nil {
+		a.Log.Error("Failed to notify the new assignee", "error", err,
+			"assignee_id", assigneeID, "conversation_id", conversationID)
+	}
+}
+
+// uuidOrEmpty renders an optional id for an audit payload. A blank reads as
+// "nobody", which is what unassigning means.
+func uuidOrEmpty(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }
 
 // GetConversation returns a contact's active conversation, if any.
@@ -406,5 +472,89 @@ func (a *App) GetConversation(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]any{
 		"conversation": a.toConversationResponse(orgID, *conv, a.ShouldMaskPhoneNumbers(orgID)),
+	})
+}
+
+// MarkConversationPending records that we have replied and are waiting on the
+// customer (plan 03).
+//
+// Open and Pending are the difference between "this needs me" and "this needs
+// them". Without it an agent's count includes everything they are waiting on,
+// so it never goes down and stops being worth looking at.
+func (a *App) MarkConversationPending(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	if err != nil {
+		return err
+	}
+	req, ok := decodeConversationAction(r)
+	if !ok {
+		return nil
+	}
+	contactID, ok := a.contactForAction(r, orgID, req)
+	if !ok {
+		return nil
+	}
+
+	conv, err := a.Conversations().SetPending(context.Background(), orgID, contactID,
+		crmevents.UserActor(userID, ""))
+	if err != nil {
+		if err == conversation.ErrNotFound {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "No active conversation", nil, "")
+		}
+		a.Log.Error("Failed to mark conversation pending", "error", err, "contact_id", contactID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update conversation", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"conversation": a.toConversationResponse(orgID, *conv, false),
+	})
+}
+
+// ReopenConversation puts a resolved conversation back in the inbox.
+//
+// Resolving one by mistake is a single click, and without this the agent's only
+// options were to wait for the customer to write again or to start what looks
+// like a new issue.
+func (a *App) ReopenConversation(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	if err != nil {
+		return err
+	}
+
+	var req struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+	conversationID, parseErr := uuid.Parse(req.ConversationID)
+	if parseErr != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "conversation_id is required", nil, "")
+	}
+
+	// Visibility is checked on the contact, the same as every other
+	// conversation action: reopening is a way of reaching a conversation, so
+	// it must not reach one the agent cannot see.
+	var existing models.Conversation
+	if err := a.DB.Where("id = ? AND organization_id = ?", conversationID, orgID).
+		First(&existing).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Conversation not found", nil, "")
+	}
+	if !a.canSeeContact(orgID, userID, existing.ContactID) {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Conversation not found", nil, "")
+	}
+
+	conv, err := a.Conversations().Reopen(context.Background(), orgID, conversationID,
+		crmevents.UserActor(userID, ""))
+	if err != nil {
+		if err == conversation.ErrNotFound {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Conversation not found", nil, "")
+		}
+		a.Log.Error("Failed to reopen conversation", "error", err, "conversation_id", conversationID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to reopen conversation", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"conversation": a.toConversationResponse(orgID, *conv, false),
 	})
 }

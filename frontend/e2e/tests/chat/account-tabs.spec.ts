@@ -250,8 +250,14 @@ test.describe('Multi-Account Tabs', () => {
     await chatPage.goto(CONTACT_ID)
     await page.waitForTimeout(500)
 
-    // Get the chat header and account tabs bounding boxes
-    const header = page.locator('.h-14.flex-shrink-0').first()
+    // Get the chat header and account tabs bounding boxes.
+    //
+    // Matched on h-16: the header was h-14 when this test was written and has
+    // since grown to line up with the page headers elsewhere. The stale
+    // selector matched nothing, so boundingBox() came back null and the test
+    // failed on its own precondition rather than on the overlap it exists to
+    // catch.
+    const header = page.locator('.h-16.flex-shrink-0').first()
     const tabsContainer = chatPage.getAccountTab('account-1').locator('..')
 
     const headerBox = await header.boundingBox()

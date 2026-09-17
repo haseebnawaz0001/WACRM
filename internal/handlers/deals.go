@@ -96,7 +96,7 @@ func (a *App) broadcastDeal(orgID uuid.UUID, deal *models.Deal) {
 	if a.WSHub == nil || deal == nil {
 		return
 	}
-	a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+	msg := websocket.WSMessage{
 		Type: websocket.TypeDealUpdated,
 		Payload: map[string]any{
 			"deal_id":        deal.ID.String(),
@@ -105,7 +105,16 @@ func (a *App) broadcastDeal(orgID uuid.UUID, deal *models.Deal) {
 			"board_position": deal.BoardPosition,
 			"status":         deal.Status,
 		},
-	})
+	}
+
+	// The board watching this pipeline, and the organization at large.
+	//
+	// The topic is what an open board subscribes to (plan 10, S10), so a card
+	// moved by a colleague lands without a reload. The org-wide send stays for
+	// clients that predate topics — a board that hears about the move twice
+	// refetches twice, which is cheap; one that never hears is stale.
+	a.WSHub.BroadcastToTopic(orgID, websocket.BoardTopic(deal.PipelineID.String()), msg)
+	a.WSHub.BroadcastToOrg(orgID, msg)
 }
 
 // ListDeals returns deals for the list/table view.

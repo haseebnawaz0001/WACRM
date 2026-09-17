@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,14 @@ import (
 
 // ErrNotFound is returned when a task does not exist in the organization.
 var ErrNotFound = errors.New("tasks: not found")
+
+// ErrNotOpen is returned when an edit is attempted on a closed task. Editing
+// one silently would rewrite history: the record says what was promised, and a
+// finished promise is not re-negotiable. Reopen it first.
+var ErrNotOpen = errors.New("tasks: task is not open")
+
+// ErrTitleRequired is returned when an edit would leave a task unnamed.
+var ErrTitleRequired = errors.New("tasks: title is required")
 
 // DefaultReminderLead is how far before the deadline the owner is reminded
 // when no explicit reminder is set.
@@ -61,6 +70,7 @@ type CreateInput struct {
 	ConversationID   *uuid.UUID
 	MessageID        *uuid.UUID
 	DealID           *uuid.UUID
+	CallLogID        *uuid.UUID
 	AutomationRuleID *uuid.UUID
 
 	// Location is the owner's timezone, used to place an all-day deadline at
@@ -107,6 +117,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*models.Task, err
 		ConversationID:   in.ConversationID,
 		MessageID:        in.MessageID,
 		DealID:           in.DealID,
+		CallLogID:        in.CallLogID,
 		TypeID:           taskType.ID,
 		Title:            in.Title,
 		Description:      in.Description,
@@ -300,7 +311,8 @@ type ListOpts struct {
 // List returns tasks, soonest deadline first.
 func (s *Service) List(ctx context.Context, orgID uuid.UUID, opts ListOpts) ([]models.Task, int64, error) {
 	q := s.DB.WithContext(ctx).Model(&models.Task{}).
-		Where("tasks.organization_id = ?", orgID)
+		Where("tasks.organization_id = ?", orgID).
+		Where(liveContactOnly("tasks"))
 
 	status := opts.Status
 	if status == "" {
@@ -390,8 +402,187 @@ func priorityOrNormal(p string) string {
 
 func sourceOrManual(s string) string {
 	switch s {
-	case models.TaskSourceAutomation, models.TaskSourceAPI, models.TaskSourceChatbot:
+	case models.TaskSourceAutomation, models.TaskSourceAPI, models.TaskSourceChatbot,
+		models.TaskSourceCall:
 		return s
 	}
 	return models.TaskSourceManual
+}
+
+// liveContactOnly hides work attached to a deleted contact (plan 10, S2).
+//
+// Deleting a contact keeps their tasks and deals rather than destroying
+// someone's to-do list, but a follow-up for a customer who no longer exists is
+// not work anybody can do, and it should not sit in a list being counted,
+// chased and reported on. Restoring the contact brings them back, which is why
+// the rows are filtered rather than deleted.
+func liveContactOnly(table string) string {
+	return "EXISTS (SELECT 1 FROM contacts c WHERE c.id = " + table +
+		".contact_id AND c.deleted_at IS NULL)"
+}
+
+// DueCounts is what a person can act on right now.
+type DueCounts struct {
+	// Overdue tasks have passed their deadline.
+	Overdue int64 `json:"overdue"`
+	// DueToday are due before the end of the day in the owner's timezone.
+	DueToday int64 `json:"due_today"`
+}
+
+// Total is the sidebar badge: what is late plus what is due today (plan 04).
+//
+// Deliberately not "all open tasks". A badge showing forty because somebody
+// planned forty follow-ups over the next month is a badge people learn to
+// ignore; a badge showing three because three are actually due is a prompt.
+func (d DueCounts) Total() int64 { return d.Overdue + d.DueToday }
+
+// DueFor counts one owner's overdue and due-today tasks.
+//
+// One query with two filtered aggregates rather than two round trips: this
+// runs on every page load to fill a badge, and a badge is not worth two
+// queries.
+func (s *Service) DueFor(ctx context.Context, orgID, ownerID uuid.UUID, loc *time.Location) (DueCounts, error) {
+	if loc == nil {
+		loc = time.UTC
+	}
+	now := time.Now().UTC()
+	// End of today in the owner's timezone: "due today" is a statement about
+	// their calendar, not the server's.
+	local := now.In(loc)
+	endOfDay := time.Date(local.Year(), local.Month(), local.Day(), 23, 59, 59, 0, loc).UTC()
+
+	var out DueCounts
+	err := s.DB.WithContext(ctx).Model(&models.Task{}).
+		Select(`count(*) FILTER (WHERE tasks.due_at < ?) AS overdue,
+		        count(*) FILTER (WHERE tasks.due_at >= ? AND tasks.due_at <= ?) AS due_today`,
+			now, now, endOfDay).
+		Where("tasks.organization_id = ? AND tasks.owner_id = ? AND tasks.status = ?",
+			orgID, ownerID, models.TaskOpen).
+		Where(liveContactOnly("tasks")).
+		Scan(&out).Error
+	return out, err
+}
+
+// UpdateInput is what a person may change about an existing task.
+//
+// Every field is a pointer so "leave it alone" and "set it to empty" are
+// different instructions. A form that always sends every field would otherwise
+// blank a description the user never touched.
+type UpdateInput struct {
+	Title       *string
+	Description *string
+	Priority    *string
+	DueAt       *time.Time
+	AllDay      *bool
+	RemindAt    *time.Time
+	// ClearRemind removes the reminder, which a nil RemindAt cannot express.
+	ClearRemind bool
+}
+
+// Update edits a task: renaming it, rescheduling it, changing its priority.
+//
+// Rescheduling clears the reminder claim, so a task moved from this morning to
+// next week reminds its owner again rather than staying silent because the
+// notifier already fired once for the old deadline.
+func (s *Service) Update(ctx context.Context, orgID, taskID uuid.UUID, in UpdateInput, actor crmevents.Actor) (*models.Task, error) {
+	var task models.Task
+
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND organization_id = ?", taskID, orgID).First(&task).Error; err != nil {
+			return ErrNotFound
+		}
+		if task.Status != models.TaskOpen {
+			return ErrNotOpen
+		}
+
+		updates := map[string]any{}
+		if in.Title != nil {
+			title := strings.TrimSpace(*in.Title)
+			if title == "" {
+				return ErrTitleRequired
+			}
+			updates["title"] = title
+		}
+		if in.Description != nil {
+			updates["description"] = *in.Description
+		}
+		if in.Priority != nil {
+			updates["priority"] = *in.Priority
+		}
+		if in.AllDay != nil {
+			updates["all_day"] = *in.AllDay
+		}
+		if in.DueAt != nil {
+			updates["due_at"] = in.DueAt.UTC()
+			// A new deadline is a new promise: the reminder and the overdue
+			// notice both get to fire again.
+			updates["reminder_sent_at"] = nil
+			updates["overdue_notified_at"] = nil
+		}
+		switch {
+		case in.ClearRemind:
+			updates["remind_at"] = nil
+		case in.RemindAt != nil:
+			updates["remind_at"] = in.RemindAt.UTC()
+			updates["reminder_sent_at"] = nil
+		}
+
+		if len(updates) == 0 {
+			return nil
+		}
+
+		if err := tx.Model(&models.Task{}).Where("id = ?", taskID).Updates(updates).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id = ?", taskID).First(&task).Error; err != nil {
+			return err
+		}
+		return s.publish(tx, &task, "task.updated", actor)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+// Reopen puts a completed or cancelled task back on someone's list.
+//
+// Completing a task by mistake is a click; without a way back the only remedy
+// was to create a second task, which loses the history of the first.
+func (s *Service) Reopen(ctx context.Context, orgID, taskID uuid.UUID, actor crmevents.Actor) (*models.Task, error) {
+	var task models.Task
+
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND organization_id = ?", taskID, orgID).First(&task).Error; err != nil {
+			return ErrNotFound
+		}
+		if task.Status == models.TaskOpen {
+			// Already open: reopening twice is a no-op, not a failure.
+			return nil
+		}
+
+		if err := tx.Model(&models.Task{}).Where("id = ?", taskID).
+			Updates(map[string]any{
+				"status":          models.TaskOpen,
+				"completed_at":    nil,
+				"completed_by_id": nil,
+				"cancelled_at":    nil,
+				// The notices belong to the closed life of this task; a
+				// reopened one has not been chased yet.
+				"reminder_sent_at":    nil,
+				"overdue_notified_at": nil,
+			}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id = ?", taskID).First(&task).Error; err != nil {
+			return err
+		}
+		return s.publish(tx, &task, "task.updated", actor)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
 }

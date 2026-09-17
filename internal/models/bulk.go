@@ -23,11 +23,15 @@ type BulkMessageCampaign struct {
 	DeliveredCount       int            `gorm:"default:0" json:"delivered_count"`
 	ReadCount            int            `gorm:"default:0" json:"read_count"`
 	FailedCount          int            `gorm:"default:0" json:"failed_count"`
-	ScheduledAt          *time.Time     `json:"scheduled_at,omitempty"`
-	StartedAt            *time.Time     `json:"started_at,omitempty"`
-	CompletedAt          *time.Time     `json:"completed_at,omitempty"`
-	CreatedBy            uuid.UUID      `gorm:"type:uuid;not null" json:"created_by"`
-	UpdatedByID          *uuid.UUID     `gorm:"type:uuid" json:"updated_by_id,omitempty"`
+	// RepliedCount is how many recipients wrote back inside the attribution
+	// window (plan 10, §4.5). Delivery counts say the message arrived; this is
+	// the only one that says it worked.
+	RepliedCount int        `gorm:"default:0" json:"replied_count"`
+	ScheduledAt  *time.Time `json:"scheduled_at,omitempty"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	CreatedBy    uuid.UUID  `gorm:"type:uuid;not null" json:"created_by"`
+	UpdatedByID  *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Audience (plan 05). A campaign used to be aimed at whatever list somebody
 	// pasted in, and the list was gone the moment it was sent. Pointing it at a
@@ -43,6 +47,16 @@ type BulkMessageCampaign struct {
 	AudienceCount  *int       `json:"audience_count,omitempty"`
 	ExcludedCount  *int       `json:"excluded_count,omitempty"`
 	MaterializedAt *time.Time `json:"materialized_at,omitempty"`
+
+	// ParamMappings says where each template parameter's value comes from for
+	// a segment-targeted campaign (plan 05). A list campaign gets them from
+	// the CSV; a segment has no CSV, so without this a template variable went
+	// out as its literal text.
+	//
+	// Keyed by the template's own parameter names — "1", "2" for a positional
+	// template, words for a named one — matching how the recipient rows key
+	// template_params.
+	ParamMappings JSONB `gorm:"type:jsonb;default:'{}'" json:"param_mappings,omitempty"`
 
 	// Relations
 	Organization *Organization          `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

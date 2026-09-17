@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -473,6 +474,15 @@ func (a *App) ImportData(r *fastglue.Request) error {
 	const maxCSVSize = 10 << 20
 	limitedReader := io.LimitReader(file, maxCSVSize+1)
 
+	// Contacts have their own importer (plan 01, S2). The reflection importer
+	// matched on the exact phone string, so "+923…" and "923…" produced two
+	// contacts, and a row colliding with a soft-deleted contact failed the
+	// whole file with a unique-constraint error. It also had no idea custom
+	// fields existed. It stays for the simple tables.
+	if tableName == "contacts" {
+		return a.importContacts(r, orgID, userID, limitedReader, columnMapping)
+	}
+
 	// Parse CSV
 	reader := csv.NewReader(limitedReader)
 
@@ -684,6 +694,88 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		"errors":   errors,
 		"messages": errorMessages,
 	})
+}
+
+// importContacts runs the dedicated contacts importer and answers in the shape
+// the import dialog already reads.
+func (a *App) importContacts(r *fastglue.Request, orgID, userID uuid.UUID,
+	source io.Reader, columnMapping map[string]string) error {
+
+	body, err := io.ReadAll(source)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read file", nil, "")
+	}
+
+	// The importer matches on header names, so the dialog's mapping has to
+	// land on the header before it sees the file.
+	body, err = remapCSVHeader(body, columnMapping)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read CSV header", nil, "")
+	}
+
+	result, err := a.ImportContactsCSV(orgID, userID, bytes.NewReader(body))
+	if err != nil {
+		a.Log.Error("Failed to import contacts", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+
+	messages := make([]string, 0, len(result.Errors))
+	for _, e := range result.Errors {
+		if e.Phone != "" {
+			messages = append(messages, fmt.Sprintf("Row %d (%s): %s", e.Line, e.Phone, e.Message))
+			continue
+		}
+		messages = append(messages, fmt.Sprintf("Row %d: %s", e.Line, e.Message))
+	}
+
+	// An import is the change people come to the audit log to find: it can
+	// touch thousands of records at once and "updated" on each of them says
+	// nothing about where they came from (plan 10, 4.10).
+	a.logAudit(orgID, userID, models.ResourceContacts, uuid.Nil, models.AuditActionImported, nil,
+		map[string]any{
+			"created": result.Created,
+			"updated": result.Updated,
+			"skipped": result.Skipped,
+		})
+
+	return r.SendEnvelope(map[string]any{
+		"created":  result.Created,
+		"updated":  result.Updated,
+		"skipped":  result.Skipped,
+		"errors":   len(result.Errors),
+		"messages": messages,
+	})
+}
+
+// remapCSVHeader renames the header cells the dialog mapped, leaving every row
+// untouched. An empty mapping returns the file as it came.
+func remapCSVHeader(body []byte, columnMapping map[string]string) ([]byte, error) {
+	if len(columnMapping) == 0 {
+		return body, nil
+	}
+
+	reader := csv.NewReader(bytes.NewReader(body))
+	reader.FieldsPerRecord = -1
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return body, nil
+	}
+
+	for i, cell := range records[0] {
+		if mapped, ok := columnMapping[strings.TrimSpace(cell)]; ok {
+			records[0][i] = mapped
+		}
+	}
+
+	var out bytes.Buffer
+	writer := csv.NewWriter(&out)
+	if err := writer.WriteAll(records); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 // GetExportConfig returns the export configuration for a table

@@ -724,7 +724,7 @@ func (a *App) GetWidgetData(r *fastglue.Request) error {
 	}
 
 	// Execute the query
-	data, err := a.executeWidgetQuery(orgID, widget, fromStr, toStr)
+	data, err := a.executeWidgetQuery(orgID, userID, widget, fromStr, toStr)
 	if err != nil {
 		a.Log.Error("Failed to execute widget query", "error", err, "widget_id", id)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get widget data", nil, "")
@@ -758,7 +758,7 @@ func (a *App) GetAllWidgetsData(r *fastglue.Request) error {
 	// Execute queries for all widgets
 	results := make(map[string]WidgetDataResponse)
 	for _, widget := range widgets {
-		data, err := a.executeWidgetQuery(orgID, widget, fromStr, toStr)
+		data, err := a.executeWidgetQuery(orgID, userID, widget, fromStr, toStr)
 		if err != nil {
 			a.Log.Error("Failed to execute widget query", "error", err, "widget_id", widget.ID)
 			continue
@@ -772,8 +772,11 @@ func (a *App) GetAllWidgetsData(r *fastglue.Request) error {
 	})
 }
 
-// executeWidgetQuery executes the query for a widget and returns the data
-func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr, toStr string) (WidgetDataResponse, error) {
+// executeWidgetQuery executes the query for a widget and returns the data.
+//
+// viewerID is who is looking: a shared widget filtered on "me" resolves against
+// them, not against whoever saved it.
+func (a *App) executeWidgetQuery(orgID, viewerID uuid.UUID, widget models.Widget, fromStr, toStr string) (WidgetDataResponse, error) {
 	now := time.Now()
 
 	var periodStart, periodEnd time.Time
@@ -815,6 +818,7 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 			})
 		}
 	}
+	filters = resolveViewerFilters(filters, viewerID)
 
 	// Funnel and leaderboard are shapes rather than aggregates over one table,
 	// so they are served from the report queries that already compute them
@@ -890,6 +894,35 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 	}
 
 	return response, nil
+}
+
+// widgetOwnerColumns are the filter columns that name a person, and so the ones
+// "me" can stand in for.
+var widgetOwnerColumns = map[string]bool{
+	"owner_id":         true,
+	"assignee_id":      true,
+	"assigned_user_id": true,
+	"agent_id":         true,
+	"sent_by_user_id":  true,
+	"created_by_id":    true,
+}
+
+// resolveViewerFilters replaces the literal "me" with the viewer's id.
+//
+// A shared widget reading "My open tasks" has to mean a different set for each
+// person who opens it (plan 10, 4.7). Storing the author's id instead would put
+// their tasks on everybody's dashboard — worse than useless, because it looks
+// personal and is not.
+func resolveViewerFilters(filters []FilterInput, viewerID uuid.UUID) []FilterInput {
+	if viewerID == uuid.Nil {
+		return filters
+	}
+	for i, f := range filters {
+		if f.Value == "me" && widgetOwnerColumns[f.Field] {
+			filters[i].Value = viewerID.String()
+		}
+	}
+	return filters
 }
 
 // Query helper functions for each data source

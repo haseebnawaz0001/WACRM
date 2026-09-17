@@ -40,6 +40,84 @@ function findUnescapedDoubleCurlies(value: string): boolean {
   return stripped.includes('{{') || stripped.includes('}}')
 }
 
+
+/**
+ * Find keys declared twice in the same object.
+ *
+ * JSON.parse keeps the last one and says nothing, so a second `"profile": {}`
+ * block silently replaces the first. That is how the Profile page lost its
+ * labels: a contact-profile namespace was added under a name already in use,
+ * every `profile.*` string became the raw key, and nothing failed until the
+ * page was opened. The raw text has to be scanned, because by the time the file
+ * is parsed the evidence is gone.
+ */
+function findDuplicateKeys(raw: string): string[] {
+  const duplicates: string[] = []
+  const stack: Array<'object' | 'array'> = []
+  const seen: Array<Set<string>> = []
+  const path: string[] = []
+  let awaitingKey = false
+  let lastKey = ''
+  let i = 0
+
+  const readString = (): string => {
+    let out = ''
+    i++ // opening quote
+    while (i < raw.length) {
+      if (raw[i] === '\\') {
+        out += raw[i] + raw[i + 1]
+        i += 2
+        continue
+      }
+      if (raw[i] === '"') {
+        i++
+        return out
+      }
+      out += raw[i]
+      i++
+    }
+    return out
+  }
+
+  while (i < raw.length) {
+    const c = raw[i]
+    if (c === '"') {
+      const text = readString()
+      if (awaitingKey && stack[stack.length - 1] === 'object') {
+        const here = seen[seen.length - 1]
+        if (here.has(text)) {
+          duplicates.push([...path, text].filter(Boolean).join('.'))
+        }
+        here.add(text)
+        lastKey = text
+        awaitingKey = false
+      }
+      continue
+    }
+    if (c === '{') {
+      stack.push('object')
+      seen.push(new Set())
+      path.push(lastKey)
+      lastKey = ''
+      awaitingKey = true
+    } else if (c === '}') {
+      stack.pop()
+      seen.pop()
+      path.pop()
+      awaitingKey = false
+    } else if (c === '[') {
+      stack.push('array')
+    } else if (c === ']') {
+      stack.pop()
+    } else if (c === ',') {
+      awaitingKey = stack[stack.length - 1] === 'object'
+    }
+    i++
+  }
+
+  return duplicates
+}
+
 test.describe('i18n Translation Validation', () => {
   test('locale files should not contain unescaped double curly braces', () => {
     const files = fs.readdirSync(LOCALES_DIR).filter(f => f.endsWith('.json'))
@@ -93,5 +171,18 @@ test.describe('i18n Translation Validation', () => {
     }
 
     expect(empties, `Found ${empties.length} empty translation(s):\n${empties.join('\n')}`).toHaveLength(0)
+  })
+  test('locale files should not declare a key twice', () => {
+    const files = fs.readdirSync(LOCALES_DIR).filter(f => f.endsWith('.json'))
+    const clashes: string[] = []
+
+    for (const file of files) {
+      const raw = fs.readFileSync(path.join(LOCALES_DIR, file), 'utf-8')
+      for (const key of findDuplicateKeys(raw)) {
+        clashes.push(`${file} → "${key}" is declared more than once; the later block silently replaces the earlier one`)
+      }
+    }
+
+    expect(clashes, `Found ${clashes.length} duplicate key(s):\n${clashes.join('\n')}`).toHaveLength(0)
   })
 })

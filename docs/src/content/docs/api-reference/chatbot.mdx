@@ -321,6 +321,44 @@ POST /api/chatbot/ai-contexts
 |------|-------------|
 | `static` | Fixed text content |
 | `api` | Fetched from external API |
+| `contact_profile` | What the CRM knows about the person being talked to |
+
+An unknown type is refused with `400` rather than stored: a context the processor does not build contributes nothing to the prompt, which reads to an operator as "the assistant ignored my instructions".
+
+### Contact profile context
+
+Without it the assistant asks customers for things the CRM already knows, and cannot answer "what did I order" without an integration written for the purpose.
+
+It is **opt-in twice**: once by adding the context, and again per field. A CRM holds things nobody would send to a language model — a national id, a medical note, an internal score — so naming no fields sends no fields.
+
+```json
+{
+  "name": "Who am I talking to",
+  "context_type": "contact_profile",
+  "static_content": "Use these facts to answer; do not read them back to the customer.",
+  "api_config": {
+    "fields": ["company", "plan"],
+    "include_tags": true,
+    "include_lifecycle": true,
+    "include_open_tasks": true,
+    "include_open_deals": true,
+    "include_conversation": true
+  }
+}
+```
+
+| Setting | Effect |
+|---|---|
+| `fields` | Custom field keys to include. Empty sends none; `["*"]` sends every live field and has to be typed |
+| `include_tags` | The contact's tags |
+| `include_lifecycle` | The lifecycle stage |
+| `include_open_tasks` | Up to five open follow-ups with their deadlines |
+| `include_open_deals` | Up to five open deals by title |
+| `include_conversation` | The conversation's status and how long it has been open |
+
+Each section defaults to **on**; only an explicit `false` turns one off. Archived fields are never sent, and everything rendered is a fact the customer already knows about themselves — that is the test each section is held to.
+
+`static_content` is still used, and is the right place for the instruction that goes with the record.
 
 ### Get Context
 

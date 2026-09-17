@@ -1063,6 +1063,13 @@ func (m *Manager) handleTransferNoAnswer(session *CallSession, transferID uuid.U
 		"completed_at": now.Format(time.RFC3339),
 	})
 
+	// A transfer nobody accepted is a customer left holding (plan 10, §4.4).
+	var transfer models.CallTransfer
+	if err := m.db.Where("id = ?", transferID).First(&transfer).Error; err == nil {
+		m.publishTransferNoAnswer(session.OrganizationID, session.CallLogID,
+			transfer.ContactID, transfer.TeamID)
+	}
+
 	m.log.Info("Call transfer timed out", "transfer_id", transferID)
 
 	// If the IVR loop is waiting to resume, signal it instead of cleaning up.

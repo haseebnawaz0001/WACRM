@@ -109,7 +109,7 @@ func (a *App) SearchContacts(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to search contacts", nil, "")
 	}
 
-	items, err := a.buildContactSearchResults(orgID, contacts, req.Include)
+	items, err := a.buildContactSearchResults(orgID, userID, contacts, req.Include)
 	if err != nil {
 		a.Log.Error("Failed to load contact page extras", "error", err, "org_id", orgID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to search contacts", nil, "")
@@ -238,7 +238,7 @@ type ContactSearchResult struct {
 
 // buildContactSearchResults assembles the page, loading requested extras in one
 // query each rather than per row.
-func (a *App) buildContactSearchResults(orgID uuid.UUID, contacts []models.Contact, include []string) ([]ContactSearchResult, error) {
+func (a *App) buildContactSearchResults(orgID, viewerID uuid.UUID, contacts []models.Contact, include []string) ([]ContactSearchResult, error) {
 	wants := make(map[string]bool, len(include))
 	for _, name := range include {
 		wants[name] = true
@@ -261,7 +261,7 @@ func (a *App) buildContactSearchResults(orgID uuid.UUID, contacts []models.Conta
 	var unread map[uuid.UUID]int64
 	if wants["unread"] && len(ids) > 0 {
 		var err error
-		unread, err = a.unreadCountsFor(ids)
+		unread, err = a.Conversations().UnreadFor(context.Background(), orgID, viewerID, ids)
 		if err != nil {
 			return nil, err
 		}
@@ -301,33 +301,6 @@ func (a *App) buildContactSearchResults(orgID uuid.UUID, contacts []models.Conta
 			row.UnreadCount = unread[c.ID]
 		}
 		out = append(out, row)
-	}
-	return out, nil
-}
-
-// unreadCountsFor returns unread message counts for a page of contacts.
-//
-// One grouped query rather than one per row: counting per contact is the N+1
-// that made the contacts list slow in proportion to the page size.
-func (a *App) unreadCountsFor(contactIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
-	type row struct {
-		ContactID uuid.UUID
-		Count     int64
-	}
-	var rows []row
-
-	if err := a.DB.Model(&models.Message{}).
-		Select("contact_id, count(*) as count").
-		Where("contact_id IN ? AND direction = ? AND status <> ?",
-			contactIDs, models.DirectionIncoming, models.MessageStatusRead).
-		Group("contact_id").
-		Scan(&rows).Error; err != nil {
-		return nil, err
-	}
-
-	out := make(map[uuid.UUID]int64, len(rows))
-	for _, r := range rows {
-		out[r.ContactID] = r.Count
 	}
 	return out, nil
 }

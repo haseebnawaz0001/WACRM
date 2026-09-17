@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useNavBadgesStore } from '@/stores/navBadges'
 import type { NavItem } from './navigation'
 
 const props = defineProps<{
@@ -13,6 +14,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   navigate: []
 }>()
+
+const badges = useNavBadgesStore()
+
+/**
+ * The live count for this item, or zero when it has none (plan 10, S12).
+ *
+ * Zero renders nothing rather than a "0": a badge saying there is nothing to do
+ * is a badge asking to be ignored.
+ */
+const badgeCount = computed(() => (props.item.badgeKey ? badges.countFor(props.item.badgeKey) : 0))
 
 const showChildren = computed(() => !!props.item.children?.length && props.item.active && !props.collapsed)
 
@@ -38,7 +49,7 @@ const activeChildPath = computed(() => {
       <RouterLink
         :to="item.path"
         :class="[
-          'sidebar-link nav-active-indicator btn-press flex items-center gap-2.5 rounded-lg px-2.5 py-2 max-md:py-3 text-[13px] font-medium transition-colors duration-150',
+          'sidebar-link nav-active-indicator btn-press relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 max-md:py-3 text-[13px] font-medium transition-colors duration-150',
           parentMarked
             ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
             : item.active
@@ -52,6 +63,15 @@ const activeChildPath = computed(() => {
       >
         <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
         <span :class="collapsed && 'md:sr-only'">{{ $t(item.name) }}</span>
+        <span
+          v-if="badgeCount > 0"
+          :class="[
+            'ml-auto shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-medium text-emerald-400 light:bg-emerald-100 light:text-emerald-700',
+            collapsed && 'md:absolute md:right-1 md:top-1 md:ml-0 md:px-1 md:py-0'
+          ]"
+        >
+          {{ badgeCount > 99 ? '99+' : badgeCount }}
+        </span>
       </RouterLink>
     </TooltipTrigger>
     <TooltipContent side="right" :side-offset="10">{{ $t(item.name) }}</TooltipContent>

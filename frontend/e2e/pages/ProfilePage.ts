@@ -16,8 +16,15 @@ export class ProfilePage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Profile' })
-    this.accountInfoCard = page.locator('.rounded-lg.border').filter({ hasText: 'Account Information' })
-    this.changePasswordCard = page.locator('.rounded-lg.border').filter({ hasText: 'Change Password' })
+    // By the card's heading, not by its text: the "Change Password" button
+    // carries a border and a radius of its own, so a text filter matches both
+    // the card and the button inside it.
+    this.accountInfoCard = page
+      .locator('.rounded-lg.border')
+      .filter({ has: page.getByRole('heading', { name: 'Account Information' }) })
+    this.changePasswordCard = page
+      .locator('.rounded-lg.border')
+      .filter({ has: page.getByRole('heading', { name: 'Change Password' }) })
     this.currentPasswordInput = page.locator('input#current_password')
     this.newPasswordInput = page.locator('input#new_password')
     this.confirmPasswordInput = page.locator('input#confirm_password')

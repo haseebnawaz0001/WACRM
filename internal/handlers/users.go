@@ -61,8 +61,8 @@ type UserResponse struct {
 	// only; a user list has no business carrying org settings on every row.
 	OrgTimezone   string `json:"org_timezone,omitempty"`
 	OrgDateFormat string `json:"org_date_format,omitempty"`
-	CreatedAt      string       `json:"created_at"`
-	UpdatedAt      string       `json:"updated_at"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 // PermissionInfo represents permission info in role response

@@ -32,6 +32,7 @@ var resourceLabels = map[string]ResourceType{
 	"ai_context":                {"ai_context", "AI Context", "Automation"},
 	"automations":               {"automations", "Automation Rule", "Automation"},
 	"campaigns":                 {"campaigns", "Campaign", "Outreach"},
+	"chat":                      {"chat", "Conversation", "CRM"},
 	"canned_response":           {"canned_response", "Canned Response", "Outreach"},
 	"chatbot_flow":              {"chatbot_flow", "Chatbot Flow", "Automation"},
 	"contact_fields":            {"contact_fields", "Contact Field", "CRM"},
@@ -77,10 +78,29 @@ func KnownResourceType(value string) bool {
 }
 
 // Actions returns the auditable actions.
+//
+// The same reasoning as the resource catalog: the filter offers what the server
+// writes. A verb missing here is a change that happened and cannot be searched
+// for; a verb here that nothing writes is a filter that always comes back
+// empty, which reads as "this never happened".
 func Actions() []Action {
 	return []Action{
 		{"created", "Created"},
 		{"updated", "Updated"},
 		{"deleted", "Deleted"},
+		{"merged", "Merged"},
+		{"assigned", "Assigned"},
+		{"started", "Started"},
+		{"imported", "Imported"},
 	}
+}
+
+// KnownAction reports whether an action is in the catalog.
+func KnownAction(value string) bool {
+	for _, action := range Actions() {
+		if action.Value == value {
+			return true
+		}
+	}
+	return false
 }

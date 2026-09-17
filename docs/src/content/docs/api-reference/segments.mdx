@@ -1,0 +1,143 @@
+---
+title: Segments
+description: Saved contact filters
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Segments require `segments:read`, `segments:write` and `segments:delete`. A private segment is visible only to the person who created it, whatever permissions anyone else holds.
+</Aside>
+
+## Overview
+
+A segment is a saved contact filter with a name — "Lifecycle = New, source = Import, not opted out". It is a definition, not a list: the members are whoever matches today, so a campaign aimed at a segment last week goes to whoever qualifies when it runs.
+
+Segments can be defined in terms of other segments. Cycles and nesting deeper than a few levels are rejected when the filter is **saved**, not when it is evaluated, so a filter that cannot be answered never gets stored.
+
+## The filter
+
+The filter is the contact filter AST used everywhere contacts are selected — search, campaign audiences, automation conditions:
+
+```json
+{
+  "op": "and",
+  "children": [
+    { "field": "field.lifecycle_stage", "operator": "is", "value": "new" },
+    { "field": "source", "operator": "is", "value": "import" },
+    { "op": "not", "children": [
+      { "field": "opted_out", "operator": "is", "value": true }
+    ]}
+  ]
+}
+```
+
+`GET /api/contacts/filter-fields` returns every field that may appear, with its type and the operators it accepts — including custom fields as `field.<key>`, deals as `deal.*`, and saved segments as `segment`, which is what lets one segment be built on another.
+
+The filter is validated on save: an unknown field, an operator the field does not accept, or a value of the wrong type is a `400` at save time rather than a query that quietly matches nothing.
+
+## List Segments
+
+```bash
+GET /api/segments
+```
+
+Returns the caller's own segments plus the shared ones. Someone else's private segment is not listed, and asking for it by id returns `404`.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "segments": [
+      {
+        "id": "…",
+        "name": "New imported leads",
+        "description": "",
+        "filter": { "op": "and", "children": [] },
+        "visibility": "shared",
+        "created_by_id": "…",
+        "contact_count": 412,
+        "counted_at": "2026-09-17T08:45:00Z",
+        "last_used_at": "2026-09-17T09:02:00Z",
+        "created_at": "2026-09-01T10:00:00Z"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+`contact_count` is a cached number with the time it was taken. It is refreshed every fifteen minutes for segments that have been used recently, and cleared the moment the filter changes — a stale count against a new filter is worse than no count.
+
+## Create / Update Segment
+
+```bash
+POST /api/segments
+PUT /api/segments/{id}
+```
+
+```json
+{
+  "name": "New imported leads",
+  "description": "",
+  "visibility": "shared",
+  "filter": { "op": "and", "children": [] }
+}
+```
+
+`visibility` is `shared` or `private`.
+
+## Preview a filter before saving
+
+```bash
+POST /api/segments/preview-count
+```
+
+```json
+{ "filter": { "op": "and", "children": [] } }
+```
+
+Counts what a filter would match without saving anything, so the builder can show the size as it is edited.
+
+## Recount
+
+```bash
+POST /api/segments/{id}/count
+```
+
+Takes a fresh count now rather than waiting for the refresh job.
+
+## Members
+
+```bash
+POST /api/segments/{id}/contacts
+```
+
+Returns the contacts currently matching, paginated. It is a `POST` because the request carries the paging and sort the list needs; an empty body is fine and takes the defaults.
+
+Browsing applies **the viewer's own** contact scope: an agent opening "VIP" sees the VIP contacts they are allowed to see, not everybody's. The cached `contact_count` on the segment is the unscoped total, so the two can legitimately differ.
+
+## Delete Segment
+
+```bash
+DELETE /api/segments/{id}
+```
+
+Refused with `409` while something still points at the segment — a campaign aimed at it, an automation condition, or another segment built on it. The response names the dependents:
+
+```json
+{
+  "status": "error",
+  "message": "This segment is still used by automation \"Welcome import\", segment \"Warm leads\""
+}
+```
+
+Pass `?force=1` to delete it anyway. The things that referenced it keep running and stop matching, which is why the warning exists.
+
+## Using a segment
+
+- **Campaigns** target a segment with `PUT /api/campaigns/{id}/audience`. Recipients are materialised when the campaign *starts*, not when the audience is set.
+- **Automation** conditions accept `segment` as a filter field.
+- **Exports** accept the same AST, so "export this segment" is the segment's filter handed to the export.

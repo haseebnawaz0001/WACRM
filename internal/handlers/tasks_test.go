@@ -308,3 +308,57 @@ func TestTaskNotifier_IgnoresClosedTasks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, count)
 }
+
+// Being given work you do not know about is the same as not being given it.
+func TestReassignTask_TellsTheNewOwner(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, tasks.SeedOrganization(app.DB, org.ID))
+	admin := adminFor(t, app, org)
+	agent := testutil.CreateTestUser(t, app.DB, org.ID)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	created, err := app.Tasks().Create(context.Background(), tasks.CreateInput{
+		OrgID: org.ID, ContactID: contact.ID, TypeKey: models.TaskTypeFollowUp,
+		Title: "Chase the documents", OwnerID: &admin.ID, CreatedBy: &admin.ID,
+		Source: models.TaskSourceManual, Location: time.UTC,
+	})
+	require.NoError(t, err)
+
+	req := testutil.NewJSONRequest(t, map[string]any{"owner_id": agent.ID.String()})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetPathParam(req, "id", created.ID.String())
+
+	require.NoError(t, app.ReassignTask(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	notes := notificationsFor(t, app, agent.ID, models.NotificationTaskAssigned)
+	require.Len(t, notes, 1)
+	assert.Equal(t, "Chase the documents", notes[0].Body)
+}
+
+// Taking a task yourself is not news.
+func TestReassignTask_TakingItYourselfIsNotANotification(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, tasks.SeedOrganization(app.DB, org.ID))
+	admin := adminFor(t, app, org)
+	other := testutil.CreateTestUser(t, app.DB, org.ID)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	created, err := app.Tasks().Create(context.Background(), tasks.CreateInput{
+		OrgID: org.ID, ContactID: contact.ID, TypeKey: models.TaskTypeFollowUp,
+		Title: "Chase the documents", OwnerID: &other.ID, CreatedBy: &admin.ID,
+		Source: models.TaskSourceManual, Location: time.UTC,
+	})
+	require.NoError(t, err)
+
+	req := testutil.NewJSONRequest(t, map[string]any{"owner_id": admin.ID.String()})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetPathParam(req, "id", created.ID.String())
+
+	require.NoError(t, app.ReassignTask(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	assert.Empty(t, notificationsFor(t, app, admin.ID, models.NotificationTaskAssigned))
+}

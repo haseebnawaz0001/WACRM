@@ -326,7 +326,16 @@ export interface TaskType {
 
 export const tasksService = {
   list: (params: { view?: string; status?: string; contact_id?: string; limit?: number; offset?: number } = {}) =>
-    api.get<{ tasks: Task[]; total: number; view: string }>(`/tasks${toQuery(params)}`),
+    api.get<{
+      tasks: Task[]
+      total: number
+      view: string
+      /** Past their deadline. */
+      overdue: number
+      due_today: number
+      /** overdue + due today — what the sidebar badge shows (plan 04). */
+      due_count: number
+    }>(`/tasks${toQuery(params)}`),
   create: (data: Record<string, any>) => api.post<{ task: Task }>('/tasks', data),
   complete: (id: string) => api.post<{ task: Task }>(`/tasks/${id}/complete`, {}),
   cancel: (id: string) => api.post<{ task: Task }>(`/tasks/${id}/cancel`, {}),
@@ -337,6 +346,8 @@ export const tasksService = {
 
 // --- Inbox and conversations (plan 03) ---
 
+export type ConversationHandling = 'bot' | 'human' | 'handoff_pending' | 'none'
+
 export interface InboxRow {
   id: string
   contact_id: string
@@ -345,6 +356,9 @@ export interface InboxRow {
   status: string
   assignee_id?: string
   team_id?: string
+  /** Who is dealing with it now: bot | human | handoff_pending | none. */
+  handling: ConversationHandling
+  /** Derived from `handling`; kept for callers written before it existed. */
   bot_active: boolean
   whatsapp_account?: string
   snoozed_until?: string | null
@@ -450,7 +464,17 @@ export const campaignAudienceService = {
       segment_id: segmentId || undefined
     }),
   preview: (campaignId: string) =>
-    api.post<AudiencePreview>(`/campaigns/${campaignId}/audience/preview`, {})
+    api.post<AudiencePreview>(`/campaigns/${campaignId}/audience/preview`, {}),
+  /**
+   * Say where each template variable's value comes from (plan 05).
+   *
+   * Sent on the audience endpoint because it is the same decision: who this
+   * goes to, and what it says to each of them.
+   */
+  setParamMappings: (
+    campaignId: string,
+    mappings: Record<string, { source: string; value: string; fallback: string }>
+  ) => api.put(`/campaigns/${campaignId}/audience`, { param_mappings: mappings })
 }
 
 // --- Duplicates and merge (plan 06) ---
@@ -797,6 +821,27 @@ export interface ReportRange {
   pipeline_id?: string
 }
 
+/** R6: did the campaign work, as opposed to arrive (plan 09)? */
+export interface CampaignReplyRow {
+  campaign_id: string
+  name: string
+  started_at: string
+  recipients: number
+  delivered: number
+  replied: number
+  /** Replies over **delivered**: a message that never arrived cannot be replied to. */
+  reply_rate: number
+}
+
+export interface CampaignRepliesReport {
+  rows: CampaignReplyRow[]
+  recipients: number
+  delivered: number
+  replied: number
+  reply_rate: number
+  counting_rule: string
+}
+
 export const reportsService = {
   contactsBySource: (params: ReportRange = {}) =>
     api.get<ContactsBySourceReport>(`/reports/contacts-by-source${toQuery(params)}`),
@@ -810,6 +855,8 @@ export const reportsService = {
     api.get<{ rows: TaskAgentRow[] }>(`/reports/tasks-by-agent${toQuery(params)}`),
   agentPerformance: (params: ReportRange = {}) =>
     api.get<AgentPerformanceReport>(`/reports/agent-performance${toQuery(params)}`),
+  campaignReplies: (params: ReportRange = {}) =>
+    api.get<CampaignRepliesReport>(`/reports/campaign-replies${toQuery(params)}`),
 
   /** The CSV URL, so the browser downloads it rather than the app buffering it. */
   exportUrl: (key: string, params: ReportRange = {}) =>
@@ -968,7 +1015,8 @@ export const campaignsService = {
   cancel: (id: string) => api.post(`/campaigns/${id}/cancel`),
   retryFailed: (id: string) => api.post(`/campaigns/${id}/retry-failed`),
   // Recipients
-  getRecipients: (id: string) => api.get(`/campaigns/${id}/recipients`),
+  getRecipients: (id: string, params?: { page?: number; limit?: number; status?: string }) =>
+    api.get(`/campaigns/${id}/recipients`, { params }),
   addRecipients: (id: string, recipients: Array<{ phone_number: string; recipient_name?: string; template_params?: Record<string, any> }>) =>
     api.post(`/campaigns/${id}/recipients/import`, { recipients }),
   deleteRecipient: (campaignId: string, recipientId: string) =>
@@ -1078,7 +1126,35 @@ export const cannedResponsesService = {
   update: (id: string, data: CannedResponseUpsertPayload) =>
     api.put(`/canned-responses/${id}`, data),
   delete: (id: string) => api.delete(`/canned-responses/${id}`),
-  use: (id: string) => api.post(`/canned-responses/${id}/use`)
+  use: (id: string) => api.post(`/canned-responses/${id}/use`),
+  /**
+   * Render a canned response against a contact on the server (plan 10, S6).
+   *
+   * The chat used to substitute tokens in the browser against a hardcoded list
+   * of four names, so anything else — an owner, a custom field, the team —
+   * reached the customer as a literal `{{...}}`.
+   */
+  resolve: (id: string, data: { contact_id?: string; params?: Record<string, string> }) =>
+    api.post<{ content: string; buttons?: Record<string, any>[] }>(
+      `/canned-responses/${id}/resolve`,
+      data
+    )
+}
+
+/** Template variables offered by a given editing context (plan 10, S6). */
+export interface TemplateVariable {
+  path: string
+  label: string
+  group: string
+  example?: string
+  dynamic?: boolean
+}
+
+export const variablesService = {
+  list: (context: string) =>
+    api.get<{ context: string; variables: TemplateVariable[] }>('/variables', {
+      params: { context }
+    })
 }
 
 export const agentAnalyticsService = {
@@ -1324,6 +1400,7 @@ export const organizationService = {
   getSettings: () => api.get('/org/settings'),
   updateSettings: (data: {
     mask_phone_numbers?: boolean
+    marketing_frequency_cap_hours?: number
     timezone?: string
     date_format?: string
     name?: string
@@ -1335,6 +1412,13 @@ export const organizationService = {
     meta_app_id?: string
     meta_config_id?: string
     meta_app_secret?: string
+    /** Conversation lifecycle rules (plan 03). */
+    inbox?: {
+      reopen_window_hours: number
+      auto_resolve_idle_hours: number
+      pending_timeout_hours: number
+      auto_pending_on_agent_reply: boolean
+    }
   }) => api.put('/org/settings', data),
   uploadOrgAudio: (file: File, type: 'hold_music' | 'ringback') => {
     const formData = new FormData()
@@ -1655,6 +1739,8 @@ export const notesService = {
 
 // Calling - Call Logs & IVR Flows
 export interface CallLog {
+  disposition?: string
+  notes?: string
   id: string
   organization_id: string
   whatsapp_account: string
@@ -1690,7 +1776,7 @@ export interface CallLog {
 }
 
 // v2 Node-based IVR Flow types
-export type IVRNodeType = 'greeting' | 'menu' | 'gather' | 'http_callback' | 'transfer' | 'goto_flow' | 'timing' | 'hangup'
+export type IVRNodeType = 'greeting' | 'menu' | 'gather' | 'http_callback' | 'transfer' | 'goto_flow' | 'timing' | 'crm_condition' | 'hangup'
 
 export interface IVRNodePosition {
   x: number
@@ -1845,6 +1931,15 @@ export const outgoingCallsService = {
 }
 
 export const callLogsService = {
+  recordOutcome: (id: string, body: {
+    disposition: string
+    notes?: string
+    follow_up?: boolean
+    follow_up_at?: string
+    follow_up_note?: string
+    complete_task_id?: string
+  }) => api.post(`/call-logs/${id}/outcome`, body),
+
   list: (params?: { status?: string; account?: string; contact_id?: string; direction?: string; ivr_flow_id?: string; phone?: string; from?: string; to?: string; page?: number; limit?: number }) =>
     api.get<{ call_logs: CallLog[]; total: number }>('/call-logs', { params }),
   get: (id: string) => api.get<CallLog>(`/call-logs/${id}`),

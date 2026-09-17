@@ -110,7 +110,7 @@ func (e *Engine) timeTriggerEvents(ctx context.Context, rule *models.AutomationR
 			Where("organization_id = ? AND status <> ?", rule.OrganizationID, models.ConversationResolved).
 			// Bot-handled conversations are excluded: nobody is late when the
 			// chatbot is mid-answer.
-			Where("bot_active = false").
+			Where("handling <> ?", models.HandlingBot).
 			Where("waiting_since IS NOT NULL AND waiting_since < ?", time.Now().UTC().Add(-after)).
 			Limit(TimeTriggerBatch).Find(&rows).Error
 		if err != nil {

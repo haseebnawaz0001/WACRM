@@ -39,7 +39,7 @@ func TestTouchInbound_OpensAConversation(t *testing.T) {
 	require.NotNil(t, c.WaitingSince, "a customer message puts the ball in our court")
 	require.NotNil(t, c.FirstCustomerMessageAt)
 	assert.Equal(t, 1, c.MessageCount)
-	assert.True(t, c.BotActive)
+	assert.Equal(t, models.HandlingBot, c.Handling)
 }
 
 // waiting_since marks the oldest unanswered message. Resetting it on every
@@ -295,7 +295,7 @@ func TestAssign_DoesNotTouchTheContactOwner(t *testing.T) {
 
 	require.NotNil(t, assigned.AssigneeID)
 	assert.Equal(t, handler.ID, *assigned.AssigneeID)
-	assert.False(t, assigned.BotActive, "a human taking over stops the bot driving")
+	assert.Equal(t, models.HandlingHuman, assigned.Handling, "a human taking over stops the bot driving")
 
 	var reloaded models.Contact
 	require.NoError(t, db.First(&reloaded, "id = ?", contact.ID).Error)

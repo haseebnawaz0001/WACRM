@@ -1,6 +1,7 @@
 package calling
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -180,6 +181,8 @@ func (m *Manager) executeNodeLoop(session *CallSession, waAccount *whatsapp.Acco
 			return // terminal (recursive call to runIVRFlow)
 		case IVRNodeTiming:
 			outcome = m.executeTiming(session, node)
+		case IVRNodeCRMCondition:
+			outcome = m.executeCRMCondition(session, node)
 		case IVRNodeHangup:
 			ctx.Path = append(ctx.Path, map[string]string{
 				"node": node.ID, "type": string(node.Type), "label": node.Label,
@@ -551,6 +554,36 @@ func (m *Manager) executeTiming(session *CallSession, node *IVRNode) string {
 		return "in_hours"
 	}
 	return "out_of_hours"
+}
+
+// executeCRMCondition branches on what the CRM knows about the caller
+// (plan 10, 4.4).
+//
+// Routing by keypress alone means a customer worth keeping navigates the same
+// three menus as everybody else. The condition is the ordinary contact filter,
+// so "tagged VIP", "lifecycle is customer" and "in this segment" are one node
+// rather than three.
+//
+// Anything that cannot be answered takes the no_match edge. A call is in
+// progress: it has to keep going, and treating a failed lookup as a match would
+// route strangers to the account manager.
+func (m *Manager) executeCRMCondition(session *CallSession, node *IVRNode) string {
+	filter, _ := node.Config["filter"].(map[string]any)
+	if len(filter) == 0 || m.matcher == nil || session.ContactID == uuid.Nil {
+		return "no_match"
+	}
+
+	matched, err := m.matcher.Matches(context.Background(),
+		session.OrganizationID, session.ContactID, filter)
+	if err != nil {
+		m.log.Error("IVR CRM condition failed", "error", err,
+			"call_id", session.ID, "contact_id", session.ContactID)
+		return "no_match"
+	}
+	if matched {
+		return "match"
+	}
+	return "no_match"
 }
 
 // orgLocation resolves the organization's timezone, falling back to UTC.

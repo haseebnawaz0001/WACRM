@@ -3,15 +3,18 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/activity"
 	"github.com/shridarpatil/whatomate/internal/contacts"
 	"github.com/shridarpatil/whatomate/internal/conversation"
+	"github.com/shridarpatil/whatomate/internal/crmcontext"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/schedule"
+	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"gorm.io/gorm"
 )
@@ -222,10 +225,12 @@ func (a *App) StartCRMEventSubscriber(ctx context.Context) error {
 					a.Log.Error("failed to decode CRM event fan-out message", "error", err)
 					continue
 				}
+				payload := crmEventPayload(event)
 				a.WSHub.BroadcastToOrg(event.OrgID, websocket.WSMessage{
 					Type:    websocket.TypeCRMEvent,
-					Payload: crmEventPayload(event),
+					Payload: payload,
 				})
+				a.broadcastTypedEvent(event, payload)
 			}
 		}
 	}()
@@ -276,7 +281,12 @@ func (a *App) NewEventRelay() *crmevents.Relay {
 // resolves a phone number to a contact goes through it, so the restore policy
 // is decided in one place rather than re-implemented per caller.
 func (a *App) Contacts() *contacts.Service {
-	return contacts.New(a.DB)
+	svc := contacts.New(a.DB)
+	svc.Conversations = a.Conversations()
+	svc.Log = func(format string, args ...any) {
+		a.Log.Error(fmt.Sprintf(format, args...))
+	}
+	return svc
 }
 
 // OrgLocation returns the organization's timezone as a location, falling back
@@ -299,18 +309,133 @@ func (a *App) OrgLocation(orgID uuid.UUID) *time.Location {
 // rather than being re-derived at each call site.
 func (a *App) Conversations() *conversation.Service {
 	svc := conversation.New(a.DB)
-	svc.Set = a.inboxSettings()
+	svc.SettingsFor = a.inboxSettings
 	return svc
 }
 
-// inboxSettings reads the organization's inbox rules, falling back to the
-// defaults. Settings are per-org, so this is resolved per call rather than
-// cached on the App.
-func (a *App) inboxSettings() conversation.Settings {
-	return conversation.DefaultSettings()
+// inboxSettings reads one organization's inbox rules from its settings JSONB,
+// falling back to the defaults.
+//
+// The values live under organizations.settings.inbox so they sit with the rest
+// of the organization's configuration rather than in a table of their own, and
+// they are read through the settings cache because every conversation
+// transition asks for them.
+func (a *App) inboxSettings(orgID uuid.UUID) conversation.Settings {
+	set := conversation.DefaultSettings()
+
+	inbox, _ := a.getOrgSettingsCached(orgID)["inbox"].(map[string]any)
+	if inbox == nil {
+		return set
+	}
+
+	if h := positiveHours(inbox["reopen_window_hours"]); h > 0 {
+		set.ReopenWindow = h
+	}
+	// Zero means "never close on its own", which is the default and has to
+	// stay expressible: an organization may want the list to be the record.
+	set.AutoResolveIdle = positiveHours(inbox["auto_resolve_idle_hours"])
+	set.PendingTimeout = positiveHours(inbox["pending_timeout_hours"])
+	if v, ok := inbox["auto_pending_on_agent_reply"].(bool); ok {
+		set.AutoPendingOnAgentReply = v
+	}
+	return set
+}
+
+// positiveHours reads a JSON number as a duration in hours. Anything absent,
+// negative or not a number is zero, which every caller reads as "off".
+func positiveHours(v any) time.Duration {
+	f, ok := v.(float64)
+	if !ok || f <= 0 {
+		return 0
+	}
+	return time.Duration(f * float64(time.Hour))
 }
 
 // crmActorForUser builds an event actor for an acting user.
 func crmActorForUser(userID uuid.UUID) crmevents.Actor {
 	return crmevents.UserActor(userID, "")
+}
+
+// CRMContext returns the builder for the product's one template namespace
+// (plan 10, S6).
+func (a *App) CRMContext() *crmcontext.Builder {
+	return crmcontext.New(a.DB)
+}
+
+// phoneMasker returns the masking function to apply to phone numbers rendered
+// into a template for this viewer, or nil when they may see the real thing.
+//
+// Masking is a property of the organization and the viewer, never of the
+// template, so it is resolved here and handed to the context builder rather
+// than being re-decided at each interpolation site.
+func (a *App) phoneMasker(orgID, viewerID uuid.UUID) func(string) string {
+	if !a.ShouldMaskPhoneNumbers(orgID) {
+		return nil
+	}
+	// Someone who may read the full contact record is not the person masking
+	// protects against; hiding it from them only makes the product harder to
+	// use without making anything safer.
+	if a.HasPermission(viewerID, models.ResourceContacts, models.ActionRead, orgID) {
+		return nil
+	}
+	return utils.MaskPhoneNumber
+}
+
+// broadcastTypedEvent sends the narrow, typed WebSocket events clients patch
+// their views from (plan 10, S10).
+//
+// The generic crm_event is a firehose: a view that wants to know "did this
+// contact change?" has to match on strings and guess. A typed event with a
+// stable name and an ids-only payload lets a store patch one row, and lets the
+// contact topic deliver it only to the tabs that are actually looking.
+//
+// Payloads stay ids-only for the same reason the generic one does: this is an
+// org-wide channel, and the client refetches with its own permissions.
+func (a *App) broadcastTypedEvent(e crmevents.Event, payload map[string]any) {
+	if a.WSHub == nil {
+		return
+	}
+
+	send := func(msgType string) {
+		msg := websocket.WSMessage{Type: msgType, Payload: payload}
+		a.WSHub.BroadcastToOrg(e.OrgID, msg)
+		// Also on the contact topic, so a profile or a split view open on this
+		// contact hears about it without watching the whole organization.
+		if e.ContactID != nil {
+			a.WSHub.BroadcastToTopic(e.OrgID, websocket.ContactTopic(e.ContactID.String()), msg)
+		}
+	}
+
+	switch e.Type {
+	case "contact.created", "contact.updated", "contact.assigned",
+		"contact.tag_added", "contact.tag_removed",
+		"contact.deleted", "contact.restored", "contact.lifecycle_stage_changed":
+		send(websocket.TypeContactUpdated)
+	case "contact.field_changed":
+		send(websocket.TypeCustomFieldsUpdated)
+	case "contact.merged":
+		// The two contact ids travel with this one. They are not sensitive —
+		// a client that cannot see either record gets nothing back when it
+		// refetches — and without them a tab open on the merged-away contact
+		// has no way to know where its conversation went.
+		merged := map[string]any{}
+		for key, value := range payload {
+			merged[key] = value
+		}
+		merged["primary_contact_id"] = e.Data["primary_contact_id"]
+		merged["secondary_contact_id"] = e.Data["secondary_contact_id"]
+
+		msg := websocket.WSMessage{Type: websocket.TypeContactMerged, Payload: merged}
+		a.WSHub.BroadcastToOrg(e.OrgID, msg)
+		if secondary, ok := e.Data["secondary_contact_id"].(string); ok && secondary != "" {
+			// The tab watching the record that is going away is the one that
+			// most needs to hear this.
+			a.WSHub.BroadcastToTopic(e.OrgID, websocket.ContactTopic(secondary), msg)
+		}
+	case "conversation.created", "conversation.status_changed", "conversation.assigned":
+		send(websocket.TypeConversationUpdated)
+	case "task.created", "task.completed", "task.updated",
+		"task.cancelled", "task.overdue", "task.due":
+		send(websocket.TypeTaskUpdated)
+	}
 }

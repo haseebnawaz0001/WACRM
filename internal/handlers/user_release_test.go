@@ -145,8 +145,8 @@ func TestUpdateUser_DeactivationRehomesPrivateSegmentsAndRules(t *testing.T) {
 		TriggerType:    "contact.created",
 		// Actions is a JSONB object wrapping the list; the column default is a
 		// bare [], which will not scan back into models.JSONB.
-		Actions:        models.JSONB{"list": []any{}},
-		CreatedByID:    &agent.ID,
+		Actions:     models.JSONB{"list": []any{}},
+		CreatedByID: &agent.ID,
 	}
 	require.NoError(t, app.DB.Create(rule).Error)
 

@@ -67,7 +67,10 @@ test.describe('Custom Role with Limited Permissions', () => {
 
   test('user lands on first accessible page after login', async ({ page }) => {
     await loginAs(page, user)
-    expect(page.url()).toContain('/chat')
+    // Home is the landing page for anyone without `analytics`: they cannot
+    // open the Dashboard, and dropping them straight into the inbox skipped
+    // their tasks and notifications entirely.
+    expect(page.url()).toContain('/home')
   })
 })
 

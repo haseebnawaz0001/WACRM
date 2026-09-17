@@ -7,6 +7,16 @@ const (
 	AuditActionCreated AuditAction = "created"
 	AuditActionUpdated AuditAction = "updated"
 	AuditActionDeleted AuditAction = "deleted"
+
+	// Four CRM operations that created/updated/deleted describes badly
+	// (plan 10, 4.10). A merge is not an update to one contact — it ends
+	// another one. Assigning work, starting a campaign and importing a file
+	// are the changes people go to an audit log to find, and recording them
+	// all as "updated" leaves them indistinguishable from a rename.
+	AuditActionMerged   AuditAction = "merged"
+	AuditActionAssigned AuditAction = "assigned"
+	AuditActionStarted  AuditAction = "started"
+	AuditActionImported AuditAction = "imported"
 )
 
 // TeamRole represents a user's role within a specific team (not organizational role)
@@ -217,7 +227,23 @@ type ContextType string
 const (
 	ContextTypeStatic ContextType = "static"
 	ContextTypeAPI    ContextType = "api"
+	// ContextTypeContactProfile gives the model what the CRM already knows
+	// about the person it is talking to (plan 10, 4.3).
+	//
+	// Opt-in per context and per field: a language model is an external
+	// service, and "everything we hold about this customer" is not a
+	// reasonable default payload to send one.
+	ContextTypeContactProfile ContextType = "contact_profile"
 )
+
+// KnownContextType reports whether a context type is one the processor builds.
+func KnownContextType(value ContextType) bool {
+	switch value {
+	case ContextTypeStatic, ContextTypeAPI, ContextTypeContactProfile:
+		return true
+	}
+	return false
+}
 
 // InputType represents chatbot flow step input types
 type InputType string

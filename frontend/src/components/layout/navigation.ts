@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  Home,
   MessageSquare,
   Bot,
   FileText,
@@ -36,9 +37,20 @@ export interface NavItem {
   permission?: string
   /** Optional module this item belongs to; hidden when the module is off. */
   module?: string
+  /**
+   * Which live count to show as a badge (plan 10, S12).
+   *
+   * The sidebar previously had no way to say "this item has a number", so the
+   * unread count lived inside the chat view and the overdue task count
+   * nowhere — an agent had to open Tasks to find out they were late.
+   */
+  badgeKey?: NavBadgeKey
   childPermissions?: string[]
   children?: NavItem[]
 }
+
+/** Counts the sidebar knows how to show. */
+export type NavBadgeKey = 'inboxUnread' | 'tasksDue' 
 
 export interface NavSection {
   label: string
@@ -61,6 +73,13 @@ export const navigationSections: NavSection[] = [
         permission: 'analytics'
       },
       {
+        // Home has no permission: everyone can see their own work, and that is
+        // the whole page.
+        name: 'nav.home',
+        path: '/home',
+        icon: Home
+      },
+      {
         name: 'nav.chat',
         path: '/chat',
         icon: MessageSquare,
@@ -68,6 +87,7 @@ export const navigationSections: NavSection[] = [
       },
       {
         name: 'nav.inbox',
+        badgeKey: 'inboxUnread',
         path: '/inbox',
         icon: Inbox,
         permission: 'chat'
@@ -80,6 +100,7 @@ export const navigationSections: NavSection[] = [
       },
       {
         name: 'nav.tasks',
+        badgeKey: 'tasksDue',
         path: '/tasks',
         icon: ListChecks,
         permission: 'tasks'
@@ -94,7 +115,11 @@ export const navigationSections: NavSection[] = [
         name: 'nav.pipeline',
         path: '/pipeline',
         icon: KanbanSquare,
-        permission: 'deals'
+        permission: 'deals',
+        // Pipelines are optional per organization; the API already says so
+        // through /organizations/current, and this is what connects that
+        // answer to the menu (plan 07, plan 10 S12).
+        module: 'pipelines'
       },
       {
         name: 'nav.automations',
@@ -119,7 +144,7 @@ export const navigationSections: NavSection[] = [
           { name: 'nav.keywords', path: '/chatbot/keywords', icon: Key, permission: 'chatbot.keywords' },
           { name: 'nav.flows', path: '/chatbot/flows', icon: Workflow, permission: 'flows.chatbot' },
           { name: 'nav.aiContexts', path: '/chatbot/ai', icon: Sparkles, permission: 'chatbot.ai' },
-          { name: 'nav.transfers', path: '/chatbot/transfers', icon: UserX, permission: 'transfers' }
+          { name: 'nav.transferSla', path: '/chatbot/transfers/sla', icon: UserX, permission: 'transfers' }
         ]
       },
       {
@@ -190,7 +215,6 @@ export const navigationSections: NavSection[] = [
           { name: 'nav.general', path: '/settings', icon: Settings, permission: 'settings.general' },
           { name: 'nav.chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
           { name: 'nav.accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
-          { name: 'nav.contacts', path: '/settings/contacts', icon: Contact, permission: 'contacts' },
           { name: 'nav.contactFields', path: '/settings/contact-fields', icon: ListChecks, permission: 'contact_fields' },
           { name: 'nav.pipelines', path: '/settings/pipelines', icon: KanbanSquare, permission: 'pipelines' },
           { name: 'nav.cannedResponses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
@@ -233,7 +257,7 @@ const legacyShortcutKeys: Record<string, string> = {
   chatbot: '/chatbot',
   contacts: '/contacts',
   flows: '/flows',
-  transfers: '/chatbot/transfers',
+  transfers: '/chatbot/transfers/sla',
   agentAnalytics: '/analytics/agents',
   metaInsights: '/analytics/meta-insights',
   settings: '/settings',

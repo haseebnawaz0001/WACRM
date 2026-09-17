@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
@@ -148,6 +149,14 @@ func (a *App) CreateConversationNote(r *fastglue.Request) error {
 			Payload: resp,
 		})
 	}
+
+	// The timeline needs to know a note was written (plan 02). It is not a
+	// webhook: a note is internal commentary, and delivering it to an external
+	// subscriber would leak what agents say about customers.
+	a.PublishEvent(crmevents.New(orgID, "note.created",
+		crmevents.UserActor(userID, user.FullName), map[string]any{
+			"note_id": note.ID.String(),
+		}).ForContact(contactID))
 
 	return r.SendEnvelope(resp)
 }

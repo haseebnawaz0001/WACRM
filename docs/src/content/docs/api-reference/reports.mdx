@@ -1,0 +1,148 @@
+---
+title: CRM Reports
+description: Contact, agent, task and pipeline reporting
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Reports require `reports:read`; the CSV export additionally requires `reports:export`. A user without `reports:read` still gets a response — narrowed to their own row, because a leaderboard is a performance review.
+</Aside>
+
+## Overview
+
+Five reports, each answering a question somebody actually asks:
+
+| Endpoint | Answers |
+|---|---|
+| `GET /api/reports/contacts-by-source` | Where are contacts coming from, and which sources become customers |
+| `GET /api/reports/lifecycle-funnel` | How far down the funnel do people get, and where do they stop |
+| `GET /api/reports/agent-performance` | How fast do agents respond and resolve |
+| `GET /api/reports/tasks-by-agent` | Who is on top of their follow-ups |
+| `GET /api/reports/pipeline-funnel` | What is on the board, what closes, and why it is lost |
+| `GET /api/reports/pipeline-forecast` | What is expected to close, and when |
+| `GET /api/reports/campaign-replies` | Did the campaign work, as opposed to arrive |
+
+## Date ranges
+
+Every report takes the same parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `from` | date | `YYYY-MM-DD`, inclusive |
+| `to` | date | `YYYY-MM-DD`, **inclusive to the end of that day** |
+| `interval` | string | `day`, `week` or `month` for the time buckets |
+
+Ranges are evaluated in the **organization's** timezone, not the server's and not the viewer's. A day boundary that shifts with whoever opens the report makes two people reading the same report disagree about yesterday.
+
+`to` includes the whole of that day. A report for `2026-09-01` to `2026-09-17` that silently stopped at midnight on the 17th would be missing today, which is the day anyone actually wants.
+
+## Contacts by source
+
+```bash
+GET /api/reports/contacts-by-source?from=2026-09-01&to=2026-09-17&interval=day&split=source
+```
+
+Contacts created per bucket, grouped by source, with a **"became customer"** column so the report answers which sources are worth anything rather than only which are loud.
+
+Contacts with no recorded source go into an explicit `unknown` bucket rather than being dropped — a source breakdown that quietly omits a third of the contacts is worse than one that admits it.
+
+## Lifecycle funnel
+
+```bash
+GET /api/reports/lifecycle-funnel?from=…&to=…
+```
+
+Each step reports how many contacts have **reached** it — cumulatively, so someone who is now a customer counts as having reached lead. The step conversion is the ratio between consecutive steps. The counting rule is stated in the response so two people reading it cannot disagree about what "40%" meant.
+
+## Agent performance
+
+```bash
+GET /api/reports/agent-performance?from=…&to=…
+```
+
+Per agent: conversations handled, median and 90th-percentile first response, median and 90th-percentile resolution time, and the reopened rate.
+
+Medians, not averages: one conversation left open over a weekend moves an average by hours and a median not at all.
+
+**First response counts only messages whose sender is an agent.** A chatbot reply, an automation or a campaign send does not close the clock. Before that distinction existed, every response-time figure flattered the team by counting the bot's instant greeting.
+
+The reopened rate is there because "resolved" is easy to hit and "resolved and stayed resolved" is the thing that matters.
+
+## Tasks by agent
+
+```bash
+GET /api/reports/tasks-by-agent?from=…&to=…
+```
+
+Per agent: open, overdue, due today, completed, on-time rate and median lateness. Overdue is derived from the deadline, so it matches what the task list shows at the same moment.
+
+## Pipeline funnel
+
+```bash
+GET /api/reports/pipeline-funnel?from=…&to=…&pipeline_id=…
+```
+
+Deals per stage, median time in stage, win rate and lost reasons.
+
+**The win rate is over closed deals only.** Counting open deals as "not yet won" makes the number fall every time a healthy pipeline fills up, which is exactly backwards.
+
+## Pipeline forecast
+
+```bash
+GET /api/reports/pipeline-forecast?from=…&to=…&pipeline_id=…
+```
+
+A probability-weighted forecast by expected close date. Deals that are **overdue** and deals with **no close date** are reported separately rather than folded into the total — hiding them makes a forecast look tidier and less true.
+
+## Campaign replies
+
+```bash
+GET /api/reports/campaign-replies?from=…&to=…
+```
+
+"Delivered" and "read" are the numbers Meta gives back, and a campaign can score well on both while achieving nothing. A reply is the first thing a customer does that the business asked for, and it is what separates a list worth mailing from one that merely tolerates being mailed.
+
+Replies are attributed by the conversation the customer opened after a send, inside the attribution window — so a reply three weeks later is not credited to a campaign nobody remembers receiving.
+
+```json
+{
+  "status": "success",
+  "data": {
+    "rows": [
+      {
+        "campaign_id": "…",
+        "name": "Autumn sale",
+        "started_at": "2026-09-15T10:00:00Z",
+        "recipients": 200,
+        "delivered": 180,
+        "replied": 45,
+        "reply_rate": 25.0
+      }
+    ],
+    "recipients": 200,
+    "delivered": 180,
+    "replied": 45,
+    "reply_rate": 25.0,
+    "counting_rule": "A reply is a conversation the contact opened within the attribution window after receiving this campaign. …"
+  }
+}
+```
+
+**The rate is replies over `delivered`, not over `recipients`.** A message that never arrived cannot be replied to, and counting it against the campaign blames the copy for a delivery problem.
+
+A campaign that delivered nothing reports **no** rate rather than 100% or `NaN`. Campaigns that never started are not listed: they have no outcome yet.
+
+The totals are computed the same way as a row, so adding the column up by hand gives the same answer, and `counting_rule` is returned so two people reading the number cannot disagree about what it meant.
+
+## CSV export
+
+```bash
+GET /api/reports/{key}/export.csv?from=…&to=…
+```
+
+`key` is the report name from the table above. The same viewer scoping applies: an agent exports their own row.
+
+## Pinning a report to the dashboard
+
+A report card can be pinned as a dashboard widget with the `funnel` or `leaderboard` display type. The permission is checked when the widget **renders**, not only when it is pinned — otherwise a report pinned by a manager would keep serving its numbers to whoever inherited the dashboard afterwards.

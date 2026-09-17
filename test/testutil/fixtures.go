@@ -443,3 +443,24 @@ func GenerateTestRefreshToken(t *testing.T, user *models.User, secret string, ex
 	require.NoError(t, err)
 	return tokenString
 }
+
+// PermissionsByKeys resolves "resource:action" keys to seeded permissions,
+// seeding the catalog first if this database has not been used yet.
+func PermissionsByKeys(t *testing.T, db *gorm.DB, keys []string) []models.Permission {
+	t.Helper()
+
+	byKey := make(map[string]models.Permission)
+	for _, p := range GetOrCreateTestPermissions(t, db) {
+		byKey[p.Resource+":"+p.Action] = p
+	}
+
+	out := make([]models.Permission, 0, len(keys))
+	for _, key := range keys {
+		p, ok := byKey[key]
+		if !ok {
+			t.Fatalf("permission %q is not seeded", key)
+		}
+		out = append(out, p)
+	}
+	return out
+}

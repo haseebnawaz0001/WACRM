@@ -48,6 +48,15 @@ const form = ref({
   api_method: 'GET',
   api_headers: '{}',
   api_response_path: '',
+  // Contact profile (plan 10, 4.3). Fields are named one by one on purpose: a
+  // CRM holds things nobody would send to a language model, and a default of
+  // "everything" would send them the first time this was switched on.
+  profile_fields: '',
+  profile_tags: true,
+  profile_lifecycle: true,
+  profile_tasks: true,
+  profile_deals: true,
+  profile_conversation: true,
   priority: 10,
   enabled: true,
 })
@@ -82,6 +91,12 @@ function syncForm(data: any) {
   form.value = {
     name: data.name || '',
     context_type: data.context_type || 'static',
+    profile_fields: (data.api_config?.fields || []).join(', '),
+    profile_tags: data.api_config?.include_tags !== false,
+    profile_lifecycle: data.api_config?.include_lifecycle !== false,
+    profile_tasks: data.api_config?.include_open_tasks !== false,
+    profile_deals: data.api_config?.include_open_deals !== false,
+    profile_conversation: data.api_config?.include_conversation !== false,
     trigger_keywords: (data.trigger_keywords || []).join(', '),
     static_content: data.static_content || '',
     api_url: data.api_config?.url || '',
@@ -107,6 +122,32 @@ function parseJSON(str: string): Record<string, any> {
   }
 }
 
+/**
+ * The per-type settings, which all live in api_config because that is where
+ * this shape already keeps them.
+ */
+function contextConfig(headers: Record<string, unknown>) {
+  if (form.value.context_type === 'api') {
+    return {
+      url: form.value.api_url,
+      method: form.value.api_method,
+      headers,
+      response_path: form.value.api_response_path,
+    }
+  }
+  if (form.value.context_type === 'contact_profile') {
+    return {
+      fields: form.value.profile_fields.split(',').map(f => f.trim()).filter(Boolean),
+      include_tags: form.value.profile_tags,
+      include_lifecycle: form.value.profile_lifecycle,
+      include_open_tasks: form.value.profile_tasks,
+      include_open_deals: form.value.profile_deals,
+      include_conversation: form.value.profile_conversation,
+    }
+  }
+  return {}
+}
+
 function buildPayload() {
   let headers = {}
   if (form.value.api_headers.trim()) {
@@ -118,12 +159,7 @@ function buildPayload() {
     context_type: form.value.context_type,
     trigger_keywords: form.value.trigger_keywords.split(',').map(k => k.trim()).filter(Boolean),
     static_content: form.value.static_content,
-    api_config: form.value.context_type === 'api' ? {
-      url: form.value.api_url,
-      method: form.value.api_method,
-      headers,
-      response_path: form.value.api_response_path,
-    } : {},
+    api_config: contextConfig(headers),
     priority: form.value.priority,
     enabled: form.value.enabled,
   }
@@ -224,6 +260,7 @@ onMounted(async () => {
             <SelectContent>
               <SelectItem value="static">{{ $t('aiContexts.staticContent', 'Static Content') }}</SelectItem>
               <SelectItem value="api">{{ $t('aiContexts.apiFetch', 'API Fetch') }}</SelectItem>
+              <SelectItem value="contact_profile">{{ $t('aiContexts.contactProfile') }}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -267,6 +304,42 @@ onMounted(async () => {
     </Card>
 
     <!-- API Configuration Card (only for api type) -->
+    <Card v-if="form.context_type === 'contact_profile'">
+      <CardHeader class="pb-3">
+        <CardTitle class="text-sm">{{ $t('aiContexts.contactProfile') }}</CardTitle>
+        <CardDescription class="text-xs">{{ $t('aiContexts.contactProfileDesc') }}</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <div class="space-y-1.5">
+          <Label class="text-xs">{{ $t('aiContexts.profileFields') }}</Label>
+          <Input v-model="form.profile_fields" placeholder="company, plan" />
+          <p class="text-xs text-muted-foreground">{{ $t('aiContexts.profileFieldsHint') }}</p>
+        </div>
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.profile_tags" type="checkbox" class="h-3.5 w-3.5" />
+            {{ $t('aiContexts.profileTags') }}
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.profile_lifecycle" type="checkbox" class="h-3.5 w-3.5" />
+            {{ $t('aiContexts.profileLifecycle') }}
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.profile_tasks" type="checkbox" class="h-3.5 w-3.5" />
+            {{ $t('aiContexts.profileTasks') }}
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.profile_deals" type="checkbox" class="h-3.5 w-3.5" />
+            {{ $t('aiContexts.profileDeals') }}
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.profile_conversation" type="checkbox" class="h-3.5 w-3.5" />
+            {{ $t('aiContexts.profileConversation') }}
+          </label>
+        </div>
+      </CardContent>
+    </Card>
+
     <Card v-if="form.context_type === 'api'">
       <CardHeader class="pb-3">
         <CardTitle class="text-sm font-medium">{{ $t('aiContexts.apiConfiguration', 'API Configuration') }}</CardTitle>

@@ -154,8 +154,8 @@ type KeywordRule struct {
 
 	ActiveFrom  *time.Time `json:"active_from,omitempty"`
 	ActiveUntil *time.Time `json:"active_until,omitempty"`
-	CreatedByID     *uuid.UUID   `gorm:"type:uuid" json:"created_by_id,omitempty"`
-	UpdatedByID     *uuid.UUID   `gorm:"type:uuid" json:"updated_by_id,omitempty"`
+	CreatedByID *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

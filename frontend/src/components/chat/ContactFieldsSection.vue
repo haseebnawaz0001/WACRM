@@ -40,7 +40,8 @@ const panelFields = computed(() =>
 
 async function loadFields() {
   try {
-    const { data } = await contactFieldsService.list()
+    const { data: envelope } = await contactFieldsService.list()
+    const data = (envelope as any)?.data ?? envelope
     fields.value = data.fields || []
   } catch {
     fields.value = []

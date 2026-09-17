@@ -84,6 +84,20 @@ var webhookEventLabels = map[string]struct{ Label, Description string }{
 	"transfer.created":  {"Transfer Created", "A transfer to a human agent is requested"},
 	"transfer.assigned": {"Transfer Assigned", "A transfer is assigned to an agent"},
 	"transfer.resumed":  {"Transfer Resumed", "The chatbot resumes (transfer closed)"},
+	"transfer.expired":  {"Transfer Expired", "A transfer timed out before anyone picked it up"},
+
+	"contact.lifecycle_stage_changed": {"Lifecycle Stage Changed", "A contact moved to a different lifecycle stage"},
+
+	"call.missed":             {"Call Missed", "A call ended without anyone answering"},
+	"call.completed":          {"Call Completed", "A call was answered and has ended"},
+	"call.transfer_no_answer": {"Call Transfer Not Answered", "A call transfer timed out with no agent accepting"},
+
+	"chatbot.flow_completed": {"Chatbot Flow Completed", "A contact reached the end of a chatbot flow"},
+
+	"campaign.replied": {"Campaign Replied", "A contact replied after receiving a campaign"},
+
+	"conversation.sla_breached":  {"SLA Breached", "A conversation passed its response deadline"},
+	"conversation.sla_escalated": {"SLA Escalated", "A conversation was escalated after going unanswered"},
 }
 
 // availableWebhookEvents builds the picker list from the catalog.
@@ -170,6 +184,58 @@ func (a *App) GetWebhook(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(webhookToResponse(*webhook))
+}
+
+// ListWebhookDeliveries returns what this webhook has actually been sent, most
+// recent first (plan 00, F11).
+//
+// Deliveries were recorded and then unreadable: when an integration stopped
+// receiving events the only way to find out why was to read the server log.
+// The row already holds the status code, the attempts and the error, which is
+// the whole of the answer — whether we sent it, and what came back.
+//
+// `?failed=1` narrows it to the deliveries that did not succeed, because that
+// is the question being asked in practice.
+func (a *App) ListWebhookDeliveries(r *fastglue.Request) error {
+	orgID, _, err := a.requireAuth(r, models.ResourceWebhooks, models.ActionRead)
+	if err != nil {
+		return nil
+	}
+
+	webhookID, err := parsePathUUID(r, "id", "webhook")
+	if err != nil {
+		return nil
+	}
+	// Scoped through the webhook so another organization's id returns "not
+	// found" rather than an empty list, which would read as "nothing was ever
+	// sent".
+	if _, err := findByIDAndOrg[models.Webhook](a.DB, r, webhookID, orgID, "Webhook"); err != nil {
+		return nil
+	}
+
+	pg := parsePagination(r)
+	query := a.DB.Model(&models.WebhookDelivery{}).
+		Where("organization_id = ? AND webhook_id = ?", orgID, webhookID)
+	if boolParam(r, "failed") {
+		query = query.Where("success = ?", false)
+	}
+	if eventType := string(r.RequestCtx.QueryArgs().Peek("event_type")); eventType != "" {
+		query = query.Where("event_type = ?", eventType)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		a.Log.Error("Failed to count webhook deliveries", "error", err, "webhook_id", webhookID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load deliveries", nil, "")
+	}
+
+	var deliveries []models.WebhookDelivery
+	if err := pg.Apply(query.Order("created_at DESC")).Find(&deliveries).Error; err != nil {
+		a.Log.Error("Failed to load webhook deliveries", "error", err, "webhook_id", webhookID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load deliveries", nil, "")
+	}
+
+	return r.SendEnvelope(listEnvelope("deliveries", deliveries, total, pg))
 }
 
 // CreateWebhook creates a new webhook

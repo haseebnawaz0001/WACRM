@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -221,6 +222,26 @@ func (a *App) ExportReport(r *fastglue.Request) error {
 	return nil
 }
 
+// CampaignRepliesReport is R6: did the campaign work?
+//
+// "Delivered" and "read" are Meta's numbers, and a campaign can score well on
+// both while achieving nothing. A reply is the first thing a customer does
+// that the business asked for (plan 09).
+func (a *App) CampaignRepliesReport(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceReports, models.ActionRead)
+	if err != nil {
+		return err
+	}
+	viewer, period := a.reportContext(r, orgID, userID)
+
+	result, err := a.Reports().CampaignReplies(context.Background(), viewer, period)
+	if err != nil {
+		a.Log.Error("Failed to build campaign replies report", "error", err, "org_id", orgID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to build the report", nil, "")
+	}
+	return r.SendEnvelope(result)
+}
+
 // reportRows renders one report as CSV rows, header first.
 func (a *App) reportRows(ctx context.Context, key string, r *fastglue.Request, viewer reports.Viewer, period reports.Range, orgID uuid.UUID) ([][]string, error) {
 	switch key {
@@ -316,6 +337,24 @@ func (a *App) reportRows(ctx context.Context, key string, r *fastglue.Request, v
 				strconv.FormatInt(step.Reached, 10),
 				strconv.FormatFloat(step.Conversion, 'f', 1, 64),
 				days,
+			})
+		}
+		return rows, nil
+
+	case "campaign-replies":
+		result, err := a.Reports().CampaignReplies(ctx, viewer, period)
+		if err != nil {
+			return nil, err
+		}
+		rows := [][]string{{"campaign", "started_at", "recipients", "delivered", "replied", "reply_rate_percent"}}
+		for _, row := range result.Rows {
+			rows = append(rows, []string{
+				row.Name,
+				row.StartedAt.Format(time.RFC3339),
+				strconv.FormatInt(row.Recipients, 10),
+				strconv.FormatInt(row.Delivered, 10),
+				strconv.FormatInt(row.Replied, 10),
+				strconv.FormatFloat(row.ReplyRate, 'f', 1, 64),
 			})
 		}
 		return rows, nil

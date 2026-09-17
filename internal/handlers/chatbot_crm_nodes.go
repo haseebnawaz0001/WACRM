@@ -213,9 +213,12 @@ func (a *App) chatRunContext(ctx *chatNodeCtx) crmactions.RunContext {
 	return crmactions.RunContext{
 		OrgID:     ctx.account.OrganizationID,
 		ContactID: ctx.contact.ID,
-		Actor:     crmevents.Actor{Type: crmevents.ActorSystem, Name: "Chatbot"},
-		Vars:      vars,
-		Location:  a.OrgLocation(ctx.account.OrganizationID),
+		// The chatbot, not "system": a flow editing a record while talking to
+		// somebody is a different answer to "who did this" than the product
+		// doing something on its own (plan 02).
+		Actor:    crmevents.Actor{Type: crmevents.ActorBot, Name: "Chatbot"},
+		Vars:     vars,
+		Location: a.OrgLocation(ctx.account.OrganizationID),
 	}
 }
 

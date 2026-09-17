@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmcontext"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/templating"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
@@ -421,4 +424,133 @@ func validateCannedResponseButtons(buttons []CannedResponseButton) error {
 		})
 	}
 	return validateInteractiveButtons(converted)
+}
+
+// ResolveCannedResponseRequest asks for a canned response rendered against one
+// contact.
+type ResolveCannedResponseRequest struct {
+	ContactID string `json:"contact_id"`
+	// Params fills the placeholders the namespace does not cover — the ones
+	// the author invented, which only a person can supply.
+	Params map[string]string `json:"params"`
+}
+
+// ResolveCannedResponse renders a canned response server-side (plan 10, S6).
+//
+// The chat used to do this in the browser, against a hardcoded list of four
+// token names. Anything else — an owner's name, a custom field, the team the
+// conversation sits in — was left as a literal `{{...}}` and sent to the
+// customer that way. Rendering on the server means the canned response, the
+// campaign and the automation all resolve the same names against the same
+// record.
+func (a *App) ResolveCannedResponse(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceCannedResponses, models.ActionRead)
+	if err != nil {
+		return nil
+	}
+
+	id, err := parsePathUUID(r, "id", "canned response")
+	if err != nil {
+		return nil
+	}
+
+	var req ResolveCannedResponseRequest
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	response, err := findByIDAndOrg[models.CannedResponse](a.DB, r, id, orgID, "Canned response")
+	if err != nil {
+		return nil
+	}
+
+	data := map[string]any{}
+	if req.ContactID != "" {
+		contactID, parseErr := uuid.Parse(req.ContactID)
+		if parseErr != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		}
+		// The same visibility rule as the chat endpoints: rendering a template
+		// must not become a way to read a contact you cannot open.
+		var contact models.Contact
+		scoped := a.scopeAssignedContact(
+			a.DB.Where("id = ? AND organization_id = ?", contactID, orgID), userID, orgID)
+		if scoped.First(&contact).Error != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+		}
+
+		data, err = a.CRMContext().Build(context.Background(), orgID, crmcontext.Opts{
+			ContactID:     contact.ID,
+			UserID:        &userID,
+			IncludeFields: true,
+			MaskPhone:     a.phoneMasker(orgID, userID),
+		})
+		if err != nil {
+			a.Log.Error("build canned response context", "error", err, "contact", contact.ID)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to render response", nil, "")
+		}
+	} else {
+		data, err = a.CRMContext().Build(context.Background(), orgID, crmcontext.Opts{UserID: &userID})
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to render response", nil, "")
+		}
+	}
+
+	crmcontext.WithLegacyAliases(data)
+
+	// The author's own placeholders come last and never shadow the record: a
+	// param called "contact" must not be able to rewrite who the message is
+	// addressed to.
+	for key, value := range req.Params {
+		if crmcontext.IsReserved(key) {
+			continue
+		}
+		data[key] = value
+	}
+
+	// Only the placeholders the namespace owns. A canned response saying
+	// "your order {{order_id}} is ready" has a placeholder the agent fills in
+	// the dialog; blanking it here would leave the customer told their order
+	// number is empty (plan 10, S6).
+	rendered := map[string]any{
+		"content": crmcontext.RenderOwned(response.Content, data, templating.EscapeRaw),
+	}
+	if len(response.Buttons) > 0 {
+		rendered["buttons"] = renderCannedButtons(response.Buttons, data)
+	}
+	return r.SendEnvelope(rendered)
+}
+
+// renderCannedButtons renders `{{...}}` inside button titles, URLs and phone
+// numbers, each encoded for where it lands.
+//
+// A URL is not text: a contact name with a space or an ampersand substituted
+// raw into a button URL produces a link that either fails to open or carries
+// the rest of the name as a second query parameter.
+func renderCannedButtons(buttons models.JSONBArray, data map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(buttons))
+	for _, raw := range buttons {
+		button, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		rendered := make(map[string]any, len(button))
+		for key, value := range button {
+			text, isText := value.(string)
+			if !isText {
+				rendered[key] = value
+				continue
+			}
+			// A URL is not text: a name with a space or an ampersand
+			// substituted raw produces a link that either fails to open or
+			// carries the rest of the name as a second query parameter.
+			mode := templating.EscapeRaw
+			if key == "url" {
+				mode = templating.EscapeQuery
+			}
+			rendered[key] = crmcontext.RenderOwned(text, data, mode)
+		}
+		out = append(out, rendered)
+	}
+	return out
 }

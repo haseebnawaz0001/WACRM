@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -139,4 +140,22 @@ func parseDateRange(startStr, endStr string, loc *time.Location) (start, end tim
 	}
 	end = endOfDay(end)
 	return start, end, ""
+}
+
+// boolParam reads a query parameter as a flag.
+//
+// Accepts the spellings a browser and a curl user each reach for first —
+// "?peek=1", "?peek=true" and the bare "?peek" — because a flag that silently
+// means false when spelled the other way is worse than no flag.
+func boolParam(r *fastglue.Request, name string) bool {
+	args := r.RequestCtx.QueryArgs()
+	if !args.Has(name) {
+		return false
+	}
+	switch strings.ToLower(string(args.Peek(name))) {
+	case "", "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

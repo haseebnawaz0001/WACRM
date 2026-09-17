@@ -486,6 +486,16 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 
 	a.Log.Info("Recipients enqueued for processing", "campaign_id", id, "count", len(jobs))
 
+	// Who sent this to how many people, and when. It is the first question
+	// asked after a campaign goes out wrongly, and until now the log only
+	// showed the edits that preceded it (plan 10, 4.10).
+	a.logAudit(orgID, userID, models.ResourceCampaigns, id, models.AuditActionStarted, nil,
+		map[string]any{
+			"name":       campaign.Name,
+			"recipients": len(recipients),
+			"started_at": now,
+		})
+
 	return r.SendEnvelope(map[string]any{
 		"message": "Campaign started",
 		"status":  models.CampaignStatusProcessing,
@@ -744,8 +754,26 @@ func (a *App) GetCampaignRecipients(r *fastglue.Request) error {
 		return nil
 	}
 
+	// Paged: a campaign can hold hundreds of thousands of recipients, and
+	// returning all of them served one screen by sending the whole table over
+	// the wire and building it in the browser (plan 10, 4.5).
+	pg := parsePaginationWithDefaults(r, 50, 200)
+	query := a.DB.Model(&models.BulkMessageRecipient{}).Where("campaign_id = ?", id)
+
+	// The list is read to answer "who did not get it", so filtering by status
+	// is the point of opening it at all.
+	if status := string(r.RequestCtx.QueryArgs().Peek("status")); status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		a.Log.Error("Failed to count recipients", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list recipients", nil, "")
+	}
+
 	var recipients []models.BulkMessageRecipient
-	if err := a.DB.Where("campaign_id = ?", id).Order("created_at ASC").Find(&recipients).Error; err != nil {
+	if err := pg.Apply(query.Order("created_at ASC")).Find(&recipients).Error; err != nil {
 		a.Log.Error("Failed to list recipients", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list recipients", nil, "")
 	}
@@ -757,10 +785,7 @@ func (a *App) GetCampaignRecipients(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"recipients": recipients,
-		"total":      len(recipients),
-	})
+	return r.SendEnvelope(listEnvelope("recipients", recipients, total, pg))
 }
 
 // DeleteCampaignRecipient deletes a single recipient from a campaign

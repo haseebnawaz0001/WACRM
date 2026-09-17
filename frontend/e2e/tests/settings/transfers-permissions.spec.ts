@@ -61,7 +61,7 @@ test.describe('Transfers tabs respect transfers:write permission', () => {
 
   test('user with transfers:write sees all three tabs', async ({ page }) => {
     await loginAs(page, fullAccess)
-    await page.goto('/chatbot/transfers')
+    await page.goto('/chatbot/transfers/sla')
     await page.waitForLoadState('networkidle')
 
     const tablist = page.locator('[role="tablist"]')
@@ -73,7 +73,7 @@ test.describe('Transfers tabs respect transfers:write permission', () => {
 
   test('user without transfers:write sees agent-only view (no tabs)', async ({ page }) => {
     await loginAs(page, agentOnly)
-    await page.goto('/chatbot/transfers')
+    await page.goto('/chatbot/transfers/sla')
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('[role="tablist"]')).toHaveCount(0)

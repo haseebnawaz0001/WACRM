@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationGeneric } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 // Permission-based route meta type
@@ -44,6 +44,14 @@ const router = createRouter({
           name: 'dashboard',
           component: () => import('@/views/dashboard/DashboardView.vue'),
           meta: { permission: 'analytics' }
+        },
+        {
+          // Where an agent lands (plan 04). The Dashboard needs `analytics`,
+          // which agents do not have, so signing in used to put them on a page
+          // they could not open.
+          path: 'home',
+          name: 'home',
+          component: () => import('@/views/dashboard/HomeView.vue')
         },
         {
           path: 'chat/:contactId?',
@@ -141,7 +149,17 @@ const router = createRouter({
           meta: { permission: 'chatbot.ai' }
         },
         {
+          // The transfer queue is the Inbox's Unassigned view now (plan 03,
+          // plan 10 §4.2). Two screens showing the same waiting customers is
+          // how an agent ends up answering one twice; the path redirects
+          // because it is in bookmarks and in the dashboard shortcuts.
           path: 'chatbot/transfers',
+          redirect: { path: '/inbox', query: { view: 'unassigned' } }
+        },
+        {
+          // The supervisor's SLA view keeps its own page: it is a different
+          // question ("who is late?") from the queue ("what is next?").
+          path: 'chatbot/transfers/sla',
           name: 'chatbot-transfers',
           component: () => import('@/views/chatbot/AgentTransfersView.vue'),
           meta: { permission: 'transfers' }
@@ -264,16 +282,19 @@ const router = createRouter({
           meta: { permission: 'pipelines' }
         },
         {
+          // Contacts moved out of Settings into their own module (plan 01).
+          // The old paths redirect rather than 404: they are in people's
+          // bookmarks, in links colleagues have sent each other, and in the
+          // dashboard shortcuts saved before the move.
           path: 'settings/contacts',
-          name: 'contacts',
-          component: () => import('@/views/settings/ContactsView.vue'),
-          meta: { permission: 'contacts' }
+          redirect: { name: 'contacts-module' }
         },
         {
           path: 'settings/contacts/:id',
-          name: 'contact-detail',
-          component: () => import('@/views/settings/ContactDetailView.vue'),
-          meta: { permission: 'contacts' }
+          redirect: (to: RouteLocationGeneric) => ({
+            name: 'contact-profile',
+            params: { id: to.params.id }
+          })
         },
         {
           path: 'settings/contact-fields',
@@ -413,6 +434,7 @@ const router = createRouter({
 // Used to find the first accessible route for a user
 const navigationOrder = [
   { path: '/', permission: 'analytics' },
+  { path: '/home' },
   { path: '/chat', permission: 'chat' },
   { path: '/chatbot', permission: 'settings.chatbot', childPaths: [
     { path: '/chatbot', permission: 'settings.chatbot' },
@@ -420,7 +442,7 @@ const navigationOrder = [
     { path: '/chatbot/flows', permission: 'flows.chatbot' },
     { path: '/chatbot/ai', permission: 'chatbot.ai' }
   ]},
-  { path: '/chatbot/transfers', permission: 'transfers' },
+  { path: '/chatbot/transfers/sla', permission: 'transfers' },
   { path: '/analytics/agents', permission: 'analytics.agents' },
   { path: '/analytics/meta-insights', permission: 'analytics' },
   { path: '/templates', permission: 'templates' },
@@ -443,7 +465,6 @@ const navigationOrder = [
     { path: '/settings/chatbot', permission: 'settings.chatbot' },
     { path: '/settings/accounts', permission: 'accounts' },
     { path: '/settings/canned-responses', permission: 'canned_responses' },
-    { path: '/settings/contacts', permission: 'contacts' },
     { path: '/settings/pipelines', permission: 'pipelines' },
     { path: '/settings/contact-fields', permission: 'contact_fields' },
     { path: '/settings/tags', permission: 'tags' },
@@ -460,6 +481,11 @@ const navigationOrder = [
 // Find the first accessible route for the user
 function getFirstAccessibleRoute(authStore: ReturnType<typeof useAuthStore>): string {
   for (const item of navigationOrder) {
+    // An item with no permission is open to everyone — Home, which exists
+    // precisely so an agent lands somewhere they can use (plan 04).
+    if (!item.permission) {
+      return item.path
+    }
     // Check if user has permission for this item
     if (authStore.hasPermission(item.permission, 'read')) {
       return item.path

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { onKeyStroke } from '@vueuse/core'
@@ -18,6 +18,9 @@ import { authService, organizationsService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
 import NotificationBell from './NotificationBell.vue'
+import CommandPalette from './CommandPalette.vue'
+import { useNavBadgesStore } from '@/stores/navBadges'
+import ShortcutHelp from './ShortcutHelp.vue'
 import SidebarNavItem from './SidebarNavItem.vue'
 import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
 import { ScrollToTop } from '@/components/shared'
@@ -61,6 +64,9 @@ watch(() => route.path, async () => {
   sidebarRef.value?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' })
 }, { immediate: true })
 
+const navBadges = useNavBadgesStore()
+const badgeUnsubscribers: Array<() => void> = []
+
 // Refresh user data and connect WebSocket on mount
 onMounted(() => {
   if (authStore.isAuthenticated) {
@@ -74,6 +80,11 @@ onMounted(() => {
       .then(({ data }) => authStore.setModules((data as any)?.data?.modules ?? (data as any)?.modules))
       .catch(() => {})
 
+    // Sidebar badges (plan 10, S12). Fetched once here and refreshed on the
+    // realtime events that can change them, rather than polled: a timer in
+    // every open tab is a lot of traffic to keep two numbers honest.
+    void navBadges.refresh()
+
     wsService.connect(async () => {
       try {
         const resp = await authService.getWSToken()
@@ -82,7 +93,16 @@ onMounted(() => {
         return null
       }
     })
+
+    for (const event of ['new_message', 'conversation_updated', 'task_updated', 'crm_event']) {
+      badgeUnsubscribers.push(wsService.subscribe(event, () => void navBadges.refresh()))
+    }
   }
+})
+
+onUnmounted(() => {
+  badgeUnsubscribers.forEach(stop => stop())
+  badgeUnsubscribers.length = 0
 })
 
 function filterItems(items: NavSection['items']) {
@@ -309,5 +329,10 @@ const handleLogout = async () => {
       <ActiveCallPanel />
       <ScrollToTop />
     </main>
+
+    <!-- App-wide, so ⌘K and ? work from any page rather than only the ones
+         that remembered to mount them (plan 10, S12). -->
+    <CommandPalette />
+    <ShortcutHelp />
   </div>
 </template>

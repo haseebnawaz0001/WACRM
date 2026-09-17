@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/contacts"
 	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
+	"github.com/shridarpatil/whatomate/internal/messaging"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -126,11 +126,19 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		return nil // Don't retry: the template will not come back.
 	}
 
-	// Check marketing opt-out
-	if contact.MarketingOptOut && strings.EqualFold(campaign.Template.Category, "MARKETING") {
-		w.Log.Info("Skipping marketing message for opted-out contact", "contact_id", contact.ID, "phone", job.PhoneNumber)
-		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Contact opted out of marketing messages")
+	// The same rules every other send path applies (plan 00, F10): approval,
+	// marketing consent, and a reachable address. Each of these used to be
+	// written out per caller, and they had drifted — the worker checked
+	// approval only at campaign start, so a template Meta unapproved in the
+	// meantime produced a rejected send instead of a stated reason.
+	//
+	// Parameters are not checked here: they are filled per recipient below.
+	if err := messaging.CheckTemplate(campaign.Template, contact, nil); err != nil {
+		w.Log.Info("Skipping recipient", "contact_id", contact.ID,
+			"phone", job.PhoneNumber, "reason", err)
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", err.Error())
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
+		// Permanent: none of these become true by retrying.
 		return nil
 	}
 

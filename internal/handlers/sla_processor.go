@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 )
@@ -66,9 +67,32 @@ func (p *SLAProcessor) processStaleTransfers() {
 		return
 	}
 
+	// One pass per organization, not per settings row (plan 03).
+	//
+	// chatbot_settings is keyed by organization *and* WhatsApp account, so an
+	// organization with three numbers had every SLA deadline evaluated three
+	// times each tick — three escalation notifications for one late reply, and
+	// three auto-close attempts racing each other.
+	seen := make(map[uuid.UUID]bool, len(settings))
 	for _, s := range settings {
+		if seen[s.OrganizationID] {
+			continue
+		}
+		seen[s.OrganizationID] = true
 		p.processOrganizationSLA(s, now)
 	}
+}
+
+// RunOnce performs one SLA pass. It is the entry point for the scheduler,
+// which holds the leader lock (plan 00, F4 / plan 03).
+//
+// The processor used to run its own ticker in every replica: three servers
+// meant three passes a minute over the same rows, so a customer waiting on a
+// late reply could be sent three warning messages and an agent three
+// escalation notifications for one breach.
+func (p *SLAProcessor) RunOnce(ctx context.Context) error {
+	p.processStaleTransfers()
+	return ctx.Err()
 }
 
 // processOrganizationSLA processes SLA for a single organization
@@ -232,6 +256,14 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 		// Send notification to escalation contacts
 		p.notifyEscalation(transfer, settings, newLevel)
 
+		// And to everything outside the SLA screen: the timeline, webhook
+		// subscribers, and anybody reconstructing what happened afterwards.
+		p.app.PublishEvent(crmevents.New(orgID, "conversation.sla_escalated",
+			crmevents.SystemActor(), map[string]any{
+				"transfer_id": transfer.ID.String(),
+				"level":       newLevel,
+			}).ForContact(transfer.ContactID))
+
 		// Broadcast update
 		p.broadcastTransferUpdate(transfer, websocket.TypeTransferEscalated)
 
@@ -248,21 +280,52 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 
 // markSLABreached marks transfers as SLA breached when past response deadline
 func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, now time.Time) {
-	result := p.app.DB.Model(&models.AgentTransfer{}).Where(
+	// Read the rows before flipping the flag, so each breach can be announced
+	// once with the contact it belongs to. A bulk UPDATE alone tells us how
+	// many there were and nothing about who they are — which is why breaches
+	// reached nobody outside the SLA screen.
+	var breaching []models.AgentTransfer
+	if err := p.app.DB.Where(
 		"organization_id = ? AND status = ? AND sla_breached = ? AND sla_response_deadline IS NOT NULL AND sla_response_deadline < ? AND agent_id IS NULL",
 		orgID, models.TransferStatusActive, false, now,
-	).Updates(map[string]any{
-		"sla_breached":    true,
-		"sla_breached_at": now,
-	})
+	).Limit(500).Find(&breaching).Error; err != nil {
+		p.app.Log.Error("Failed to load breaching transfers", "error", err, "org_id", orgID)
+		return
+	}
+	if len(breaching) == 0 {
+		return
+	}
+
+	ids := make([]uuid.UUID, 0, len(breaching))
+	for _, t := range breaching {
+		ids = append(ids, t.ID)
+	}
+
+	result := p.app.DB.Model(&models.AgentTransfer{}).
+		// The flag is re-checked in the UPDATE so a concurrent pass cannot
+		// announce the same breach twice.
+		Where("id IN ? AND sla_breached = ?", ids, false).
+		Updates(map[string]any{
+			"sla_breached":    true,
+			"sla_breached_at": now,
+		})
 
 	if result.Error != nil {
 		p.app.Log.Error("Failed to mark SLA breached", "error", result.Error, "org_id", orgID)
 		return
 	}
+	if result.RowsAffected == 0 {
+		return
+	}
 
-	if result.RowsAffected > 0 {
-		p.app.Log.Warn("Marked transfers as SLA breached", "count", result.RowsAffected, "org_id", orgID)
+	p.app.Log.Warn("Marked transfers as SLA breached", "count", result.RowsAffected, "org_id", orgID)
+
+	for _, transfer := range breaching {
+		p.app.PublishEvent(crmevents.New(orgID, "conversation.sla_breached",
+			crmevents.SystemActor(), map[string]any{
+				"transfer_id": transfer.ID.String(),
+				"waited_for":  now.Sub(transfer.TransferredAt).Round(time.Second).String(),
+			}).ForContact(transfer.ContactID))
 	}
 }
 

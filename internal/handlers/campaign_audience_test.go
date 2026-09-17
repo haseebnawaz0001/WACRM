@@ -204,3 +204,130 @@ func TestStartCampaign_MaterialisesTheSegmentIntoRecipients(t *testing.T) {
 	// even if the segment is edited afterwards.
 	assert.NotEmpty(t, reloaded.AudienceFilter)
 }
+
+// setFrequencyCap turns the organization's marketing cap on.
+func setFrequencyCap(t *testing.T, app *handlers.App, org *models.Organization, hours int) {
+	t.Helper()
+	require.NoError(t, app.DB.Exec(
+		`UPDATE organizations SET settings = coalesce(settings, '{}'::jsonb)
+		 || jsonb_build_object('marketing_frequency_cap_hours', ?::int) WHERE id = ?`,
+		hours, org.ID).Error)
+	app.InvalidateOrgSettingsCache(org.ID)
+}
+
+// recordCampaignSend writes the message a campaign would have produced.
+func recordCampaignSend(t *testing.T, app *handlers.App, org *models.Organization, contactID uuid.UUID, ago string) {
+	t.Helper()
+	require.NoError(t, app.DB.Exec(`
+		INSERT INTO messages (id, organization_id, whats_app_account, contact_id,
+			direction, message_type, content, status, sender_type, created_at, updated_at)
+		VALUES (gen_random_uuid(), ?, 'acct', ?, 'outgoing', 'template', 'hi', 'sent', ?,
+			now() - ?::interval, now())`,
+		org.ID, contactID, models.SenderCampaign, ago).Error)
+}
+
+// Opt-out is all-or-nothing: somebody sent four marketing campaigns in a week
+// has no way to ask for fewer without asking for none. The cap is what stands
+// between a well-meaning marketing calendar and a customer being harassed.
+func TestPreviewCampaignAudience_FrequencyCapExcludesRecentlyMailedContacts(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, customfields.SeedOrganization(app.DB, org.ID))
+	admin := adminFor(t, app, org)
+	setFrequencyCap(t, app, org, 48)
+
+	fresh := testutil.CreateTestContactWith(t, app.DB, org.ID,
+		testutil.WithPhoneNumber("15559911001"), testutil.WithTags("VIP"),
+		testutil.WithProfileName("Not mailed"))
+	recent := testutil.CreateTestContactWith(t, app.DB, org.ID,
+		testutil.WithPhoneNumber("15559911002"), testutil.WithTags("VIP"),
+		testutil.WithProfileName("Mailed yesterday"))
+	recordCampaignSend(t, app, org, recent.ID, "1 day")
+	// Outside the window, so still reachable.
+	recordCampaignSend(t, app, org, fresh.ID, "10 days")
+
+	segment := createSegmentVia(t, app, org, admin, vipBody("VIP"))
+	campaign := campaignFor(t, app, org, admin, "MARKETING")
+	require.Equal(t, fasthttp.StatusOK,
+		setAudience(t, app, org, admin, campaign.ID.String(), segment.ID))
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+
+	require.NoError(t, app.PreviewCampaignAudience(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var result struct {
+		Data handlers.AudiencePreview `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
+	assert.Equal(t, 1, result.Data.Count)
+	assert.Equal(t, 1, result.Data.Excluded[handlers.ExcludedRecentlyMailed])
+	require.Len(t, result.Data.Sample, 1)
+	assert.Equal(t, "Not mailed", result.Data.Sample[0].Name)
+}
+
+// A delivery notification or a one-time code is not what anybody means by "too
+// many messages", so the cap must not narrow a utility campaign.
+func TestPreviewCampaignAudience_FrequencyCapDoesNotApplyToUtility(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, customfields.SeedOrganization(app.DB, org.ID))
+	admin := adminFor(t, app, org)
+	setFrequencyCap(t, app, org, 48)
+
+	recent := testutil.CreateTestContactWith(t, app.DB, org.ID,
+		testutil.WithPhoneNumber("15559912001"), testutil.WithTags("VIP"),
+		testutil.WithProfileName("Mailed yesterday"))
+	recordCampaignSend(t, app, org, recent.ID, "1 day")
+
+	segment := createSegmentVia(t, app, org, admin, vipBody("VIP"))
+	campaign := campaignFor(t, app, org, admin, "UTILITY")
+	require.Equal(t, fasthttp.StatusOK,
+		setAudience(t, app, org, admin, campaign.ID.String(), segment.ID))
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+
+	require.NoError(t, app.PreviewCampaignAudience(req))
+
+	var result struct {
+		Data handlers.AudiencePreview `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
+	assert.Equal(t, 1, result.Data.Count)
+	assert.Zero(t, result.Data.Excluded[handlers.ExcludedRecentlyMailed])
+}
+
+// Off by default: a cap chosen on an organization's behalf would silently drop
+// recipients from campaigns they had already approved.
+func TestPreviewCampaignAudience_FrequencyCapIsOffUnlessSet(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, customfields.SeedOrganization(app.DB, org.ID))
+	admin := adminFor(t, app, org)
+
+	recent := testutil.CreateTestContactWith(t, app.DB, org.ID,
+		testutil.WithPhoneNumber("15559913001"), testutil.WithTags("VIP"),
+		testutil.WithProfileName("Mailed yesterday"))
+	recordCampaignSend(t, app, org, recent.ID, "1 day")
+
+	segment := createSegmentVia(t, app, org, admin, vipBody("VIP"))
+	campaign := campaignFor(t, app, org, admin, "MARKETING")
+	require.Equal(t, fasthttp.StatusOK,
+		setAudience(t, app, org, admin, campaign.ID.String(), segment.ID))
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+
+	require.NoError(t, app.PreviewCampaignAudience(req))
+
+	var result struct {
+		Data handlers.AudiencePreview `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
+	assert.Equal(t, 1, result.Data.Count)
+}

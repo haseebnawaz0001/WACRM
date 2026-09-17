@@ -42,7 +42,8 @@ const pending = ref<{ candidate: DuplicateCandidate; keep: DuplicateContactSumma
 
 async function fetchCandidates() {
   try {
-    const { data } = await duplicatesService.list()
+    const { data: envelope } = await duplicatesService.list()
+    const data = (envelope as any)?.data ?? envelope
     candidates.value = data.candidates || []
     fetchError.value = false
   } catch {
@@ -55,7 +56,8 @@ async function fetchCandidates() {
 async function scan() {
   isScanning.value = true
   try {
-    const { data } = await duplicatesService.scan()
+    const { data: envelope } = await duplicatesService.scan()
+    const data = (envelope as any)?.data ?? envelope
     toast.success(t('duplicates.scanned', { count: data.found }))
     await fetchCandidates()
   } catch (error: any) {

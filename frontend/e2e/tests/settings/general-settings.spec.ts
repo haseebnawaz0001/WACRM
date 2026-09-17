@@ -60,7 +60,9 @@ test.describe('General Tab', () => {
   test('should show available timezones', async ({ page }) => {
     await settingsPage.timezoneSelect.click()
     await expect(page.locator('[role="option"]').filter({ hasText: 'UTC' })).toBeVisible()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'Eastern' })).toBeVisible()
+    // The picker offers the browser's full IANA list by zone name, not six
+    // hand-written friendly labels, so "Eastern Time" is now "America/New York".
+    await expect(page.locator('[role="option"]').filter({ hasText: 'America/New York' })).toBeVisible()
     // Close dropdown
     await page.keyboard.press('Escape')
   })

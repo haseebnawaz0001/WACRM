@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -181,6 +182,15 @@ func (a *App) UpdateTag(r *fastglue.Request) error {
 		`, tagName, req.Name, orgID, tagName).Error; err != nil {
 			a.Log.Error("Failed to update contacts with renamed tag", "error", err)
 			// Continue anyway - tag rename will still work
+		}
+
+		// The same word is written into segment filters and automation configs
+		// as JSONB, and a rename used to update only the contacts (plan 10,
+		// X10). The result was silent: a segment for "vip" returned nothing
+		// after the tag became "VIP customer", and said nothing about why.
+		if err := entityrefs.RenameTag(a.DB, orgID, tagName, req.Name); err != nil {
+			a.Log.Error("Failed to rewrite tag references", "error", err,
+				"from", tagName, "to", req.Name)
 		}
 
 		// Delete old tag

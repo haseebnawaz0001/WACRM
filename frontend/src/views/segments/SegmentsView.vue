@@ -59,7 +59,8 @@ const previewMatches = useDebounceFn(async () => {
   }
   isCounting.value = true
   try {
-    const { data } = await segmentsService.previewCount(draftFilter.value)
+    const { data: envelope } = await segmentsService.previewCount(draftFilter.value)
+    const data = (envelope as any)?.data ?? envelope
     previewCount.value = data.count
   } catch {
     previewCount.value = null
@@ -121,7 +122,8 @@ async function remove(segment: Segment) {
 
 async function recount(segment: Segment) {
   try {
-    const { data } = await segmentsService.count(segment.id)
+    const { data: envelope } = await segmentsService.count(segment.id)
+    const data = (envelope as any)?.data ?? envelope
     segment.contact_count = data.count
     segment.counted_at = new Date().toISOString()
   } catch (error: any) {
@@ -138,7 +140,8 @@ const memberTotal = ref(0)
 async function openMembers(segment: Segment) {
   viewing.value = segment
   try {
-    const { data } = await segmentsService.contacts(segment.id, { limit: 50 })
+    const { data: envelope } = await segmentsService.contacts(segment.id, { limit: 50 })
+    const data = (envelope as any)?.data ?? envelope
     members.value = data.contacts || []
     memberTotal.value = data.total
   } catch {
@@ -151,7 +154,8 @@ async function openMembers(segment: Segment) {
 
 async function fetchSegments() {
   try {
-    const { data } = await segmentsService.list({ search: search.value })
+    const { data: envelope } = await segmentsService.list({ search: search.value })
+    const data = (envelope as any)?.data ?? envelope
     segments.value = data.segments || []
     fetchError.value = false
   } catch {
@@ -167,7 +171,8 @@ watch(search, debouncedFetch)
 onMounted(async () => {
   await fetchSegments()
   try {
-    const { data } = await contactsService.filterFields()
+    const { data: envelope } = await contactsService.filterFields()
+    const data = (envelope as any)?.data ?? envelope
     filterFields.value = data.fields || []
   } catch {
     filterFields.value = []

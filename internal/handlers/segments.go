@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/contactquery"
+	"github.com/shridarpatil/whatomate/internal/entityrefs"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/segments"
 	"github.com/valyala/fasthttp"
@@ -216,6 +217,17 @@ func (a *App) DeleteSegment(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid segment id", nil, "")
 	}
 
+	// The segments service blocks on other segments and pending campaigns.
+	// Automation rules can name one too — a chatbot CRM condition or a rule's
+	// contact filter — and those were not checked (plan 10, S8).
+	if dependents, depErr := entityrefs.FindDependents(a.DB, orgID, segmentID.String()); depErr != nil {
+		a.Log.Error("Failed to check segment references", "error", depErr, "segment_id", segmentID)
+	} else if rules := automationDependents(dependents); len(rules) > 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusConflict,
+			"This segment is still used by "+entityrefs.DescribeDependents(rules),
+			map[string]any{"dependents": rules}, "")
+	}
+
 	if err := a.Segments().Delete(context.Background(), orgID, segmentID); err != nil {
 		if errors.Is(err, segments.ErrNotFound) {
 			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Segment not found", nil, "")
@@ -350,7 +362,7 @@ func (a *App) SegmentContacts(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load members", nil, "")
 	}
 
-	items, err := a.buildContactSearchResults(orgID, contacts, req.Include)
+	items, err := a.buildContactSearchResults(orgID, userID, contacts, req.Include)
 	if err != nil {
 		a.Log.Error("Failed to load segment member extras", "error", err, "segment_id", segment.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load members", nil, "")
@@ -364,4 +376,18 @@ func (a *App) SegmentContacts(r *fastglue.Request) error {
 		"contacts": items, "total": total, "page": page, "limit": limit,
 		"segment": toSegmentResponse(*segment),
 	})
+}
+
+// automationDependents narrows a dependency list to rules.
+//
+// Segments referencing segments are already the segments service's own check,
+// with a better message: it names them without a second query.
+func automationDependents(all []entityrefs.Dependent) []entityrefs.Dependent {
+	out := make([]entityrefs.Dependent, 0, len(all))
+	for _, d := range all {
+		if d.Kind == "automation" {
+			out = append(out, d)
+		}
+	}
+	return out
 }
