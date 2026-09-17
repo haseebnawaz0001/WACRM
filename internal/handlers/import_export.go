@@ -184,6 +184,13 @@ type ExportRequest struct {
 	Columns []string          `json:"columns"`
 	Filters map[string]string `json:"filters"`
 	Format  string            `json:"format"` // csv (default), json
+
+	// SegmentID narrows a contacts export to one saved segment (plan 05).
+	//
+	// A segment is the audience an organization has already defined; exporting
+	// it should not mean rebuilding the same filter by hand in a second place
+	// and hoping the two agree.
+	SegmentID string `json:"segment_id"`
 }
 
 // ExportData handles generic data export
@@ -198,16 +205,54 @@ func (a *App) ExportData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
-	// Get export config
 	config, ok := exportConfigs[req.Table]
 	if !ok {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid table", nil, "")
 	}
-
-	// Check permission
 	if !a.HasPermission(userID, config.Resource, models.ActionExport, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to export "+req.Table, nil, "")
 	}
+
+	return a.exportData(r, orgID, userID, req, config)
+}
+
+// ExportSegment exports the contacts of one saved segment (plan 05).
+//
+// It is the same export, aimed by the segment rather than by whatever filters
+// the caller reassembles: the audience an organization defined once is the
+// audience that leaves the product.
+func (a *App) ExportSegment(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceSegments, models.ActionRead)
+	if err != nil {
+		return err
+	}
+	segment, err := a.segmentFor(r, orgID, userID)
+	if err != nil {
+		return nil
+	}
+
+	var req ExportRequest
+	if body := r.RequestCtx.PostBody(); len(body) > 0 {
+		if err := json.Unmarshal(body, &req); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+		}
+	}
+	req.Table = "contacts"
+	req.SegmentID = segment.ID.String()
+
+	// Reading a segment is not the same as taking its contents out of the
+	// product, so the contacts export permission is required as well.
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionExport, orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to export contacts", nil, "")
+	}
+
+	return a.exportData(r, orgID, userID, req, exportConfigs["contacts"])
+}
+
+// exportData writes the CSV for a request whose table and permission the
+// caller has already checked.
+func (a *App) exportData(r *fastglue.Request, orgID, userID uuid.UUID,
+	req ExportRequest, config ExportConfig) error {
 
 	// Validate and set columns
 	columns := req.Columns
@@ -246,6 +291,31 @@ func (a *App) ExportData(r *fastglue.Request) error {
 
 	// Build query
 	query := a.DB.Model(config.Model).Where("organization_id = ?", orgID)
+
+	if req.SegmentID != "" {
+		if req.Table != "contacts" {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+				"A segment can only narrow a contacts export", nil, "")
+		}
+		segmentID, parseErr := uuid.Parse(req.SegmentID)
+		if parseErr != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid segment id", nil, "")
+		}
+		registry, regErr := a.contactRegistry(orgID)
+		if regErr != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load contact fields", nil, "")
+		}
+		// The viewer's own scope applies, as it does when they browse the
+		// segment: an export must not be a way around the contacts an agent
+		// cannot see in the list.
+		members, memberErr := a.Segments().Apply(context.Background(),
+			a.DB.Model(&models.Contact{}).Select("contacts.id"),
+			registry, a.contactViewer(orgID, userID), segmentID)
+		if memberErr != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, memberErr.Error(), nil, "")
+		}
+		query = query.Where("id IN (?)", members)
+	}
 
 	// Apply filters
 	if search, ok := req.Filters["search"]; ok && search != "" {

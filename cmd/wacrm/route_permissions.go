@@ -313,6 +313,7 @@ var routePermissions = map[string]routeAccess{
 	"DELETE /api/segments/{id}":                              needs(models.ResourceSegments, models.ActionDelete),        // DeleteSegment
 	"GET /api/segments/{id}":                                 needs(models.ResourceSegments, models.ActionRead),          // GetSegment
 	"PUT /api/segments/{id}":                                 needs(models.ResourceSegments, models.ActionWrite),         // UpdateSegment
+	"POST /api/segments/{id}/export":                         needs(models.ResourceSegments, models.ActionRead),          // ExportSegment
 	"POST /api/segments/{id}/contacts":                       needs(models.ResourceSegments, models.ActionRead),          // SegmentContacts
 	"POST /api/segments/{id}/count":                          needs(models.ResourceSegments, models.ActionRead),          // CountSegment
 	"GET /api/settings/sso":                                  needs(models.ResourceSettingsSSO, models.ActionRead),       // GetSSOSettings

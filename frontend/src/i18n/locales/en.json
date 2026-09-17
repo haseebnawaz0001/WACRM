@@ -3154,15 +3154,18 @@
     "conditions": "Conditions",
     "builderHint": "The count updates as you build, so you never have to save to find out.",
     "counting": "Counting…",
-    "matches": "Matches {count} contacts",
+    "matches": "{count} contacts match",
     "addACondition": "Add a condition to see how many match.",
     "contacts": "contacts",
     "countedAt": "counted {when}",
-    "recount": "Recount now",
+    "recount": "Refresh count",
     "inUse": "Something still points at this segment.",
     "memberCount": "{count} contacts",
     "noMembers": "Nothing matches this segment right now.",
-    "segment": "Segment"
+    "segment": "Segment",
+    "sendCampaign": "Send campaign",
+    "countFailed": "The count could not be refreshed",
+    "campaignFailed": "The campaign could not be created"
   },
   "duplicates": {
     "title": "Possible duplicates",

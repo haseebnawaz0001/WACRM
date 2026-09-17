@@ -473,7 +473,15 @@ export const segmentsService = {
   contacts: (id: string, body: Record<string, any> = {}) =>
     api.post<{ contacts: ContactSearchRow[]; total: number; segment: Segment }>(
       `/segments/${id}/contacts`, body
-    )
+    ),
+  /**
+   * Exports the segment's contacts as CSV (plan 05).
+   *
+   * Aimed by the segment rather than by filters reassembled in the export
+   * dialog: the audience an organization defined once is the audience that
+   * leaves the product.
+   */
+  export: (id: string) => api.post(`/segments/${id}/export`, {}, { responseType: 'text' })
 }
 
 // --- Campaign audience (plan 05) ---

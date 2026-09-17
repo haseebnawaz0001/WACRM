@@ -2602,5 +2602,12 @@
     "dueWeek": "In a week",
     "dueMonth": "In a month",
     "dueMinutes": "In {count} minutes"
+  },
+  "segments": {
+    "matches": "{count} contacts match",
+    "recount": "Refresh count",
+    "sendCampaign": "Send campaign",
+    "countFailed": "The count could not be refreshed",
+    "campaignFailed": "The campaign could not be created"
   }
 }

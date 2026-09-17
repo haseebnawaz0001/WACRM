@@ -9,7 +9,7 @@
  */
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -19,18 +19,24 @@ import {
   CreateContactDialog, ImportExportDialog, type Column
 } from '@/components/shared'
 import {
-  contactsService, contactFieldsService,
-  type ContactSearchRow, type ContactField, type FilterNode, type FilterFieldInfo
+  contactsService, contactFieldsService, segmentsService, campaignsService, campaignAudienceService,
+  type ContactSearchRow, type ContactField, type FilterNode, type FilterFieldInfo,
+  type Segment
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Contact as ContactIcon, SlidersHorizontal, X, ListChecks, Plus, ArrowDownUp } from 'lucide-vue-next'
+import {
+  Contact as ContactIcon, SlidersHorizontal, X, ListChecks, Plus, ArrowDownUp,
+  Users, Bookmark, Send, Download, RefreshCw, Pencil
+} from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
 import { useListViewState, jsonFilterCodec } from '@/composables/useListViewState'
+import { unwrapListResponse, unwrapItemResponse, getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const organizationsStore = useOrganizationsStore()
@@ -81,6 +87,107 @@ const canImportExport = computed(() => authStore.hasPermission('contacts', 'read
 
 const createOpen = ref(false)
 const importExportOpen = ref(false)
+
+/**
+ * Saved segments as views of this list (plan 05).
+ *
+ * A segment is a question an organization has already answered — "customers in
+ * Lahore who have not replied in 30 days" — and it lived on a page of its own,
+ * so using one meant leaving the contacts list and rebuilding the same filter
+ * by hand. Selecting one here loads its filter, and the list becomes that
+ * audience with somewhere to send it.
+ */
+const segments = ref<Segment[]>([])
+const activeSegmentId = ref<string>(String(route.query.segment ?? ''))
+const activeSegment = computed(() =>
+  segments.value.find((s) => s.id === activeSegmentId.value) ?? null
+)
+const canUseSegments = computed(() => authStore.hasPermission('segments', 'read'))
+const canSendCampaigns = computed(() => authStore.hasPermission('campaigns', 'write'))
+
+async function loadSegments() {
+  if (!canUseSegments.value) return
+  try {
+    segments.value = unwrapListResponse<Segment>(await segmentsService.list(), 'segments')
+  } catch {
+    // The contacts list works without them; a failed segment load should not
+    // take the page with it.
+    segments.value = []
+  }
+}
+
+/** Opens a segment as the current view, or returns to all contacts. */
+async function selectSegment(id: string) {
+  activeSegmentId.value = id
+  currentPage.value = 1
+  void router.replace({ query: { ...route.query, segment: id || undefined } })
+
+  if (!id) {
+    await fetchContacts()
+    return
+  }
+
+  // The segment's own filter becomes the list's filter, so the builder shows
+  // what the audience actually is and can be adjusted from there.
+  const segment = segments.value.find((s) => s.id === id)
+  if (segment?.filter) filter.value = segment.filter as FilterNode
+  await fetchContacts()
+}
+
+async function refreshSegmentCount() {
+  const segment = activeSegment.value
+  if (!segment) return
+  try {
+    const { data: envelope } = await segmentsService.count(segment.id)
+    const data = (envelope as any)?.data ?? envelope
+    segment.contact_count = data.count
+    segment.counted_at = new Date().toISOString()
+  } catch {
+    toast.error(t('segments.countFailed'))
+  }
+}
+
+/** Exports exactly this audience, rather than whatever filters get rebuilt. */
+async function exportSegment() {
+  const segment = activeSegment.value
+  if (!segment) return
+  try {
+    const response = await segmentsService.export(segment.id)
+    downloadCSV(response.data as unknown as string, `${segment.name}.csv`)
+  } catch {
+    toast.error(t('common.failedLoad', { resource: t('resources.contacts') }))
+  }
+}
+
+function downloadCSV(body: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([body], { type: 'text/csv;charset=utf-8;' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Starts a campaign aimed at this segment.
+ *
+ * The draft is created and aimed in one step so the audience is already set
+ * when the campaign opens — picking the segment again on the next screen is
+ * the step that makes people target the wrong list.
+ */
+async function sendCampaign() {
+  const segment = activeSegment.value
+  if (!segment) return
+  try {
+    const created = unwrapItemResponse<any>(
+      await campaignsService.create({ name: segment.name }), 'campaign'
+    )
+    await campaignAudienceService.set(created.id, segment.id)
+    void router.push(`/campaigns/${created.id}`)
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('segments.campaignFailed')))
+  }
+}
 
 /** A new contact goes straight to its profile: creating one is usually the
  *  first step of working on it, not an end in itself. */
@@ -194,6 +301,11 @@ async function fetchContacts() {
 
 onMounted(async () => {
   await loadFieldMetadata()
+  await loadSegments()
+  if (activeSegmentId.value) {
+    await selectSegment(activeSegmentId.value)
+    return
+  }
   await fetchContacts()
 })
 </script>
@@ -250,6 +362,63 @@ onMounted(async () => {
 
     <ScrollArea v-else class="flex-1">
       <div class="p-6 space-y-4">
+        <!-- Saved segments as views of this list (plan 05). A segment used to
+             live on a page of its own, so using one meant leaving the contacts
+             list and rebuilding the same filter by hand. -->
+        <div v-if="canUseSegments && segments.length" class="flex flex-wrap items-center gap-2">
+          <Button
+            :variant="activeSegmentId ? 'ghost' : 'secondary'"
+            size="sm"
+            @click="selectSegment('')"
+          >
+            <Users class="h-3.5 w-3.5 mr-1.5" />{{ $t('contacts.allContacts') }}
+          </Button>
+          <Button
+            v-for="segment in segments"
+            :key="segment.id"
+            :variant="activeSegmentId === segment.id ? 'secondary' : 'ghost'"
+            size="sm"
+            @click="selectSegment(segment.id)"
+          >
+            <Bookmark class="h-3.5 w-3.5 mr-1.5" />
+            {{ segment.name }}
+            <Badge variant="outline" class="ml-2 h-5 px-1.5 text-xs">
+              {{ segment.contact_count ?? '—' }}
+            </Badge>
+          </Button>
+        </div>
+
+        <!-- What can be done with the audience now that it is on screen. -->
+        <Card v-if="activeSegment" class="border-dashed">
+          <CardContent class="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div>
+              <p class="font-medium">{{ activeSegment.name }}</p>
+              <p v-if="activeSegment.description" class="text-xs text-muted-foreground">
+                {{ activeSegment.description }}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {{ $t('segments.matches', { count: activeSegment.contact_count ?? 0 }) }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <Button variant="ghost" size="sm" @click="refreshSegmentCount">
+                <RefreshCw class="h-3.5 w-3.5 mr-1.5" />{{ $t('segments.recount') }}
+              </Button>
+              <Button variant="outline" size="sm" @click="exportSegment">
+                <Download class="h-3.5 w-3.5 mr-1.5" />{{ $t('common.export') }}
+              </Button>
+              <Button v-if="canSendCampaigns" size="sm" @click="sendCampaign">
+                <Send class="h-3.5 w-3.5 mr-1.5" />{{ $t('segments.sendCampaign') }}
+              </Button>
+              <RouterLink to="/segments">
+                <Button variant="ghost" size="sm">
+                  <Pencil class="h-3.5 w-3.5 mr-1.5" />{{ $t('common.edit') }}
+                </Button>
+              </RouterLink>
+            </div>
+          </CardContent>
+        </Card>
+
         <div v-if="showFilters" class="space-y-2">
           <FilterBuilder v-model="filter" :fields="filterFields" />
           <div class="flex items-center gap-2">

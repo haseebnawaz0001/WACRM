@@ -712,6 +712,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.DELETE("/api/segments/{id}", app.DeleteSegment)
 	g.POST("/api/segments/{id}/count", app.CountSegment)
 	g.POST("/api/segments/{id}/contacts", app.SegmentContacts)
+	g.POST("/api/segments/{id}/export", app.ExportSegment)
 
 	// CRM reports (plan 09)
 	g.GET("/api/reports/contacts-by-source", app.ContactsBySourceReport)
