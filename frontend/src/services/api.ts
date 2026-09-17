@@ -428,7 +428,17 @@ export interface TimelineItem {
 }
 
 export const timelineService = {
-  forContact: (contactId: string, params: { types?: string; limit?: number; before?: string } = {}) =>
+  forContact: (
+    contactId: string,
+    params: {
+      types?: string
+      limit?: number
+      before?: string
+      /** Inclusive YYYY-MM-DD bounds, resolved in the organization's zone. */
+      from?: string
+      to?: string
+    } = {}
+  ) =>
     api.get<{ items: TimelineItem[]; next_before?: string }>(
       `/contacts/${contactId}/timeline${toQuery(params)}`
     )
@@ -946,8 +956,24 @@ export const dataService = {
 }
 
 export const messagesService = {
-  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; account?: string }) =>
-    api.get(`/contacts/${contactId}/messages`, { params }),
+  list: (
+    contactId: string,
+    params?: {
+      page?: number
+      limit?: number
+      before_id?: string
+      account?: string
+      /**
+       * Centre the page on one message (plan 02).
+       *
+       * Clicking an exchange on a contact's timeline has to land on the
+       * messages it describes. Paging back from the newest until the right one
+       * appears is not a substitute: on a contact with fifty thousand messages
+       * the thing you clicked is two hundred requests away.
+       */
+      around?: string
+    }
+  ) => api.get(`/contacts/${contactId}/messages`, { params }),
   send: (
     contactId: string,
     data: {

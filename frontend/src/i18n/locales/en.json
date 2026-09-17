@@ -6,7 +6,8 @@
     "last30Days": "Last 30 Days",
     "thisMonth": "This Month",
     "customRange": "Custom Range",
-    "apply": "Apply"
+    "apply": "Apply",
+    "allTime": "All time"
   },
   "common": {
     "save": "Save",

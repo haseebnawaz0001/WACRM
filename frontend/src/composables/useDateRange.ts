@@ -1,7 +1,13 @@
 import { ref, computed, watch } from 'vue'
 import { CalendarDate } from '@internationalized/date'
 
-export type TimeRangePreset = 'today' | '7days' | '30days' | 'this_month' | 'custom'
+/**
+ * 'all' means no bounds at all, for views where the whole history is the
+ * point — a contact's timeline opens on everything that ever happened, and a
+ * default of "this month" would hide the customer's history behind a filter
+ * nobody set. It is offered only where a view asks for it.
+ */
+export type TimeRangePreset = 'all' | 'today' | '7days' | '30days' | 'this_month' | 'custom'
 
 export interface DateRangeResult {
   from: string
@@ -60,6 +66,11 @@ export function useDateRange(options: UseDateRangeOptions = {}) {
     const now = new Date()
     let from: Date
     let to: Date = now
+
+    // Empty bounds, not a wide window: the caller leaves the parameters off
+    // entirely, so the server pages from the newest item rather than from an
+    // arbitrary earliest date.
+    if (selectedRange.value === 'all') return { from: '', to: '' }
 
     switch (selectedRange.value) {
       case 'today':

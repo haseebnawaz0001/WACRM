@@ -18,6 +18,14 @@ const props = defineProps<{
   customDateRange: any
   isDatePickerOpen: boolean
   formatDateRangeDisplay: string
+  /**
+   * Offer "All time" as well.
+   *
+   * Opt-in, because most views report on a period and an unbounded default
+   * would be a slow, meaningless query. A contact's timeline is the opposite:
+   * its whole point is the history, so it starts unbounded.
+   */
+  allowAllTime?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -39,6 +47,7 @@ const { t } = useI18n()
       <SelectValue :placeholder="t('dateRange.selectRange', 'Date Range')" />
     </SelectTrigger>
     <SelectContent>
+      <SelectItem v-if="props.allowAllTime" value="all">{{ t('dateRange.allTime', 'All time') }}</SelectItem>
       <SelectItem value="today">{{ t('dateRange.today', 'Today') }}</SelectItem>
       <SelectItem value="7days">{{ t('dateRange.last7Days', 'Last 7 Days') }}</SelectItem>
       <SelectItem value="30days">{{ t('dateRange.last30Days', 'Last 30 Days') }}</SelectItem>

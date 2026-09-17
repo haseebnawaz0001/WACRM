@@ -974,7 +974,17 @@ async function selectContact(id: string) {
     contactsStore.setAccountFilter(null)
 
     contactsStore.setCurrentContact(contact)
-    await contactsStore.fetchMessages(id)
+
+    // A deep link from the contact timeline names the message it describes
+    // (plan 02). Loading the page around it lands on that exchange instead of
+    // on the newest messages, which on a long history is nowhere near it.
+    const anchorId = typeof route.query.around === 'string' ? route.query.around : undefined
+    await contactsStore.fetchMessages(id, anchorId ? { around: anchorId } : undefined)
+    if (anchorId) {
+      // After the list has painted, or there is nothing to scroll to yet.
+      await nextTick()
+      scrollToMessage(anchorId)
+    }
 
     // Discover distinct accounts from the unfiltered message set
     const accounts = new Set<string>()

@@ -6,7 +6,8 @@
     "last30Days": "آخر 30 يومًا",
     "thisMonth": "هذا الشهر",
     "customRange": "نطاق مخصص",
-    "apply": "تطبيق"
+    "apply": "تطبيق",
+    "allTime": "All time"
   },
   "common": {
     "save": "حفظ",

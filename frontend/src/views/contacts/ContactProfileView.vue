@@ -22,7 +22,8 @@ import { Separator } from '@/components/ui/separator'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
-import { PageHeader, ErrorState, ContactSidebar, type SidebarSection } from '@/components/shared'
+import { PageHeader, ErrorState, ContactSidebar, DateRangePicker, type SidebarSection } from '@/components/shared'
+import { useDateRange } from '@/composables/useDateRange'
 import {
   contactsService, contactFieldsService, timelineService,
   dealsService, tasksService, duplicatesService,
@@ -52,6 +53,24 @@ const fieldDefs = ref<ContactField[]>([])
 const isLoading = ref(true)
 const fetchError = ref(false)
 const typeFilter = ref('')
+
+/**
+ * The timeline opens on everything and narrows on request (plan 02).
+ *
+ * A default period would be the wrong question here: the reason to open a
+ * customer's profile is usually something that happened months ago, and a feed
+ * silently cut to "this month" reads as a customer with no history.
+ */
+const {
+  selectedRange, customDateRange, isDatePickerOpen,
+  dateRange, formatDateRangeDisplay, applyCustomRange
+} = useDateRange({ defaultPreset: 'all' })
+
+/** The bounds the API is asked for, omitted entirely while the range is "all". */
+function rangeParams() {
+  const { from, to } = dateRange.value
+  return from && to ? { from, to } : {}
+}
 
 const contactId = computed(() => String(route.params.id))
 const canSeeDeals = computed(() => authStore.hasPermission('deals', 'read'))
@@ -131,7 +150,7 @@ async function loadMore() {
   if (!nextBefore.value) return
   try {
     const page = unwrapResponse<any>(await timelineService.forContact(contactId.value, {
-      limit: 50, before: nextBefore.value, types: typeFilter.value || undefined
+      limit: 50, before: nextBefore.value, types: typeFilter.value || undefined, ...rangeParams()
     }))
     items.value.push(...(page?.items || []))
     nextBefore.value = page?.next_before
@@ -142,15 +161,53 @@ async function loadMore() {
 
 async function applyFilter(value: string) {
   typeFilter.value = value
+  await reloadTimeline()
+}
+
+/** Reloads the first page under the current type filter and date range. */
+async function reloadTimeline() {
   try {
     const filtered = unwrapResponse<any>(await timelineService.forContact(contactId.value, {
-      limit: 50, types: value || undefined
+      limit: 50, types: typeFilter.value || undefined, ...rangeParams()
     }))
     items.value = filtered?.items || []
     nextBefore.value = filtered?.next_before
   } catch {
     items.value = []
   }
+}
+
+/**
+ * Where a timeline entry leads.
+ *
+ * An entry that names something — an exchange, a campaign, a deal — and cannot
+ * open it makes the reader go and find it by hand, which is the search the
+ * timeline exists to replace. A burst carries the message it is anchored on,
+ * so the chat can open on that exchange rather than at the newest message.
+ */
+function linkFor(item: TimelineItem): string | null {
+  const data = item.data || {}
+  switch (item.type) {
+    case 'message_burst':
+      return data.message_id
+        ? `/chat/${contactId.value}?around=${data.message_id}`
+        : `/chat/${contactId.value}`
+    case 'campaign_send':
+      return data.campaign_id ? `/campaigns/${data.campaign_id}` : null
+    case 'call':
+      return '/calling/logs'
+    case 'task':
+      return canSeeTasks.value ? '/tasks' : null
+    case 'deal':
+      return canSeeDeals.value && data.subject_id ? `/pipeline?deal=${data.subject_id}` : null
+    default:
+      return null
+  }
+}
+
+function openItem(item: TimelineItem) {
+  const target = linkFor(item)
+  if (target) router.push(target)
 }
 
 function money(deal: Deal): string {
@@ -235,7 +292,7 @@ onUnmounted(() => {
             <ArrowLeft class="mr-1.5 h-4 w-4" />
             {{ t('common.back') }}
           </Button>
-          <Button size="sm" @click="router.push(`/chat?contact=${contactId}`)">
+          <Button size="sm" @click="router.push(`/chat/${contactId}`)">
             <MessageSquare class="mr-1.5 h-4 w-4" />
             {{ t('contactProfile.openChat') }}
           </Button>
@@ -328,8 +385,18 @@ onUnmounted(() => {
 
         <!-- The story -->
         <Card class="lg:col-span-2">
-          <CardHeader class="flex-row items-center justify-between space-y-0">
+          <CardHeader class="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
             <CardTitle class="text-base">{{ t('contactProfile.timeline') }}</CardTitle>
+            <div class="flex flex-wrap items-center gap-2">
+            <DateRangePicker
+              v-model:selected-range="selectedRange"
+              v-model:custom-date-range="customDateRange"
+              v-model:is-date-picker-open="isDatePickerOpen"
+              :format-date-range-display="formatDateRangeDisplay"
+              allow-all-time
+              @update:selected-range="reloadTimeline"
+              @apply-custom="() => { applyCustomRange(); reloadTimeline() }"
+            />
             <Select :model-value="typeFilter" @update:model-value="v => applyFilter(String(v ?? ''))">
               <SelectTrigger class="h-8 w-44">
                 <SelectValue :placeholder="t('contactProfile.everything')" />
@@ -343,6 +410,7 @@ onUnmounted(() => {
                 <SelectItem value="tag">{{ t('contactProfile.filterTags') }}</SelectItem>
               </SelectContent>
             </Select>
+            </div>
           </CardHeader>
           <CardContent>
             <p v-if="!items.length" class="text-sm text-muted-foreground">
@@ -350,13 +418,30 @@ onUnmounted(() => {
             </p>
 
             <ol v-else class="relative space-y-4 border-l pl-6">
-              <li v-for="item in items" :key="item.id" class="relative">
+              <li
+                v-for="item in items"
+                :key="item.id"
+                class="relative rounded-md px-2 py-1 -mx-2 transition-colors"
+                :class="linkFor(item)
+                  ? 'cursor-pointer hover:bg-muted/60 focus-within:bg-muted/60'
+                  : ''"
+                @click="openItem(item)"
+              >
                 <span class="absolute -left-[31px] flex h-5 w-5 items-center justify-center rounded-full bg-background ring-4 ring-background">
                   <component :is="iconFor[item.type] || RefreshCw" class="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
 
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
-                  <p class="text-sm">{{ item.summary }}</p>
+                  <!-- A real link where there is somewhere to go, so the entry
+                       can be opened in a new tab, reached by keyboard and read
+                       by a screen reader as the action it is. -->
+                  <component
+                    :is="linkFor(item) ? 'a' : 'p'"
+                    :href="linkFor(item) ?? undefined"
+                    class="text-sm"
+                    :class="linkFor(item) ? 'hover:underline' : ''"
+                    @click.prevent="openItem(item)"
+                  >{{ item.summary }}</component>
                   <time class="shrink-0 text-xs text-muted-foreground">
                     {{ formatDateTime(item.occurred_at) }}
                   </time>

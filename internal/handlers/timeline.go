@@ -61,6 +61,23 @@ func (a *App) GetContactTimeline(r *fastglue.Request) error {
 		}
 	}
 
+	// A date has no instant of its own, so the range is resolved in the
+	// organization's timezone (plan 10, S11). Parsing these as UTC while the
+	// picker built them from the viewer's calendar moves several hours of a
+	// contact's history into the wrong day at each end.
+	loc := a.OrgLocation(orgID)
+	args := r.RequestCtx.QueryArgs()
+	if from := optionalDateArg(args, "from"); from != nil {
+		start := startOfDayIn(*from, loc)
+		opts.From = &start
+	}
+	if to := optionalDateArg(args, "to"); to != nil {
+		// Inclusive: "to the 9th" means the whole of the 9th, not midnight at
+		// the start of it.
+		end := endOfDayIn(*to, loc)
+		opts.To = &end
+	}
+
 	opts.HideActivity = a.hiddenTimelineActivity(userID, orgID)
 
 	items, err := timeline.New(a.DB).Build(context.Background(), orgID, contactID, opts)
@@ -101,4 +118,20 @@ func (a *App) hiddenTimelineActivity(userID, orgID uuid.UUID) []string {
 	}
 
 	return hidden
+}
+
+// startOfDayIn and endOfDayIn turn a calendar date into the instant range it
+// covers in a given zone.
+//
+// A date is not an instant: "2026-09-18" is a different eleven-hour window in
+// Auckland than in Los Angeles. Resolving it in the organization's zone is
+// what makes a filtered timeline agree with the dates the viewer picked.
+func startOfDayIn(day time.Time, loc *time.Location) time.Time {
+	local := day.In(loc)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+}
+
+func endOfDayIn(day time.Time, loc *time.Location) time.Time {
+	local := day.In(loc)
+	return time.Date(local.Year(), local.Month(), local.Day(), 23, 59, 59, 999999999, loc)
 }

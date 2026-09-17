@@ -91,6 +91,16 @@ type Opts struct {
 	// Types restricts to certain item types; empty means everything.
 	Types []string
 
+	// From and To bound the range a page is drawn from (plan 02).
+	//
+	// They are separate from Before, which is the paging cursor: a filtered
+	// range still pages, and folding the two together would make "older than
+	// this item" and "within this month" the same argument. Both are
+	// inclusive, because they arrive from a date picker where the end date is
+	// a day the viewer expects to see.
+	From *time.Time
+	To   *time.Time
+
 	// HideActivity drops activity entries whose crmevents type is listed.
 	//
 	// This is how the viewer's permissions reach the timeline (plan 02): an
@@ -98,6 +108,25 @@ type Opts struct {
 	// history here either, and gating only the contact would make the timeline
 	// a way around every other permission in the product.
 	HideActivity []string
+}
+
+// bound applies the cursor and the date range to one source's query.
+//
+// Each source keeps its own time column — messages by created_at, campaign
+// sends by sent_at — so the column is a parameter rather than a constant. Doing
+// it in one place is what keeps a new source from quietly ignoring the filter,
+// which is how the range would end up applying to four sources out of six.
+func (o Opts) bound(q *gorm.DB, column string) *gorm.DB {
+	if o.Before != nil {
+		q = q.Where(column+" < ?", *o.Before)
+	}
+	if o.From != nil {
+		q = q.Where(column+" >= ?", *o.From)
+	}
+	if o.To != nil {
+		q = q.Where(column+" <= ?", *o.To)
+	}
+	return q
 }
 
 // Service builds timelines.
@@ -198,9 +227,7 @@ func (s *Service) Build(ctx context.Context, orgID, contactID uuid.UUID, opts Op
 func (s *Service) messageBursts(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
 	q := s.DB.WithContext(ctx).Model(&models.Message{}).
 		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
-	if opts.Before != nil {
-		q = q.Where("created_at < ?", *opts.Before)
-	}
+	q = opts.bound(q, "created_at")
 
 	// Read more rows than the page needs: several messages collapse into one
 	// item, so a page of items spans many messages.
@@ -243,6 +270,10 @@ func (s *Service) messageBursts(ctx context.Context, orgID, contactID uuid.UUID,
 				"preview":          newest.Content,
 				"whatsapp_account": newest.WhatsAppAccount,
 				"conversation_id":  newest.ConversationID,
+				// The message this burst is anchored on, so clicking it can
+				// open the chat around that exchange rather than at the
+				// newest message (plan 02).
+				"message_id": newest.ID,
 			},
 			Group: &Group{
 				Count: len(run), FromCustomer: fromCustomer,
@@ -279,9 +310,7 @@ func burstSummary(total, fromCustomer int) string {
 func (s *Service) calls(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
 	q := s.DB.WithContext(ctx).Model(&models.CallLog{}).
 		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
-	if opts.Before != nil {
-		q = q.Where("created_at < ?", *opts.Before)
-	}
+	q = opts.bound(q, "created_at")
 
 	var rows []models.CallLog
 	if err := q.Order("created_at DESC").Limit(limit).Find(&rows).Error; err != nil {
@@ -310,9 +339,7 @@ func (s *Service) calls(ctx context.Context, orgID, contactID uuid.UUID, opts Op
 func (s *Service) notes(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
 	q := s.DB.WithContext(ctx).Model(&models.ConversationNote{}).
 		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
-	if opts.Before != nil {
-		q = q.Where("created_at < ?", *opts.Before)
-	}
+	q = opts.bound(q, "created_at")
 
 	var rows []models.ConversationNote
 	if err := q.Order("created_at DESC").Limit(limit).Find(&rows).Error; err != nil {
@@ -337,9 +364,7 @@ func (s *Service) notes(ctx context.Context, orgID, contactID uuid.UUID, opts Op
 func (s *Service) activities(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
 	q := s.DB.WithContext(ctx).Model(&models.ContactActivity{}).
 		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
-	if opts.Before != nil {
-		q = q.Where("occurred_at < ?", *opts.Before)
-	}
+	q = opts.bound(q, "occurred_at")
 	// Excluded in SQL rather than after the read, so a contact whose history is
 	// mostly deal activity still fills a page for a viewer who cannot see deals.
 	if len(opts.HideActivity) > 0 {
@@ -359,7 +384,7 @@ func (s *Service) activities(ctx context.Context, orgID, contactID uuid.UUID, op
 			OccurredAt: row.OccurredAt,
 			Actor:      Actor{Type: row.ActorType, Name: row.ActorName},
 			Summary:    summaryForActivity(row),
-			Data:       row.Data,
+			Data:       withSubject(row),
 		}
 		if row.ActorID != nil {
 			item.Actor.ID = row.ActorID.String()
@@ -367,6 +392,25 @@ func (s *Service) activities(ctx context.Context, orgID, contactID uuid.UUID, op
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+// withSubject copies an activity's data and names what it was about.
+//
+// The record an entry refers to — the task that was created, the deal that
+// moved — is in a column the item never carried, so the timeline could say
+// "Deal moved to Proposal" and offer no way to open that deal. The copy
+// matters: adding keys to row.Data would mutate the map the row was decoded
+// into, and that map is shared with anything else reading the same row.
+func withSubject(row models.ContactActivity) map[string]any {
+	data := make(map[string]any, len(row.Data)+2)
+	for key, value := range row.Data {
+		data[key] = value
+	}
+	if row.SubjectID != nil {
+		data["subject_id"] = row.SubjectID.String()
+		data["subject_type"] = row.SubjectType
+	}
+	return data
 }
 
 // itemTypeForActivity groups activity types into what the UI renders.
@@ -543,9 +587,7 @@ func (s *Service) campaignSends(ctx context.Context, orgID, contactID uuid.UUID,
 		Joins("JOIN bulk_message_campaigns c ON c.id = r.campaign_id").
 		Where("c.organization_id = ? AND r.contact_id = ? AND r.sent_at IS NOT NULL", orgID, contactID).
 		Where("r.deleted_at IS NULL")
-	if opts.Before != nil {
-		q = q.Where("r.sent_at < ?", *opts.Before)
-	}
+	q = opts.bound(q, "r.sent_at")
 
 	var rows []row
 	if err := q.Order("r.sent_at DESC").Limit(limit).Scan(&rows).Error; err != nil {
@@ -578,9 +620,7 @@ func (s *Service) campaignSends(ctx context.Context, orgID, contactID uuid.UUID,
 func (s *Service) chatbotSessions(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
 	q := s.DB.WithContext(ctx).Model(&models.ChatbotSession{}).
 		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
-	if opts.Before != nil {
-		q = q.Where("started_at < ?", *opts.Before)
-	}
+	q = opts.bound(q, "started_at")
 
 	var rows []models.ChatbotSession
 	if err := q.Order("started_at DESC").Limit(limit).Find(&rows).Error; err != nil {

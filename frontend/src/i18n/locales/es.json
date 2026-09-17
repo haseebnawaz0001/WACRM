@@ -2279,5 +2279,8 @@
     "dueWeek": "In a week",
     "dueMonth": "In a month",
     "dueMinutes": "In {count} minutes"
+  },
+  "dateRange": {
+    "allTime": "All time"
   }
 }
