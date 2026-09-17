@@ -71,6 +71,14 @@ type ResolveOpts struct {
 	// CreateIfMissing inserts a contact when none matches.
 	CreateIfMissing bool
 
+	// ForceCreate inserts a contact even when one matches.
+	//
+	// It exists for the import option that says "this number really is two
+	// people" — a shared family phone, a reception desk. The caller is
+	// expected to flag the pair for review; this is deliberate duplication,
+	// not a lookup that failed.
+	ForceCreate bool
+
 	// AllowRestore permits undoing a soft delete. It is honoured only for
 	// deletions the product performed itself (address-book sync); a contact
 	// a person deleted is never silently restored, and a merged contact is
@@ -148,6 +156,10 @@ func (s *Service) Resolve(ctx context.Context, orgID uuid.UUID, id Identity, opt
 	phone := strings.TrimSpace(id.Phone)
 	if phone == "" && id.BSUID == "" {
 		return nil, "", fmt.Errorf("contacts: identity has neither phone nor BSUID")
+	}
+
+	if opts.ForceCreate {
+		return s.create(db, orgID, id, opts)
 	}
 
 	contact, err := s.lookup(db, orgID, id, opts.DefaultCountryCode)

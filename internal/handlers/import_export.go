@@ -445,11 +445,18 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to import "+tableName, nil, "")
 	}
 
-	// Get update_on_duplicate flag
-	updateOnDup := false
-	if updateValues := form.Value["update_on_duplicate"]; len(updateValues) > 0 {
-		updateOnDup = updateValues[0] == "true"
+	// What to do with a row that names somebody the organization already has
+	// (plan 06). The older update_on_duplicate boolean is still honoured, so a
+	// client that has not been updated keeps working — it said "update", and
+	// its absence said "skip", which is exactly two of the three answers.
+	importOpts := ContactImportOpts{OnMatch: OnMatchSkip}
+	if onMatchValues := form.Value["on_match"]; len(onMatchValues) > 0 {
+		importOpts.OnMatch = onMatchValues[0]
+	} else if updateValues := form.Value["update_on_duplicate"]; len(updateValues) > 0 &&
+		updateValues[0] == "true" {
+		importOpts.OnMatch = OnMatchUpdate
 	}
+	updateOnDup := importOpts.onMatch() == OnMatchUpdate
 
 	// Get column mapping (optional)
 	columnMapping := make(map[string]string)
@@ -480,7 +487,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 	// whole file with a unique-constraint error. It also had no idea custom
 	// fields existed. It stays for the simple tables.
 	if tableName == "contacts" {
-		return a.importContacts(r, orgID, userID, limitedReader, columnMapping)
+		return a.importContacts(r, orgID, userID, limitedReader, columnMapping, importOpts)
 	}
 
 	// Parse CSV
@@ -699,7 +706,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 // importContacts runs the dedicated contacts importer and answers in the shape
 // the import dialog already reads.
 func (a *App) importContacts(r *fastglue.Request, orgID, userID uuid.UUID,
-	source io.Reader, columnMapping map[string]string) error {
+	source io.Reader, columnMapping map[string]string, opts ContactImportOpts) error {
 
 	body, err := io.ReadAll(source)
 	if err != nil {
@@ -713,7 +720,7 @@ func (a *App) importContacts(r *fastglue.Request, orgID, userID uuid.UUID,
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read CSV header", nil, "")
 	}
 
-	result, err := a.ImportContactsCSV(orgID, userID, bytes.NewReader(body))
+	result, err := a.ImportContactsCSV(orgID, userID, bytes.NewReader(body), opts)
 	if err != nil {
 		a.Log.Error("Failed to import contacts", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
@@ -733,17 +740,22 @@ func (a *App) importContacts(r *fastglue.Request, orgID, userID uuid.UUID,
 	// nothing about where they came from (plan 10, 4.10).
 	a.logAudit(orgID, userID, models.ResourceContacts, uuid.Nil, models.AuditActionImported, nil,
 		map[string]any{
-			"created": result.Created,
-			"updated": result.Updated,
-			"skipped": result.Skipped,
+			"created":        result.Created,
+			"updated":        result.Updated,
+			"skipped":        result.Skipped,
+			"merged_in_file": result.MergedInFile,
+			"flagged":        result.Flagged,
+			"on_match":       opts.onMatch(),
 		})
 
 	return r.SendEnvelope(map[string]any{
-		"created":  result.Created,
-		"updated":  result.Updated,
-		"skipped":  result.Skipped,
-		"errors":   len(result.Errors),
-		"messages": messages,
+		"created":        result.Created,
+		"updated":        result.Updated,
+		"skipped":        result.Skipped,
+		"merged_in_file": result.MergedInFile,
+		"flagged":        result.Flagged,
+		"errors":         len(result.Errors),
+		"messages":       messages,
 	})
 }
 

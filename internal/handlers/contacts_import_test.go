@@ -16,10 +16,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// importCSV runs the contacts importer over a CSV string.
+// importCSV runs the contacts importer over a CSV string, under the default
+// match policy (skip).
 func importCSV(t *testing.T, app *handlers.App, orgID, userID uuid.UUID, body string) handlers.ContactImportResult {
 	t.Helper()
-	result, err := app.ImportContactsCSV(orgID, userID, strings.NewReader(body))
+	return importCSVWith(t, app, orgID, userID, body, handlers.ContactImportOpts{})
+}
+
+// importCSVWith runs the importer under a chosen match policy.
+func importCSVWith(t *testing.T, app *handlers.App, orgID, userID uuid.UUID,
+	body string, opts handlers.ContactImportOpts) handlers.ContactImportResult {
+	t.Helper()
+	result, err := app.ImportContactsCSV(orgID, userID, strings.NewReader(body), opts)
 	require.NoError(t, err)
 	return result
 }
@@ -58,12 +66,19 @@ func TestImportContacts_MatchesExistingContactAcrossFormatting(t *testing.T) {
 	require.NoError(t, app.DB.Model(&models.Contact{}).Where("id = ?", existing.ID).
 		Update("phone_normalized", "923211234567").Error)
 
-	result := importCSV(t, app, org.ID, admin.ID, `phone_number,name
+	result := importCSVWith(t, app, org.ID, admin.ID, `phone_number,name
 +92 321 123-4567,Updated Name
-`)
+`, handlers.ContactImportOpts{OnMatch: handlers.OnMatchUpdate})
 
 	assert.Zero(t, result.Created, "a differently formatted number is the same person")
 	assert.Equal(t, 1, result.Updated)
+
+	// The same match under the default policy leaves the record alone.
+	skipped := importCSV(t, app, org.ID, admin.ID, `phone_number,name
++92 321 123-4567,Updated Name
+`)
+	assert.Zero(t, skipped.Created)
+	assert.Equal(t, 1, skipped.Skipped)
 
 	var count int64
 	require.NoError(t, app.DB.Model(&models.Contact{}).
@@ -190,7 +205,7 @@ func TestImportContacts_RequiresAPhoneColumn(t *testing.T) {
 	org := seedFieldOrg(t, app)
 	admin := adminFor(t, app, org)
 
-	_, err := app.ImportContactsCSV(org.ID, admin.ID, strings.NewReader("name,company\nAlice,Acme\n"))
+	_, err := app.ImportContactsCSV(org.ID, admin.ID, strings.NewReader("name,company\nAlice,Acme\n"), handlers.ContactImportOpts{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "phone number column")
 }

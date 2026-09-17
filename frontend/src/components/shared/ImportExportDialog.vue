@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { dataService, type ExportColumn, type ImportResult } from '@/services/api'
+import { dataService, type ExportColumn, type ImportResult, type OnMatch } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { Loader2, Upload, Download, FileSpreadsheet, Check, AlertCircle } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -54,7 +55,14 @@ const importRequiredColumns = ref<ExportColumn[]>([])
 const importOptionalColumns = ref<ExportColumn[]>([])
 const uniqueColumn = ref('')
 const importFile = ref<File | null>(null)
-const updateOnDuplicate = ref(false)
+/**
+ * What to do with a row naming somebody already on file (plan 06).
+ *
+ * Skip is the default because an import is usually a list of people rather
+ * than a correction of them, and overwriting a record an agent curated with a
+ * stale spreadsheet is the expensive mistake of the three.
+ */
+const onMatch = ref<OnMatch>('skip')
 const isImporting = ref(false)
 const isLoadingImportConfig = ref(false)
 const importResult = ref<ImportResult | null>(null)
@@ -162,7 +170,7 @@ async function handleImport() {
   isImporting.value = true
   importResult.value = null
   try {
-    const response = await dataService.importData(props.table, importFile.value, updateOnDuplicate.value)
+    const response = await dataService.importData(props.table, importFile.value, onMatch.value)
     const result = (response.data as any)?.data || response.data
     importResult.value = result as ImportResult
 
@@ -290,16 +298,18 @@ function downloadSampleCsv() {
               />
             </div>
 
-            <!-- Update on duplicate -->
-            <div v-if="uniqueColumn" class="flex items-center space-x-2">
-              <Checkbox
-                id="update-dup"
-                :checked="updateOnDuplicate"
-                @update:checked="updateOnDuplicate = !!$event"
-              />
-              <Label for="update-dup" class="cursor-pointer font-normal text-sm">
-                {{ $t('importExport.updateExisting') }}
-              </Label>
+            <!-- What to do with rows that match somebody already on file -->
+            <div v-if="uniqueColumn" class="space-y-2">
+              <Label>{{ $t('importExport.onMatchLabel') }}</Label>
+              <Select v-model="onMatch">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">{{ $t('importExport.onMatchSkip') }}</SelectItem>
+                  <SelectItem value="update">{{ $t('importExport.onMatchUpdate') }}</SelectItem>
+                  <SelectItem value="create_anyway">{{ $t('importExport.onMatchCreateAnyway') }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-muted-foreground">{{ $t(`importExport.onMatchHint_${onMatch}`) }}</p>
             </div>
 
             <!-- Import Result -->
@@ -313,6 +323,15 @@ function downloadSampleCsv() {
                 <p>{{ $t('importExport.created') }}: {{ importResult.created }}</p>
                 <p>{{ $t('importExport.updated') }}: {{ importResult.updated }}</p>
                 <p v-if="importResult.skipped > 0">{{ $t('importExport.skipped') }}: {{ importResult.skipped }}</p>
+                <!-- A spreadsheet listing the same person four times is a fact
+                     about the file its owner should hear: "created 96 of 100"
+                     with no explanation reads as data loss. -->
+                <p v-if="importResult.merged_in_file">
+                  {{ $t('importExport.mergedInFile') }}: {{ importResult.merged_in_file }}
+                </p>
+                <p v-if="importResult.flagged">
+                  {{ $t('importExport.flaggedDuplicates') }}: {{ importResult.flagged }}
+                </p>
                 <p v-if="importResult.errors > 0" class="text-amber-500">{{ $t('importExport.errors') }}: {{ importResult.errors }}</p>
               </div>
               <ScrollArea v-if="importResult.messages && importResult.messages.length > 0" class="h-24 text-xs">

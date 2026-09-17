@@ -33,6 +33,9 @@ const (
 	ReasonPhoneNormalized = "phone_normalized"
 	ReasonEmail           = "email"
 	ReasonNameAndSuffix   = "name_phone_suffix"
+	// ReasonImport is a pair an import created deliberately, having been told
+	// to add a second record for a number that already had one.
+	ReasonImport = "import"
 
 	ScorePhoneNormalized = 95
 	ScoreEmail           = 85
@@ -99,6 +102,36 @@ func (s *Service) Scan(ctx context.Context, orgID uuid.UUID) (int, error) {
 	}
 
 	return recorded, nil
+}
+
+// FlagPair records one pair a caller already knows about.
+//
+// The scan finds duplicates on its own schedule, but an import told to create
+// a second record for a number it matched knows about the pair at the moment
+// it happens — and that is the moment somebody can still say "that was the
+// wrong file". Waiting for the next scan buries it.
+//
+// Like the scan, a pair somebody has dismissed stays dismissed.
+func (s *Service) FlagPair(ctx context.Context, orgID, contactAID, contactBID uuid.UUID, reason string) error {
+	if contactAID == contactBID {
+		return nil
+	}
+	a, b := orderPair(contactAID, contactBID)
+
+	row := models.ContactDuplicateCandidate{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		ContactAID:     a,
+		ContactBID:     b,
+		Reasons:        models.JSONBArray{reason},
+		Score:          ScorePhoneNormalized,
+		Status:         models.DuplicatePending,
+	}
+
+	return s.DB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "organization_id"}, {Name: "contact_a_id"}, {Name: "contact_b_id"}},
+		DoNothing: true,
+	}).Create(&row).Error
 }
 
 // findPairs gathers duplicate signals.

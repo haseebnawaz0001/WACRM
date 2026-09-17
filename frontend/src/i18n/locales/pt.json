@@ -531,7 +531,16 @@
       "name": "Nome",
       "color": "Cor",
       "description": "Descrição"
-    }
+    },
+    "onMatchLabel": "If a row matches someone already on file",
+    "onMatchSkip": "Leave the existing record alone",
+    "onMatchUpdate": "Update the existing record",
+    "onMatchCreateAnyway": "Add a second record and flag it",
+    "onMatchHint_skip": "Nothing is overwritten. Matching rows are counted as skipped.",
+    "onMatchHint_update": "Fields and tags from the file are added. Tags are merged, not replaced, and a name in the file never replaces the one WhatsApp reported.",
+    "onMatchHint_create_anyway": "For a number that genuinely serves two people. The pair is queued on the Duplicates page for review. A number stored in exactly the same form cannot be split this way.",
+    "mergedInFile": "Duplicate rows merged within the file",
+    "flaggedDuplicates": "Flagged for review"
   },
   "settings": {
     "title": "Configurações",

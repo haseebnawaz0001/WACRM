@@ -921,7 +921,14 @@ export interface ImportResult {
   skipped: number
   errors: number
   messages: string[]
+  /** Rows collapsed because another row in the same file named the same person. */
+  merged_in_file?: number
+  /** Records created alongside an existing one and queued for review. */
+  flagged?: number
 }
+
+/** What an import does with a row that names somebody already on file (plan 06). */
+export type OnMatch = 'skip' | 'update' | 'create_anyway'
 
 export const dataService = {
   // Get export configuration for a table
@@ -939,12 +946,14 @@ export const dataService = {
   },
 
   // Import data from CSV file
-  importData: (table: string, file: File, updateOnDuplicate?: boolean, columnMapping?: Record<string, string>) => {
+  importData: (table: string, file: File, onMatch?: OnMatch, columnMapping?: Record<string, string>) => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('table', table)
-    if (updateOnDuplicate) {
-      formData.append('update_on_duplicate', 'true')
+    if (onMatch) {
+      formData.append('on_match', onMatch)
+      // The older flag, for any server that has not been updated yet.
+      if (onMatch === 'update') formData.append('update_on_duplicate', 'true')
     }
     if (columnMapping) {
       formData.append('column_mapping', JSON.stringify(columnMapping))
