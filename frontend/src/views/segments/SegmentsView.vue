@@ -207,9 +207,12 @@ onMounted(async () => {
       <li v-for="segment in segments" :key="segment.id">
         <Card>
           <CardContent class="flex flex-wrap items-center gap-3 p-4">
-            <button class="min-w-0 flex-1 text-left" @click="openMembers(segment)">
+            <!-- Opening the members is the thing people come here to do, and
+                 nothing said the name did it: a bare button inside a card looks
+                 exactly like a heading. -->
+            <button class="group min-w-0 flex-1 text-left" @click="openMembers(segment)">
               <div class="flex items-center gap-2">
-                <span class="truncate font-medium">{{ segment.name }}</span>
+                <span class="truncate font-medium underline-offset-4 group-hover:underline">{{ segment.name }}</span>
                 <Badge v-if="segment.visibility === 'private'" variant="secondary" class="px-1.5 py-0 text-[11px]">
                   {{ t('segments.private') }}
                 </Badge>
@@ -234,8 +237,18 @@ onMounted(async () => {
             <Button v-if="canWrite" variant="outline" size="sm" @click="startEdit(segment)">
               {{ t('common.edit') }}
             </Button>
-            <Button v-if="canDelete" variant="ghost" size="icon" @click="remove(segment)">
-              <Trash2 class="h-4 w-4 text-destructive" />
+            <!-- Destructive on hover, not at rest. Seven segments meant seven
+                 saturated red bins down the right edge, which made the one
+                 action nobody wants the most colourful thing on the page. -->
+            <Button
+              v-if="canDelete"
+              variant="ghost"
+              size="icon"
+              class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              :aria-label="t('common.delete')"
+              @click="remove(segment)"
+            >
+              <Trash2 class="h-4 w-4" />
             </Button>
           </CardContent>
         </Card>

@@ -199,7 +199,12 @@ test.describe('Roles Management', () => {
     await tablePage.expectRowExists(roleName)
 
     // Click delete and verify confirmation dialog appears
-    const deleteButton = page.locator(`tr:has-text("${roleName}") button:has(svg.text-destructive)`)
+    // By accessible name, not by colour. These used to look for
+    // `svg.text-destructive`, which tied the test to the delete button wearing
+    // its destructive colour at rest — and that colour was the reason a list of
+    // seven rows had seven red bins down the edge. A control is found by what
+    // it is called.
+    const deleteButton = page.locator(`tr:has-text("${roleName}")`).getByRole('button', { name: /delete/i })
     await deleteButton.click()
 
     // Should show confirmation dialog

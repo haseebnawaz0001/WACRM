@@ -375,15 +375,15 @@ async function confirmDelete() {
                     <Tooltip>
                       <TooltipTrigger as-child>
                         <RouterLink :to="`/settings/accounts/${account.id}`">
-                          <Button variant="ghost" size="icon" class="h-8 w-8"><Pencil class="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="$t('common.edit')"><Pencil class="h-4 w-4" /></Button>
                         </RouterLink>
                       </TooltipTrigger>
                       <TooltipContent>{{ $t('common.edit') }}</TooltipContent>
                     </Tooltip>
                     <Tooltip v-if="canDelete">
                       <TooltipTrigger as-child>
-                        <Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(account)">
-                          <Trash2 class="h-4 w-4 text-destructive" />
+                        <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" :aria-label="$t('accounts.deleteAccount')" @click="openDeleteDialog(account)">
+                          <Trash2 class="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>{{ $t('common.delete') }}</TooltipContent>

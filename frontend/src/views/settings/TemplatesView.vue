@@ -408,7 +408,7 @@ function getHeaderIcon(type: string) {
                     <IconButton
                       :icon="Trash2"
                       :label="$t('common.delete')"
-                      class="h-8 w-8 text-destructive"
+                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       @click="openDeleteDialog(template)"
                     />
                   </div>

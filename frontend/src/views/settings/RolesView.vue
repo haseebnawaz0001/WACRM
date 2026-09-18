@@ -162,11 +162,11 @@ function editTooltip(role: Role): string {
                     <IconButton
                       v-if="canDelete && !role.is_system"
                       :label="role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole')"
-                      class="h-8 w-8"
+                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       :disabled="role.user_count > 0"
                       @click="openDeleteDialog(role)"
                     >
-                      <Trash2 class="h-4 w-4 text-destructive" />
+                      <Trash2 class="h-4 w-4" />
                     </IconButton>
                   </div>
                 </template>

@@ -48,7 +48,12 @@ test.describe('Teams - List View', () => {
     const row = page.locator('tbody tr').first()
     if (await row.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Click delete button
-      await row.locator('button').filter({ has: page.locator('svg.text-destructive') }).click()
+    // By accessible name, not by colour. These used to look for
+    // `svg.text-destructive`, which tied the test to the delete button wearing
+    // its destructive colour at rest — and that colour was the reason a list of
+    // seven rows had seven red bins down the edge. A control is found by what
+    // it is called.
+      await row.getByRole('button', { name: /delete/i }).click()
       const dialog = page.locator('[role="alertdialog"]')
       await expect(dialog).toBeVisible({ timeout: 3000 })
       // Cancel to not actually delete

@@ -338,9 +338,10 @@ onMounted(() => fetchFields())
                     v-if="canDelete && !item.is_system"
                     variant="ghost"
                     size="icon"
+                    class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     @click="openDelete(item)"
                   >
-                    <Trash2 class="h-4 w-4 text-destructive" />
+                    <Trash2 class="h-4 w-4" />
                   </Button>
                 </div>
               </template>

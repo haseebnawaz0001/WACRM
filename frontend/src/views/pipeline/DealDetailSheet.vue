@@ -220,8 +220,8 @@ onMounted(() => {
 
         <div v-if="canWrite" class="flex items-center gap-2">
           <Button :disabled="isSaving" @click="save">{{ t('common.save') }}</Button>
-          <Button v-if="canDelete" variant="ghost" size="icon" @click="remove">
-            <Trash2 class="h-4 w-4 text-destructive" />
+          <Button v-if="canDelete" variant="ghost" size="icon" class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="remove">
+            <Trash2 class="h-4 w-4" />
           </Button>
         </div>
 

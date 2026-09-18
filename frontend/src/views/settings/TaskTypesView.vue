@@ -313,7 +313,7 @@ onMounted(() => fetchTypes())
                       v-if="!item.is_system"
                       variant="ghost"
                       size="icon"
-                      class="text-red-400 hover:text-red-300"
+                      class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       @click="openDelete(item)"
                     >
                       <Trash2 class="h-4 w-4" />

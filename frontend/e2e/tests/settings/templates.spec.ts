@@ -63,7 +63,12 @@ test.describe('Message Templates - List View', () => {
       test.skip(true, 'No templates in list')
       return
     }
-    const deleteBtn = firstRow.locator('button.text-destructive, button:has(svg.text-destructive)').first()
+    // By accessible name, not by colour. These used to look for
+    // `svg.text-destructive`, which tied the test to the delete button wearing
+    // its destructive colour at rest — and that colour was the reason a list of
+    // seven rows had seven red bins down the edge. A control is found by what
+    // it is called.
+    const deleteBtn = firstRow.getByRole('button', { name: /delete/i }).first()
     if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
       test.skip(true, 'No delete button found')
       return

@@ -41,7 +41,12 @@ export class TemplatesPage extends BasePage {
 
   async deleteTemplateFromList(rowIndex = 0) {
     const row = this.page.locator('tbody tr').nth(rowIndex)
-    await row.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
+    // By accessible name, not by colour. These used to look for
+    // `svg.text-destructive`, which tied the test to the delete button wearing
+    // its destructive colour at rest — and that colour was the reason a list of
+    // seven rows had seven red bins down the edge. A control is found by what
+    // it is called.
+    await row.getByRole('button', { name: /delete/i }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

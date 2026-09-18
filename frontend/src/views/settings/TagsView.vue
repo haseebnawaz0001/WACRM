@@ -183,8 +183,8 @@ function getColorLabel(color: string): string {
                 <template #cell-actions="{ item: tag }">
                   <div class="flex items-center justify-end gap-1">
                     <IconButton :icon="Pencil" :label="$t('tags.editTag')" class="h-8 w-8" @click="openEditDialog(tag)" />
-                    <IconButton :label="$t('tags.deleteTag')" class="h-8 w-8" @click="openDeleteDialog(tag)">
-                      <Trash2 class="h-4 w-4 text-destructive" />
+                    <IconButton :label="$t('tags.deleteTag')" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="openDeleteDialog(tag)">
+                      <Trash2 class="h-4 w-4" />
                     </IconButton>
                   </div>
                 </template>

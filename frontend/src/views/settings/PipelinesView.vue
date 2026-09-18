@@ -259,8 +259,8 @@ onMounted(fetchPipelines)
             <Button size="sm" variant="outline" @click="archivePipeline">
               {{ t('pipelines.archive') }}
             </Button>
-            <Button v-if="canDelete" size="sm" variant="ghost" @click="deletePipeline">
-              <Trash2 class="mr-1.5 h-4 w-4 text-destructive" />
+            <Button v-if="canDelete" size="sm" variant="ghost" class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="deletePipeline">
+              <Trash2 class="mr-1.5 h-4 w-4" />
               {{ t('common.delete') }}
             </Button>
           </div>
@@ -331,8 +331,8 @@ onMounted(fetchPipelines)
 
             <div v-if="canWrite" class="flex items-center gap-1">
               <Button size="sm" variant="outline" @click="saveStage(stage)">{{ t('common.save') }}</Button>
-              <Button v-if="canDelete" size="icon" variant="ghost" @click="deleteStage(stage)">
-                <Trash2 class="h-4 w-4 text-destructive" />
+              <Button v-if="canDelete" size="icon" variant="ghost" class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="deleteStage(stage)">
+                <Trash2 class="h-4 w-4" />
               </Button>
             </div>
           </div>

@@ -173,8 +173,8 @@ async function confirmDelete() {
                 </template>
                 <template #cell-actions="{ item: team }">
                   <div class="flex items-center justify-end gap-1">
-                    <Tooltip><TooltipTrigger as-child><RouterLink :to="`/settings/teams/${team.id}`"><Button variant="ghost" size="icon" class="h-8 w-8"><Pencil class="h-4 w-4" /></Button></RouterLink></TooltipTrigger><TooltipContent>{{ $t('teams.editTeamTooltip') }}</TooltipContent></Tooltip>
-                    <Tooltip v-if="canDeleteTeams"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(team)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.deleteTeamTooltip') }}</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger as-child><RouterLink :to="`/settings/teams/${team.id}`"><Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="$t('teams.editTeamTooltip')"><Pencil class="h-4 w-4" /></Button></RouterLink></TooltipTrigger><TooltipContent>{{ $t('teams.editTeamTooltip') }}</TooltipContent></Tooltip>
+                    <Tooltip v-if="canDeleteTeams"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" :aria-label="$t('teams.deleteTeamTooltip')" @click="openDeleteDialog(team)"><Trash2 class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.deleteTeamTooltip') }}</TooltipContent></Tooltip>
                   </div>
                 </template>
               </DataTable>
