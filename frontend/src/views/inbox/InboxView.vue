@@ -2537,7 +2537,15 @@ async function sendMediaMessage() {
            list, which is the only way to reach somebody nobody has messaged
            yet. -->
       <div class="border-b border-white/[0.08] px-2 py-2 light:border-gray-200">
-        <div class="flex items-center gap-0.5 overflow-x-auto pb-1">
+        <!--
+          The tabs wrap rather than scroll sideways.
+
+          Five views and their counts do not fit the list panel, and an
+          overflowing row hid the difference silently: the last tab read
+          "All 1" because the 5 of "All 15" sat past the edge. A count that
+          reads as a different number is worse than a second row.
+        -->
+        <div class="flex flex-wrap items-center gap-x-0.5 gap-y-1">
           <button
             v-for="v in (['mine', 'unassigned', 'unanswered', 'bot', 'all'] as const)"
             :key="v"
