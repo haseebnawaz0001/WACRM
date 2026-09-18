@@ -6,7 +6,6 @@ import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'vue-sonner'
 import { MessageSquare, Loader2 } from 'lucide-vue-next'
 
@@ -65,43 +64,44 @@ const handleRegister = async () => {
 </script>
 
 <template>
+  <!-- Same shell as the sign-in page, down to the padding and the type scale.
+       These are two halves of one front door, and they used to disagree about
+       which panel, which heading size and which muted grey the product uses. -->
   <div class="min-h-screen flex items-center justify-center bg-background p-4">
-    <Card class="w-full max-w-md">
-      <CardHeader class="space-y-1 text-center">
+    <div class="w-full max-w-md rounded-lg border border-white/[0.08] bg-white/[0.02] backdrop-blur light:bg-white light:border-gray-200 light:shadow-xl">
+      <div class="p-8 space-y-1 text-center">
         <div class="flex justify-center mb-4">
           <div class="h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
-            <MessageSquare class="h-7 w-7 text-primary-foreground" />
+            <MessageSquare class="h-7 w-7 text-white" />
           </div>
         </div>
-        <CardTitle class="text-2xl font-bold">{{ $t('auth.createAccount') }}</CardTitle>
-        <CardDescription>
+        <h2 class="text-2xl font-bold text-white light:text-gray-900">{{ $t('auth.createAccount') }}</h2>
+        <p class="text-white/50 light:text-gray-500">
           {{ $t('auth.createAccountDesc') }}
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
 
-      <!-- No org ID in URL — show invitation required message -->
+      <!-- Arrived without an invitation: there is nothing to fill in. -->
       <template v-if="!organizationId">
-        <CardContent>
-          <div class="text-center py-4">
-            <p class="text-sm text-muted-foreground">
-              {{ $t('auth.invitationRequired') }}
-            </p>
-          </div>
-        </CardContent>
-        <CardFooter class="flex flex-col space-y-4">
-          <RouterLink to="/login" class="w-full">
+        <div class="px-8 pb-4">
+          <p class="text-sm text-center text-white/50 light:text-gray-500">
+            {{ $t('auth.invitationRequired') }}
+          </p>
+        </div>
+        <div class="px-8 pb-8">
+          <RouterLink to="/login" class="block">
             <Button variant="outline" class="w-full">
               {{ $t('auth.signIn') }}
             </Button>
           </RouterLink>
-        </CardFooter>
+        </div>
       </template>
 
-      <!-- Has org ID — show registration form -->
+      <!-- Came in on an invitation link. -->
       <form v-else @submit.prevent="handleRegister">
-        <CardContent class="space-y-4">
+        <div class="px-8 pb-4 space-y-4">
           <div class="space-y-2">
-            <Label for="fullName">{{ $t('auth.fullName') }}</Label>
+            <Label for="fullName" class="text-white/70 light:text-gray-700">{{ $t('auth.fullName') }}</Label>
             <Input
               id="fullName"
               v-model="fullName"
@@ -112,7 +112,7 @@ const handleRegister = async () => {
             />
           </div>
           <div class="space-y-2">
-            <Label for="email">{{ $t('common.email') }}</Label>
+            <Label for="email" class="text-white/70 light:text-gray-700">{{ $t('common.email') }}</Label>
             <Input
               id="email"
               v-model="email"
@@ -123,7 +123,7 @@ const handleRegister = async () => {
             />
           </div>
           <div class="space-y-2">
-            <Label for="password">{{ $t('auth.password') }}</Label>
+            <Label for="password" class="text-white/70 light:text-gray-700">{{ $t('auth.password') }}</Label>
             <Input
               id="password"
               v-model="password"
@@ -134,7 +134,7 @@ const handleRegister = async () => {
             />
           </div>
           <div class="space-y-2">
-            <Label for="confirmPassword">{{ $t('auth.confirmPassword') }}</Label>
+            <Label for="confirmPassword" class="text-white/70 light:text-gray-700">{{ $t('auth.confirmPassword') }}</Label>
             <Input
               id="confirmPassword"
               v-model="confirmPassword"
@@ -144,20 +144,21 @@ const handleRegister = async () => {
               autocomplete="new-password"
             />
           </div>
-        </CardContent>
-        <CardFooter class="flex flex-col space-y-4">
           <Button type="submit" class="w-full" :disabled="isLoading">
             <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
             {{ $t('auth.createAccountBtn') }}
           </Button>
-          <p class="text-sm text-center text-muted-foreground">
-            {{ $t('auth.alreadyHaveAccount') }}
-            <RouterLink to="/login" class="text-primary hover:underline">
-              {{ $t('auth.signIn') }}
-            </RouterLink>
-          </p>
-        </CardFooter>
+        </div>
       </form>
-    </Card>
+
+      <div v-if="organizationId" class="px-8 pb-8">
+        <p class="text-sm text-center text-white/40 light:text-gray-500">
+          {{ $t('auth.alreadyHaveAccount') }}
+          <RouterLink to="/login" class="text-emerald-400 light:text-emerald-600 hover:underline">
+            {{ $t('auth.signIn') }}
+          </RouterLink>
+        </p>
+      </div>
+    </div>
   </div>
 </template>

@@ -344,7 +344,7 @@ const columnCount = computed(() => visibleColumns.value.length + (props.selectab
       <TableRow v-else-if="sortedItems.length === 0">
         <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
           <slot name="empty">
-            <div v-if="emptyIcon" class="mb-3 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/10">
+            <div v-if="emptyIcon" class="mb-3 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/15">
               <component :is="emptyIcon" class="h-7 w-7 text-primary/60" />
             </div>
             <p v-if="emptyTitle">{{ emptyTitle }}</p>

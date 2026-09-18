@@ -96,7 +96,7 @@ const initiateSSO = (provider: string) => {
     <div class="w-full max-w-md rounded-lg border border-white/[0.08] bg-white/[0.02] backdrop-blur light:bg-white light:border-gray-200 light:shadow-xl">
       <div class="p-8 space-y-1 text-center">
         <div class="flex justify-center mb-4">
-          <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <div class="h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
             <MessageSquare class="h-7 w-7 text-white" />
           </div>
         </div>

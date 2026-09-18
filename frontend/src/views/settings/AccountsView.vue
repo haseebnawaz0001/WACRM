@@ -266,7 +266,7 @@ async function confirmDelete() {
             size="sm"
             @click="showOnboardingDialog = true"
             :disabled="isConnectingFB"
-            class="bg-gradient-to-br from-facebook to-facebook-dark hover:from-facebook-hover hover:to-facebook-hoverDark text-white border-none shadow-none"
+            class="bg-facebook hover:bg-facebook-hover text-white border-none shadow-none"
           >
             <Loader2 v-if="isConnectingFB" class="h-4 w-4 mr-2 animate-spin" />
             <Facebook v-else class="h-4 w-4 mr-2" />
@@ -320,7 +320,7 @@ async function confirmDelete() {
                       size="lg"
                       @click="showOnboardingDialog = true"
                       :disabled="isConnectingFB || !isFBSDKLoaded"
-                      class="bg-gradient-to-br from-facebook to-facebook-dark hover:from-facebook-hover hover:to-facebook-hoverDark text-white border-none shadow-none"
+                      class="bg-facebook hover:bg-facebook-hover text-white border-none shadow-none"
                     >
                       <Facebook v-if="!isConnectingFB" class="mr-2 h-5 w-5" />
                       <Loader2 v-else class="mr-2 h-5 w-5 animate-spin" />
