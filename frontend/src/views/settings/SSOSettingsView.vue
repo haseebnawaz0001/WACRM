@@ -450,7 +450,7 @@ onMounted(() => {
             <div v-if="editForm.allow_auto_create" class="space-y-2">
               <Label>{{ $t('sso.defaultRole') }}</Label>
               <Select v-model="editForm.default_role">
-                <SelectTrigger>
+                <SelectTrigger :aria-label="$t('sso.selectRole')">
                   <SelectValue :placeholder="$t('sso.selectRole')" />
                 </SelectTrigger>
                 <SelectContent>

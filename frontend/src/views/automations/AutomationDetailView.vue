@@ -284,7 +284,7 @@ onMounted(async () => {
             <CardHeader><CardTitle class="text-base">{{ t('automations.when') }}</CardTitle></CardHeader>
             <CardContent class="space-y-3">
               <Select v-model="rule.trigger_type" :disabled="!canWrite">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger :aria-label="t('automations.when')"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectGroup v-for="(types, group) in triggerGroups" :key="group">
                     <SelectLabel>{{ t(`automations.groups.${group}`, group) }}</SelectLabel>
@@ -344,7 +344,7 @@ onMounted(async () => {
                     :disabled="!canWrite"
                     @update:model-value="v => setDuration('after', 'unit', String(v))"
                   >
-                    <SelectTrigger class="w-32"><SelectValue /></SelectTrigger>
+                    <SelectTrigger class="w-32" aria-label="Unit"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="minutes">{{ t('automations.units.minutes') }}</SelectItem>
                       <SelectItem value="hours">{{ t('automations.units.hours') }}</SelectItem>

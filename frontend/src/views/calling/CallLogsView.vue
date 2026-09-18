@@ -305,7 +305,7 @@ watch(phoneSearch, () => {
         <div class="flex gap-4 flex-wrap items-center">
           <SearchInput v-model="phoneSearch" :placeholder="t('calling.searchByPhone')" class="w-48" />
           <Select v-model="statusFilter">
-            <SelectTrigger class="w-48">
+            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByStatus')">
               <SelectValue :placeholder="t('calling.filterByStatus')" />
             </SelectTrigger>
             <SelectContent>
@@ -316,7 +316,7 @@ watch(phoneSearch, () => {
           </Select>
 
           <Select v-model="directionFilter">
-            <SelectTrigger class="w-48">
+            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByDirection')">
               <SelectValue :placeholder="t('calling.filterByDirection')" />
             </SelectTrigger>
             <SelectContent>
@@ -327,7 +327,7 @@ watch(phoneSearch, () => {
           </Select>
 
           <Select v-model="ivrFlowFilter">
-            <SelectTrigger class="w-48">
+            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByIVRFlow')">
               <SelectValue :placeholder="t('calling.filterByIVRFlow')" />
             </SelectTrigger>
             <SelectContent>
@@ -339,7 +339,7 @@ watch(phoneSearch, () => {
           </Select>
 
           <Select v-model="accountFilter">
-            <SelectTrigger class="w-48">
+            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByAccount')">
               <SelectValue :placeholder="t('calling.filterByAccount')" />
             </SelectTrigger>
             <SelectContent>

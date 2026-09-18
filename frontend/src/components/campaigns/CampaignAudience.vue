@@ -124,7 +124,7 @@ onMounted(async () => {
           :disabled="!editable"
           @update:model-value="v => choose(String(v ?? ''))"
         >
-          <SelectTrigger>
+          <SelectTrigger :aria-label="$t('campaignAudience.segment')">
             <SelectValue :placeholder="t('campaignAudience.uploadedList')" />
           </SelectTrigger>
           <SelectContent>

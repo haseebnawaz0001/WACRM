@@ -273,7 +273,7 @@ onMounted(() => fetchActions())
               <div class="space-y-2"><Label for="url">{{ $t('customActions.webhookUrl') }}</Label><Input id="url" v-model="formData.config.url" type="url" :placeholder="$t('customActions.webhookUrlPlaceholder')" /></div>
               <div class="space-y-2">
                 <Label for="method">{{ $t('customActions.httpMethod') }}</Label>
-                <Select v-model="formData.config.method"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="POST">POST</SelectItem><SelectItem value="GET">GET</SelectItem><SelectItem value="PUT">PUT</SelectItem><SelectItem value="PATCH">PATCH</SelectItem></SelectContent></Select>
+                <Select v-model="formData.config.method"><SelectTrigger :aria-label="$t('customActions.httpMethod')"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="POST">POST</SelectItem><SelectItem value="GET">GET</SelectItem><SelectItem value="PUT">PUT</SelectItem><SelectItem value="PATCH">PATCH</SelectItem></SelectContent></Select>
               </div>
               <div class="space-y-2">
                 <Label>{{ $t('customActions.headers') }}</Label>

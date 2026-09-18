@@ -828,7 +828,7 @@ function removeEscalationUser(userId: string) {
                     <div class="space-y-2">
                       <Label>{{ $t('chatbotSettings.aiProvider') }}</Label>
                       <Select v-model="aiSettings.ai_provider">
-                        <SelectTrigger>
+                        <SelectTrigger :aria-label="$t('chatbotSettings.aiProvider')">
                           <SelectValue :placeholder="$t('chatbotSettings.selectProvider') + '...'" />
                         </SelectTrigger>
                         <SelectContent>
@@ -841,7 +841,7 @@ function removeEscalationUser(userId: string) {
                     <div class="space-y-2">
                       <Label>{{ $t('chatbotSettings.model') }}</Label>
                       <Select v-model="aiSettings.ai_model" :disabled="!aiSettings.ai_provider">
-                        <SelectTrigger>
+                        <SelectTrigger :aria-label="$t('chatbotSettings.model')">
                           <SelectValue :placeholder="$t('chatbotSettings.selectModel') + '...'" />
                         </SelectTrigger>
                         <SelectContent>

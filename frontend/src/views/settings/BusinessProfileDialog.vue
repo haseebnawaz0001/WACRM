@@ -285,7 +285,7 @@ async function handleFileChange(event: Event) {
         <div class="space-y-2">
           <Label for="vertical">{{ $t('businessProfile.industry') }}</Label>
           <Select v-model="profile.vertical">
-            <SelectTrigger>
+            <SelectTrigger :aria-label="$t('businessProfile.industry')">
               <SelectValue :placeholder="$t('businessProfile.selectCategory')">
                 <template v-if="profile.vertical">{{ selectedVerticalLabel }}</template>
               </SelectValue>

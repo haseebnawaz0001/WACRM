@@ -255,7 +255,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('aiContexts.contextType', 'Context Type') }}</Label>
           <Select v-model="form.context_type">
-            <SelectTrigger><SelectValue :placeholder="$t('aiContexts.selectType', 'Select type')" /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('aiContexts.selectType')"><SelectValue :placeholder="$t('aiContexts.selectType', 'Select type')" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="static">{{ $t('aiContexts.staticContent', 'Static Content') }}</SelectItem>
               <SelectItem value="api">{{ $t('aiContexts.apiFetch', 'API Fetch') }}</SelectItem>
@@ -350,7 +350,7 @@ onMounted(async () => {
           <div class="col-span-1 space-y-1.5">
             <Label class="text-xs">{{ $t('aiContexts.method', 'Method') }}</Label>
             <Select v-model="form.api_method">
-              <SelectTrigger><SelectValue :placeholder="$t('aiContexts.method', 'Method')" /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('aiContexts.method')"><SelectValue :placeholder="$t('aiContexts.method', 'Method')" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="GET">GET</SelectItem>
                 <SelectItem value="POST">POST</SelectItem>

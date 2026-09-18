@@ -126,7 +126,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                 </div>
                 <div class="flex items-center gap-2">
                   <Select v-model="selectedCategory">
-                    <SelectTrigger class="w-[150px]"><SelectValue :placeholder="$t('common.all')" /></SelectTrigger>
+                    <SelectTrigger class="w-[150px]" :aria-label="$t('common.all')"><SelectValue :placeholder="$t('common.all')" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{{ $t('cannedResponses.allCategories') }}</SelectItem>
                       <SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem>

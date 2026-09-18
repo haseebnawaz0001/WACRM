@@ -842,7 +842,7 @@ onMounted(async () => {
                 <div class="space-y-1.5">
                   <Label class="text-xs">{{ $t('flowBuilder.action') }}</Label>
                   <Select v-model="onCompleteAction">
-                    <SelectTrigger class="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectTrigger class="h-8 text-xs" :aria-label="$t('flowBuilder.action')"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">{{ $t('flowBuilder.noAction') }}</SelectItem>
                       <SelectItem value="webhook">{{ $t('flowBuilder.sendToWebhook') }}</SelectItem>
@@ -856,7 +856,7 @@ onMounted(async () => {
                       <div class="w-20">
                         <Label class="text-[10px]">{{ $t('flowBuilder.method') }}</Label>
                         <Select v-model="completionConfig.method">
-                          <SelectTrigger class="h-7 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectTrigger class="h-7 text-xs" :aria-label="$t('flowBuilder.method')"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="GET">GET</SelectItem>
                             <SelectItem value="POST">POST</SelectItem>

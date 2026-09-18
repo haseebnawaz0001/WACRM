@@ -339,7 +339,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   <div class="space-y-2">
                     <Label for="date_format" class="text-white/70 light:text-gray-700">{{ $t('settings.dateFormat') }}</Label>
                     <Select v-model="generalSettings.date_format">
-                      <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
+                      <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700" :aria-label="$t('settings.selectFormat')">
                         <SelectValue :placeholder="$t('settings.selectFormat')" />
                       </SelectTrigger>
                       <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">

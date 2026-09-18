@@ -43,7 +43,7 @@ const { t } = useI18n()
     :model-value="selectedRange"
     @update:model-value="emit('update:selectedRange', $event as TimeRangePreset)"
   >
-    <SelectTrigger class="w-[140px]">
+    <SelectTrigger class="w-[140px]" :aria-label="$t('dateRange.selectRange')">
       <SelectValue :placeholder="t('dateRange.selectRange', 'Date Range')" />
     </SelectTrigger>
     <SelectContent>

@@ -275,7 +275,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('teams.assignmentStrategy', 'Assignment Strategy') }}</Label>
           <Select v-model="form.assignment_strategy" :disabled="!canWrite">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('teams.assignmentStrategy')"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="s in ASSIGNMENT_STRATEGIES" :key="s.value" :value="s.value">
                 {{ s.label }}

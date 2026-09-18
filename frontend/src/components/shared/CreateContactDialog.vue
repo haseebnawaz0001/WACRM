@@ -142,7 +142,7 @@ function closeDialog() {
         <div v-if="availableAccounts.length > 0" class="space-y-2">
           <Label>{{ $t('contacts.whatsappAccount') }}</Label>
           <Select v-model="formData.whatsapp_account">
-            <SelectTrigger>
+            <SelectTrigger :aria-label="$t('contacts.selectAccount')">
               <SelectValue :placeholder="$t('contacts.selectAccount')" />
             </SelectTrigger>
             <SelectContent>

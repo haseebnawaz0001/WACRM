@@ -496,7 +496,7 @@ onUnmounted(() => {
               @apply-custom="() => { applyCustomRange(); reloadTimeline() }"
             />
             <Select :model-value="typeFilter" @update:model-value="v => applyFilter(String(v ?? ''))">
-              <SelectTrigger class="h-8 w-44">
+              <SelectTrigger class="h-8 w-44" :aria-label="$t('contactProfile.everything')">
                 <SelectValue :placeholder="t('contactProfile.everything')" />
               </SelectTrigger>
               <SelectContent>

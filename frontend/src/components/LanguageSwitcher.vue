@@ -26,7 +26,7 @@ const currentLocaleName = computed(() => {
 
 <template>
   <Select v-model="currentLocale">
-    <SelectTrigger class="w-auto gap-2">
+    <SelectTrigger class="w-auto gap-2" :aria-label="$t('settings.language')">
       <Globe class="h-4 w-4" />
       <SelectValue>{{ currentLocaleName }}</SelectValue>
     </SelectTrigger>

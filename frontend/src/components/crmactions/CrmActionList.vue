@@ -58,7 +58,7 @@ function move(index: number, direction: -1 | 1) {
   <div class="space-y-3">
     <div v-if="canAdd" class="flex justify-end">
       <Select @update:model-value="v => add(String(v))">
-        <SelectTrigger class="w-48">
+        <SelectTrigger class="w-48" :aria-label="$t('automations.addAction')">
           <SelectValue :placeholder="t('automations.addAction')" />
         </SelectTrigger>
         <SelectContent>

@@ -276,7 +276,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('keywords.matchTypeLabel', 'Match Type') }}</Label>
           <Select v-model="form.match_type" :disabled="!canWrite">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('keywords.matchTypeLabel')"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="contains">{{ $t('keywords.contains', 'Contains') }}</SelectItem>
               <SelectItem value="exact">{{ $t('keywords.exact', 'Exact') }}</SelectItem>
@@ -287,7 +287,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('keywords.responseType', 'Response Type') }}</Label>
           <Select v-model="form.response_type" :disabled="!canWrite">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('keywords.responseType')"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="text">{{ $t('keywords.textResponse', 'Text Response') }}</SelectItem>
               <SelectItem value="transfer">{{ $t('keywords.transferToAgent', 'Transfer to Agent') }}</SelectItem>

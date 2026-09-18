@@ -160,7 +160,7 @@ function handleSubmit() {
           <div class="space-y-2">
             <Label>Status Code</Label>
             <Select v-model="statusCode">
-              <SelectTrigger>
+              <SelectTrigger aria-label="Status Code">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

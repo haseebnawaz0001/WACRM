@@ -330,7 +330,7 @@ onMounted(async () => {
           <div class="space-y-2">
             <Label>{{ t('calling.account') }}</Label>
             <Select v-model="createForm.whatsapp_account">
-              <SelectTrigger>
+              <SelectTrigger :aria-label="$t('calling.selectAccount')">
                 <SelectValue :placeholder="t('calling.selectAccount')" />
               </SelectTrigger>
               <SelectContent>

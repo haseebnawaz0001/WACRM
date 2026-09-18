@@ -678,7 +678,7 @@ const chartOptions = barLineOptions()
 
         <!-- Granularity Filter -->
         <Select v-model="selectedGranularity">
-          <SelectTrigger class="w-[130px]">
+          <SelectTrigger class="w-[130px]" :aria-label="$t('metaInsights.granularity')">
             <SelectValue :placeholder="$t('metaInsights.granularity')" />
           </SelectTrigger>
           <SelectContent>

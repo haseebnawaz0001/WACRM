@@ -133,7 +133,7 @@ onMounted(async () => {
           v-model="mappings[name].source"
           :disabled="!editable"
         >
-          <SelectTrigger>
+          <SelectTrigger :aria-label="$t('campaigns.paramSource')">
             <SelectValue :placeholder="t('campaigns.paramSource')" />
           </SelectTrigger>
           <SelectContent>

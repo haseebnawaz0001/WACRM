@@ -366,7 +366,7 @@ function getHeaderIcon(type: string) {
                   <div class="flex items-center gap-2">
                     <Label class="text-sm text-muted-foreground">{{ $t('templates.account') }}:</Label>
                     <Select v-model="selectedAccount" @update:model-value="onAccountChange">
-                      <SelectTrigger class="w-[180px]">
+                      <SelectTrigger class="w-[180px]" :aria-label="$t('templates.account')">
                         <SelectValue :placeholder="$t('templates.allAccounts')" />
                       </SelectTrigger>
                       <SelectContent>

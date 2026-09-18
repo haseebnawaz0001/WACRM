@@ -221,7 +221,7 @@ function getColorLabel(color: string): string {
         <div class="space-y-2">
           <Label>{{ $t('tags.color') }}</Label>
           <Select v-model="formData.color" :default-value="formData.color">
-            <SelectTrigger>
+            <SelectTrigger :aria-label="$t('tags.selectColor')">
               <SelectValue :placeholder="$t('tags.selectColor')" />
             </SelectTrigger>
             <SelectContent>

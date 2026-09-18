@@ -504,7 +504,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
                         </Badge>
                       </div>
                       <Select v-model="selectedTeamFilter">
-                        <SelectTrigger class="w-[180px]">
+                        <SelectTrigger class="w-[180px]" :aria-label="$t('agentTransfers.filterByTeam')">
                           <SelectValue :placeholder="$t('agentTransfers.filterByTeam')" />
                         </SelectTrigger>
                         <SelectContent>
@@ -756,7 +756,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
           <div class="space-y-2">
             <label class="text-sm font-medium">{{ $t('agentTransfers.teamQueue') }}</label>
             <Select v-model="selectedTeamId">
-              <SelectTrigger>
+              <SelectTrigger :aria-label="$t('agentTransfers.selectTeam')">
                 <SelectValue :placeholder="$t('agentTransfers.selectTeam')" />
               </SelectTrigger>
               <SelectContent>
@@ -772,7 +772,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
           <div class="space-y-2">
             <label class="text-sm font-medium">{{ $t('agentTransfers.assignToAgent') }}</label>
             <Select v-model="selectedAgentId">
-              <SelectTrigger>
+              <SelectTrigger :aria-label="$t('agentTransfers.selectAgent')">
                 <SelectValue :placeholder="$t('agentTransfers.selectAgent')" />
               </SelectTrigger>
               <SelectContent>

@@ -397,7 +397,7 @@ const greetingTab = computed(() =>
       <div class="space-y-1.5">
         <Label class="text-xs">Method</Label>
         <Select :model-value="config.method || 'GET'" @update:model-value="(v: any) => updateConfig('method', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Method"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="GET">GET</SelectItem>
             <SelectItem value="POST">POST</SelectItem>
@@ -438,7 +438,7 @@ const greetingTab = computed(() =>
       <div class="space-y-1.5">
         <Label class="text-xs">Team</Label>
         <Select :model-value="config.team_id || 'none'" @update:model-value="(v: any) => updateConfig('team_id', v === 'none' ? '' : v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Select team" /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Select team"><SelectValue placeholder="Select team" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Select team...</SelectItem>
             <SelectItem v-for="team in teamsStore.teams" :key="team.id" :value="team.id">
@@ -467,7 +467,7 @@ const greetingTab = computed(() =>
             <div class="space-y-1">
               <Label class="text-[10px]">Method</Label>
               <Select :model-value="getCallbackConfig(event).method || 'POST'" @update:model-value="(v: any) => updateCallbackField(event, 'method', v)">
-                <SelectTrigger class="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger class="h-7 text-xs" aria-label="Method"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="GET">GET</SelectItem>
                   <SelectItem value="POST">POST</SelectItem>
@@ -516,7 +516,7 @@ const greetingTab = computed(() =>
       <div class="space-y-1.5">
         <Label class="text-xs">Target Flow</Label>
         <Select :model-value="config.flow_id || 'none'" @update:model-value="(v: any) => updateConfig('flow_id', v === 'none' ? '' : v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Select flow" /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Select flow"><SelectValue placeholder="Select flow" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Select flow...</SelectItem>
             <SelectItem v-for="flow in gotoFlowTargets" :key="flow.id" :value="flow.id">

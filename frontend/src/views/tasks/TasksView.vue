@@ -196,7 +196,7 @@ onMounted(async () => {
       </Tabs>
 
       <Select v-model="status">
-        <SelectTrigger class="h-8 w-36"><SelectValue /></SelectTrigger>
+        <SelectTrigger class="h-8 w-36" :aria-label="t('common.status')"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="open">{{ t('tasks.statusOpen') }}</SelectItem>
           <SelectItem value="completed">{{ t('tasks.statusCompleted') }}</SelectItem>
@@ -299,7 +299,7 @@ onMounted(async () => {
           <div class="space-y-1.5">
             <Label>{{ t('tasks.type') }}</Label>
             <Select v-model="draft.type_key">
-              <SelectTrigger><SelectValue :placeholder="t('tasks.typePlaceholder')" /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('tasks.typePlaceholder')"><SelectValue :placeholder="t('tasks.typePlaceholder')" /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="type in types" :key="type.id" :value="type.key">
                   {{ type.label }}

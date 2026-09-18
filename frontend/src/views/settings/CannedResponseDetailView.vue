@@ -252,7 +252,7 @@ onMounted(() => { loadResponse() })
             <div class="space-y-1.5">
               <Label class="text-xs">{{ $t('cannedResponses.category') }}</Label>
               <Select v-model="form.category" :disabled="!canWrite">
-                <SelectTrigger>
+                <SelectTrigger :aria-label="$t('cannedResponses.category')">
                   <SelectValue :placeholder="$t('cannedResponses.category')" />
                 </SelectTrigger>
                 <SelectContent>

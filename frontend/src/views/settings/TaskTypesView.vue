@@ -355,7 +355,7 @@ onMounted(() => fetchTypes())
               :model-value="String(form.default_due_offset_minutes)"
               @update:model-value="form.default_due_offset_minutes = Number($event)"
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('taskTypes.defaultDue')"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="preset in duePresets" :key="preset.minutes" :value="String(preset.minutes)">
                   {{ $t(preset.labelKey) }}
@@ -368,7 +368,7 @@ onMounted(() => fetchTypes())
           <div class="space-y-2">
             <Label>{{ $t('taskTypes.colour') }}</Label>
             <Select v-model="form.color">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('taskTypes.colour')"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="colour in colours" :key="colour" :value="colour">{{ colour }}</SelectItem>
               </SelectContent>

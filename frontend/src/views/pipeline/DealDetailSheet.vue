@@ -188,7 +188,7 @@ onMounted(() => {
           <div class="space-y-1.5">
             <Label>{{ t('pipeline.owner') }}</Label>
             <Select v-model="draft.owner_id" :disabled="!canWrite">
-              <SelectTrigger><SelectValue :placeholder="t('pipeline.unassigned')" /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('pipeline.unassigned')"><SelectValue :placeholder="t('pipeline.unassigned')" /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="o in owners" :key="o.id" :value="o.id">{{ o.name }}</SelectItem>
               </SelectContent>
@@ -208,7 +208,7 @@ onMounted(() => {
           <div class="space-y-1.5">
             <Label>{{ t('pipeline.stage') }}</Label>
             <Select :model-value="draft.stage_id" :disabled="!canWrite" @update:model-value="value => typeof value === 'string' && moveTo(value)">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('pipeline.stage')"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="s in pipeline?.stages || []" :key="s.id" :value="s.id">
                   {{ s.name }}

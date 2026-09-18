@@ -223,7 +223,7 @@ onMounted(fetchPipelines)
 
     <template v-else>
       <Select v-if="pipelines.length > 1" v-model="selectedId">
-        <SelectTrigger class="w-64"><SelectValue /></SelectTrigger>
+        <SelectTrigger class="w-64" :aria-label="t('nav.pipeline')"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem v-for="p in pipelines" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
         </SelectContent>
@@ -308,7 +308,7 @@ onMounted(fetchPipelines)
             <div class="w-28 space-y-1.5">
               <Label class="text-xs">{{ t('pipelines.stageType') }}</Label>
               <Select v-model="stage.stage_type" :disabled="!canWrite">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger :aria-label="$t('pipelines.stageType')"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="type in stageTypes" :key="type" :value="type">
                     {{ t(`pipelines.type_${type}`) }}
@@ -374,7 +374,7 @@ onMounted(fetchPipelines)
           </DialogDescription>
         </DialogHeader>
         <Select v-model="moveDealsTo">
-          <SelectTrigger><SelectValue :placeholder="t('pipelines.chooseStage')" /></SelectTrigger>
+          <SelectTrigger :aria-label="$t('pipelines.chooseStage')"><SelectValue :placeholder="t('pipelines.chooseStage')" /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="s in otherStages" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
           </SelectContent>

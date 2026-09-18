@@ -236,7 +236,7 @@ async function copyInviteLink() {
                 </div>
                 <div class="flex items-center gap-3 flex-wrap">
                   <Select v-model="roleFilter">
-                    <SelectTrigger class="w-44 h-9">
+                    <SelectTrigger class="w-44 h-9" :aria-label="$t('users.allRoles')">
                       <SelectValue :placeholder="$t('users.allRoles', 'All roles')" />
                     </SelectTrigger>
                     <SelectContent>
@@ -334,7 +334,7 @@ async function copyInviteLink() {
         <div class="space-y-2">
           <Label for="role">{{ $t('users.role') }} <span class="text-destructive">*</span></Label>
           <Select v-model="formData.role_id">
-            <SelectTrigger>
+            <SelectTrigger :aria-label="$t('users.role')">
               <SelectValue :placeholder="$t('users.selectRole')">
                 <template v-if="formData.role_id">
                   <span class="capitalize">{{ rolesStore.roles.find(r => r.id === formData.role_id)?.name }}</span>
@@ -373,7 +373,7 @@ async function copyInviteLink() {
           <div class="space-y-2">
             <Label>{{ $t('users.role') }}</Label>
             <Select v-model="addExistingRoleId">
-              <SelectTrigger>
+              <SelectTrigger :aria-label="$t('users.selectRole')">
                 <SelectValue :placeholder="$t('users.selectRole')" />
               </SelectTrigger>
               <SelectContent>

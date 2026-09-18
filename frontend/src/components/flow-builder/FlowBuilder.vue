@@ -720,7 +720,7 @@ defineExpose({
                 :model-value="selectedComponent['on-click-action']?.name || 'complete'"
                 @update:model-value="updateComponentProperty('on-click-action', { name: $event, payload: {} })"
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Action">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -741,7 +741,7 @@ defineExpose({
                   next: { type: 'screen', name: $event }
                 })"
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Target Screen">
                   <SelectValue placeholder="Select screen" />
                 </SelectTrigger>
                 <SelectContent>

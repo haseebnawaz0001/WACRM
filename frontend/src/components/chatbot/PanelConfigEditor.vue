@@ -206,7 +206,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
               :model-value="String(section.columns)"
               @update:model-value="(v) => setSection(sectionIdx, { columns: (Number(v) === 2 ? 2 : 1) })"
             >
-              <SelectTrigger class="h-6 w-14 text-[10px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger class="h-6 w-14 text-[10px]" aria-label="Columns in this section"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">1</SelectItem>
                 <SelectItem value="2">2</SelectItem>
@@ -235,7 +235,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
           <div class="flex items-center justify-between">
             <span class="text-[10px] text-muted-foreground">Fields:</span>
             <Select @update:model-value="(v: any) => addField(sectionIdx, v)">
-              <SelectTrigger class="h-6 w-32 text-[10px]">
+              <SelectTrigger class="h-6 w-32 text-[10px]" aria-label="Add field…">
                 <SelectValue placeholder="Add field…" />
               </SelectTrigger>
               <SelectContent>
@@ -285,7 +285,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
                 :model-value="field.display_type || 'text'"
                 @update:model-value="(v: any) => setField(sectionIdx, fieldIdx, { display_type: v })"
               >
-                <SelectTrigger class="h-6 text-[10px] w-20"><SelectValue /></SelectTrigger>
+                <SelectTrigger class="h-6 text-[10px] w-20" aria-label="Display type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="text">Text</SelectItem>
                   <SelectItem value="badge">Badge</SelectItem>
@@ -297,7 +297,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
                 :disabled="(field.display_type || 'text') === 'text'"
                 @update:model-value="(v: any) => setField(sectionIdx, fieldIdx, { color: v })"
               >
-                <SelectTrigger class="h-6 text-[10px] flex-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger class="h-6 text-[10px] flex-1" aria-label="Colour"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="success">Success</SelectItem>
@@ -313,7 +313,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
                 :model-value="field.save_to_field || '__session__'"
                 @update:model-value="(v: any) => setField(sectionIdx, fieldIdx, { save_to_field: v === '__session__' ? '' : String(v) })"
               >
-                <SelectTrigger class="h-6 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger class="h-6 flex-1 text-[10px]" aria-label="Save to field"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__session__">Session data only</SelectItem>
                   <SelectItem v-for="f in contactFields" :key="f.key" :value="f.key">

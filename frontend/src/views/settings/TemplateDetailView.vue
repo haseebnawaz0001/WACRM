@@ -715,7 +715,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('templates.whatsappAccount', 'WhatsApp Account') }}</Label>
           <Select v-model="form.whatsapp_account" :disabled="!canWrite || !!template?.meta_template_id">
-            <SelectTrigger><SelectValue :placeholder="$t('templates.selectAccount', 'Select account')" /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('templates.whatsappAccount')"><SelectValue :placeholder="$t('templates.selectAccount', 'Select account')" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
                 {{ account.name }}
@@ -734,7 +734,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('templates.language', 'Language') }}</Label>
           <Select v-model="form.language" :disabled="!canWrite || !!template?.meta_template_id">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('templates.language')"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="lang in languages" :key="lang.code" :value="lang.code">
                 {{ lang.name }}
@@ -745,7 +745,7 @@ onMounted(async () => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('templates.category', 'Category') }}</Label>
           <Select v-model="form.category" :disabled="!canWrite || !isEditable || (!!template?.meta_template_id && template?.status?.toUpperCase() === 'APPROVED')">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger :aria-label="$t('templates.category')"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="cat in categories" :key="cat.value" :value="cat.value">
                 {{ cat.label }}
@@ -828,7 +828,7 @@ onMounted(async () => {
           <div class="space-y-2">
             <Label class="text-xs">{{ $t('templates.codeDelivery', 'Code Delivery Method') }}</Label>
             <Select :model-value="authOtpType" @update:model-value="setAuthOtpType" :disabled="!canWrite || !isEditable">
-              <SelectTrigger class="h-8 text-xs">
+              <SelectTrigger class="h-8 text-xs" aria-label="Select delivery method">
                 <SelectValue placeholder="Select delivery method" />
               </SelectTrigger>
               <SelectContent>
@@ -1039,7 +1039,7 @@ onMounted(async () => {
               <div class="space-y-1">
                 <Label class="text-xs">{{ $t('templates.buttonType', 'Type') }}</Label>
                 <Select v-model="button.type" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger class="h-8 text-xs" :aria-label="$t('templates.buttonType')"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem v-for="bt in buttonTypes" :key="bt.value" :value="bt.value">
                       {{ bt.label }}
@@ -1072,7 +1072,7 @@ onMounted(async () => {
               <div class="space-y-1">
                 <Label class="text-xs">{{ $t('templates.flow', 'Flow') }}</Label>
                 <Select v-model="button.flow_id" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
+                  <SelectTrigger class="h-8 text-xs" :aria-label="$t('templates.selectFlow')">
                     <SelectValue :placeholder="$t('templates.selectFlow', 'Select a Flow')" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1085,7 +1085,7 @@ onMounted(async () => {
               <div class="space-y-1">
                 <Label class="text-xs">{{ $t('templates.flowAction', 'Flow Action') }}</Label>
                 <Select v-model="button.flow_action" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
+                  <SelectTrigger class="h-8 text-xs" :aria-label="$t('templates.flowAction')">
                     <SelectValue placeholder="navigate" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1097,7 +1097,7 @@ onMounted(async () => {
               <div v-if="button.flow_action === 'navigate' && button.flow_id && getFlowScreens(button.flow_id).length > 0" class="space-y-1">
                 <Label class="text-xs">{{ $t('templates.navigateScreen', 'Screen') }}</Label>
                 <Select v-model="button.navigate_screen" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
+                  <SelectTrigger class="h-8 text-xs" :aria-label="$t('templates.navigateScreen')">
                     <SelectValue :placeholder="$t('templates.selectScreen', 'Select Screen')" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1116,7 +1116,7 @@ onMounted(async () => {
               <div class="space-y-1">
                 <Label class="text-xs">{{ $t('templates.otpType', 'OTP Type') }}</Label>
                 <Select v-model="button.otp_type" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
+                  <SelectTrigger class="h-8 text-xs" aria-label="Copy Code">
                     <SelectValue placeholder="Copy Code" />
                   </SelectTrigger>
                   <SelectContent>

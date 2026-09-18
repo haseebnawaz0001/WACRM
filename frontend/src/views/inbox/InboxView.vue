@@ -2586,7 +2586,7 @@ async function sendMediaMessage() {
         <!-- Status and Pick next belong to the queue, so they appear with it. -->
         <div v-if="isQueueView" class="mt-1.5 flex items-center gap-1.5">
           <Select v-model="queueStatus">
-            <SelectTrigger class="h-7 flex-1 text-[12px]">
+            <SelectTrigger class="h-7 flex-1 text-[12px]" :aria-label="$t('inbox.statusActive')">
               <SelectValue :placeholder="$t('inbox.statusActive')" />
             </SelectTrigger>
             <SelectContent>

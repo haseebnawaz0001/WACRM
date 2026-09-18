@@ -302,7 +302,7 @@ function downloadSampleCsv() {
             <div v-if="uniqueColumn" class="space-y-2">
               <Label>{{ $t('importExport.onMatchLabel') }}</Label>
               <Select v-model="onMatch">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger :aria-label="$t('importExport.onMatchLabel')"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="skip">{{ $t('importExport.onMatchSkip') }}</SelectItem>
                   <SelectItem value="update">{{ $t('importExport.onMatchUpdate') }}</SelectItem>

@@ -93,7 +93,7 @@ onMounted(loadFields)
           :disabled="!canEdit || saving === field.key"
           @update:model-value="() => save(field)"
         >
-          <SelectTrigger class="h-8">
+          <SelectTrigger class="h-8" :aria-label="$t('contactFields.notSet')">
             <SelectValue :placeholder="t('contactFields.notSet')" />
           </SelectTrigger>
           <SelectContent>

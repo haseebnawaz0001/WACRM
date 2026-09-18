@@ -169,7 +169,7 @@ onMounted(async () => {
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
                   <Select v-model="filterUser" @update:model-value="applyFilter">
-                    <SelectTrigger class="w-[180px]">
+                    <SelectTrigger class="w-[180px]" :aria-label="$t('auditLogs.allUsers')">
                       <SelectValue :placeholder="t('auditLogs.allUsers')" />
                     </SelectTrigger>
                     <SelectContent>
@@ -180,7 +180,7 @@ onMounted(async () => {
                     </SelectContent>
                   </Select>
                   <Select v-model="filterAction" @update:model-value="applyFilter">
-                    <SelectTrigger class="w-[140px]">
+                    <SelectTrigger class="w-[140px]" :aria-label="$t('auditLogs.allActions')">
                       <SelectValue :placeholder="t('auditLogs.allActions')" />
                     </SelectTrigger>
                     <SelectContent>
@@ -195,7 +195,7 @@ onMounted(async () => {
                     </SelectContent>
                   </Select>
                   <Select v-model="filterResourceType" @update:model-value="applyFilter">
-                    <SelectTrigger class="w-[180px]">
+                    <SelectTrigger class="w-[180px]" :aria-label="$t('auditLogs.allResources')">
                       <SelectValue :placeholder="t('auditLogs.allResources')" />
                     </SelectTrigger>
                     <SelectContent>

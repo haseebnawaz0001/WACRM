@@ -336,7 +336,7 @@ onUnmounted(() => {
         :model-value="pipeline?.id"
         @update:model-value="id => pipeline = pipelines.find(p => p.id === id) || pipeline"
       >
-        <SelectTrigger class="h-8 w-44"><SelectValue /></SelectTrigger>
+        <SelectTrigger class="h-8 w-44" :aria-label="t('nav.pipeline')"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem v-for="p in pipelines" :key="p.id" :value="p.id">{{ p.name }}</SelectItem>
         </SelectContent>
@@ -345,7 +345,7 @@ onUnmounted(() => {
       <SearchInput v-model="search" :placeholder="t('pipeline.searchPlaceholder')" class="h-8 w-56" />
 
       <Select v-model="ownerFilter">
-        <SelectTrigger class="h-8 w-36"><SelectValue /></SelectTrigger>
+        <SelectTrigger class="h-8 w-36" :aria-label="t('pipeline.owner')"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{{ t('pipeline.allOwners') }}</SelectItem>
           <SelectItem value="me">{{ t('pipeline.mine') }}</SelectItem>
@@ -353,7 +353,7 @@ onUnmounted(() => {
       </Select>
 
       <Select v-model="statusFilter">
-        <SelectTrigger class="h-8 w-32"><SelectValue /></SelectTrigger>
+        <SelectTrigger class="h-8 w-32" :aria-label="t('common.status')"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="open">{{ t('pipeline.statusOpen') }}</SelectItem>
           <SelectItem value="won">{{ t('pipeline.statusWon') }}</SelectItem>
@@ -499,7 +499,7 @@ onUnmounted(() => {
           <div class="space-y-1.5">
             <Label>{{ t('pipeline.stage') }}</Label>
             <Select v-model="newDeal.stage_id">
-              <SelectTrigger><SelectValue :placeholder="t('pipeline.firstOpenStage')" /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('pipeline.firstOpenStage')"><SelectValue :placeholder="t('pipeline.firstOpenStage')" /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="s in pipeline?.stages || []" :key="s.id" :value="s.id">
                   {{ s.name }}

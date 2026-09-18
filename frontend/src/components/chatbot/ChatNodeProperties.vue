@@ -365,7 +365,7 @@ const typeLabel: Record<string, string> = {
       <div class="space-y-1.5">
         <Label class="text-xs">Expected response</Label>
         <Select :model-value="expectedResponse" @update:model-value="(v: any) => setExpectedResponse(v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Expected response"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">None (fire-and-forget)</SelectItem>
             <SelectItem value="text">Text</SelectItem>
@@ -397,7 +397,7 @@ const typeLabel: Record<string, string> = {
             :model-value="config.save_to_field || '__none__'"
             @update:model-value="(v: any) => updateConfig('save_to_field', v === '__none__' ? '' : v)"
           >
-            <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Don't save" /></SelectTrigger>
+            <SelectTrigger class="h-8 text-sm" aria-label="Don't save"><SelectValue placeholder="Don't save" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">Don't save</SelectItem>
               <SelectItem v-for="f in contactFields" :key="f.key" :value="f.key">
@@ -510,7 +510,7 @@ const typeLabel: Record<string, string> = {
       <div class="pt-2 border-t space-y-1.5">
         <Label class="text-xs">Expected response</Label>
         <Select model-value="button" disabled>
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Expected response"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="button">Selection (buttons)</SelectItem>
           </SelectContent>
@@ -544,7 +544,7 @@ const typeLabel: Record<string, string> = {
       <div class="space-y-1.5">
         <Label class="text-xs">Method</Label>
         <Select :model-value="config.method || 'GET'" @update:model-value="(v: any) => updateConfig('method', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Method"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="GET">GET</SelectItem>
             <SelectItem value="POST">POST</SelectItem>
@@ -609,7 +609,7 @@ const typeLabel: Record<string, string> = {
             :model-value="String(key)"
             @update:model-value="(v: any) => updateFieldMappingKey(String(key), String(v))"
           >
-            <SelectTrigger class="h-7 flex-1 text-xs"><SelectValue placeholder="Field" /></SelectTrigger>
+            <SelectTrigger class="h-7 flex-1 text-xs" aria-label="Field"><SelectValue placeholder="Field" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="f in contactFields" :key="f.key" :value="f.key">{{ f.label }}</SelectItem>
             </SelectContent>
@@ -692,7 +692,7 @@ const typeLabel: Record<string, string> = {
       <div class="space-y-1.5">
         <Label class="text-xs">Team</Label>
         <Select :model-value="config.team_id || '_general'" @update:model-value="(v: any) => updateConfig('team_id', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="General queue" /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="General queue"><SelectValue placeholder="General queue" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="_general">General queue</SelectItem>
             <SelectItem v-for="team in teamsStore.teams" :key="team.id" :value="team.id">
@@ -730,7 +730,7 @@ const typeLabel: Record<string, string> = {
       <div class="space-y-1.5">
         <Label class="text-xs">Target flow</Label>
         <Select :model-value="config.flow_id || 'none'" @update:model-value="(v: any) => updateConfig('flow_id', v === 'none' ? '' : v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Select flow" /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Select flow"><SelectValue placeholder="Select flow" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Select flow…</SelectItem>
             <SelectItem v-for="flow in gotoFlowTargets" :key="flow.id" :value="flow.id">
@@ -809,7 +809,7 @@ const typeLabel: Record<string, string> = {
           :model-value="config.segment_id || '__filter__'"
           @update:model-value="(v: any) => updateConfig('segment_id', v === '__filter__' ? '' : v)"
         >
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Use a filter" /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Use a filter"><SelectValue placeholder="Use a filter" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__filter__">Use a filter</SelectItem>
             <SelectItem v-for="seg in segments" :key="seg.id" :value="seg.id">
@@ -847,7 +847,7 @@ const typeLabel: Record<string, string> = {
       <div class="space-y-1.5">
         <Label class="text-xs">Method</Label>
         <Select :model-value="config.method || 'POST'" @update:model-value="(v: any) => updateConfig('method', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 text-sm" aria-label="Method"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="GET">GET</SelectItem>
             <SelectItem value="POST">POST</SelectItem>

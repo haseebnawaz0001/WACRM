@@ -165,7 +165,7 @@ const listDrafts = ref<Record<number, string>>({})
           :model-value="rule.field"
           @update:model-value="(v) => onFieldChange(index, String(v))"
         >
-          <SelectTrigger class="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 w-[180px] text-xs" :aria-label="$t('dashboard.field')"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem v-for="f in fields" :key="f.key" :value="f.key">{{ f.label }}</SelectItem>
           </SelectContent>
@@ -175,7 +175,7 @@ const listDrafts = ref<Record<number, string>>({})
           :model-value="rule.operator"
           @update:model-value="(v) => onOperatorChange(index, String(v))"
         >
-          <SelectTrigger class="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger class="h-8 w-[150px] text-xs" :aria-label="$t('dashboard.operator')"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem
               v-for="op in fieldFor(rule.field)?.operators ?? []"
@@ -195,7 +195,7 @@ const listDrafts = ref<Record<number, string>>({})
             :model-value="Array.isArray(rule.value) ? String(rule.value[0] ?? '') : ''"
             @update:model-value="(v) => onValueChange(index, [String(v)])"
           >
-            <SelectTrigger class="h-8 flex-1 text-xs"><SelectValue :placeholder="$t('filters.selectValue')" /></SelectTrigger>
+            <SelectTrigger class="h-8 flex-1 text-xs" :aria-label="$t('filters.selectValue')"><SelectValue :placeholder="$t('filters.selectValue')" /></SelectTrigger>
             <SelectContent>
               <SelectItem
                 v-for="opt in fieldFor(rule.field)?.options ?? []"

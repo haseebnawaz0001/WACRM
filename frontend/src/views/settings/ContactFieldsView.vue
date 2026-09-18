@@ -376,7 +376,7 @@ onMounted(() => fetchFields())
           <div class="space-y-2">
             <Label>{{ $t('contactFields.fieldType') }}</Label>
             <Select v-model="form.type" :disabled="isEditing">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger :aria-label="$t('contactFields.fieldType')"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">
                   {{ $t(ft.labelKey) }}

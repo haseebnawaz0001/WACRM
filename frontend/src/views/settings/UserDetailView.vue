@@ -246,7 +246,7 @@ onMounted(async () => {
           <div class="space-y-1.5">
             <Label class="text-xs">{{ $t('users.role') }} <span class="text-destructive">*</span></Label>
             <Select v-model="form.role_id" :disabled="!canWrite">
-              <SelectTrigger>
+              <SelectTrigger :aria-label="$t('users.role')">
                 <SelectValue :placeholder="$t('users.selectRole')">
                   <template v-if="form.role_id">
                     <span class="capitalize">{{ rolesStore.roles.find(r => r.id === form.role_id)?.name }}</span>

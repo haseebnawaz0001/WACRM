@@ -1075,7 +1075,7 @@ onUnmounted(() => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('campaigns.whatsappAccount', 'WhatsApp Account') }}</Label>
           <Select v-model="form.whatsapp_account" :disabled="!isDraft">
-            <SelectTrigger>
+            <SelectTrigger :aria-label="$t('campaigns.selectAccount')">
               <SelectValue :placeholder="$t('campaigns.selectAccount', 'Select account')" />
             </SelectTrigger>
             <SelectContent>
@@ -1088,7 +1088,7 @@ onUnmounted(() => {
         <div class="space-y-1.5">
           <Label class="text-xs">{{ $t('campaigns.template', 'Template') }}</Label>
           <Select v-model="form.template_id" :disabled="!isDraft || !form.whatsapp_account">
-            <SelectTrigger>
+            <SelectTrigger :aria-label="$t('campaigns.template')">
               <SelectValue :placeholder="form.whatsapp_account ? $t('campaigns.selectTemplate', 'Select template') : $t('campaigns.selectAccountFirst', 'Select an account first')" />
             </SelectTrigger>
             <SelectContent>
