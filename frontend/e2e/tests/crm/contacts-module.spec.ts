@@ -155,7 +155,18 @@ test.describe('Contacts import and export', () => {
 
       const importButton = contactsPage.importExportDialog.getByRole('button', { name: /^import/i })
       await expect(importButton).toBeEnabled({ timeout: 10000 })
-      await importButton.click()
+      // Wait for the upload itself, not just the click. The navigation below
+      // aborts whatever is still in flight, so clicking and walking away threw
+      // the import request out about one run in three — the dialog never got to
+      // send it, and the assertion then failed on a contact that had never been
+      // created rather than on anything the product did wrong.
+      await Promise.all([
+        page.waitForResponse(
+          r => r.url().includes('/api/import') && r.request().method() === 'POST',
+          { timeout: 30000 }
+        ),
+        importButton.click()
+      ])
 
       // The imported contact reaches the list, which is the only proof that
       // matters — an import that reports success and lands nothing is the

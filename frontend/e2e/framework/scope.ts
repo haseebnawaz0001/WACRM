@@ -46,16 +46,35 @@ export function createTestScope(specName: string): TestScope {
       return `${prefix.toLowerCase()}-${local}@e2e.test`
     },
     phone() {
-      // 91 (country) + 10-digit local suffix derived from time + random.
-      // node:crypto satisfies CodeQL's js/insecure-randomness — these values
-      // flow into API calls so the linter treats them as security-sensitive
-      // even though the phones are throwaway test data.
-      const suffix = randomInt(0, 1000).toString().padStart(3, '0')
-      return `91${Date.now().toString().slice(-7)}${suffix}`
+      return e2ePhone()
     },
   }
 }
 
 function randomSuffix(): string {
   return randomBytes(4).toString('hex').slice(0, 6)
+}
+
+/**
+ * The phone prefix every E2E contact carries.
+ *
+ * A contact is not always recognisable by its name: the webhook rewrites
+ * profile_name from whatever Meta sends, and a contact created from a phone
+ * number alone has no name at all. Both slipped past a teardown that matched on
+ * names, so the demo database grew by tens of rows a day. The phone number is
+ * the one field every one of them has and nothing renames, so it carries the
+ * marker instead.
+ *
+ * 9199 keeps the country code real-looking while reserving a range no demo or
+ * seed data uses.
+ */
+export const E2E_PHONE_PREFIX = '9199'
+
+/** A phone-shaped string inside the reserved E2E range. No SMS is ever sent. */
+export function e2ePhone(): string {
+  // prefix + 5 digits of the clock + 3 random. node:crypto satisfies CodeQL's
+  // js/insecure-randomness — these values flow into API calls, so the linter
+  // treats them as security-sensitive even though the phones are throwaway.
+  const suffix = randomInt(0, 1000).toString().padStart(3, '0')
+  return `${E2E_PHONE_PREFIX}${Date.now().toString().slice(-5)}${suffix}`
 }

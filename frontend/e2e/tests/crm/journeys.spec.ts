@@ -1,5 +1,6 @@
 import { test, expect, APIRequestContext } from '@playwright/test'
 import { ApiHelper } from '../../helpers'
+import { e2ePhone } from '../../framework'
 
 /**
  * The end-to-end journeys from docs/feature-plans/10-system-integration.md §5.
@@ -16,9 +17,15 @@ import { ApiHelper } from '../../helpers'
  * chain.
  */
 
-/** A unique phone number, so parallel runs never collide on one contact. */
+/**
+ * A unique phone number, so parallel runs never collide on one contact.
+ *
+ * The shared generator, not a local one: it puts the number in the reserved
+ * range the teardown looks for, which is what finally lets these fixtures be
+ * cleaned up even after the webhook renames them.
+ */
 function uniquePhone(): string {
-  return '1555' + String(Date.now()).slice(-6) + String(Math.floor(Math.random() * 90) + 10)
+  return e2ePhone()
 }
 
 async function adminApi(request: APIRequestContext): Promise<ApiHelper> {
@@ -314,7 +321,12 @@ test.describe('Permission enforcement', () => {
 async function openConversationViaWebhook(api: ApiHelper, contactID: string): Promise<boolean> {
   const contact = await api.get(`/api/contacts/${contactID}`)
   const body = await contact.json()
-  const phone: string = (body.data.contact ?? body.data).phone_number
+  const contactRow = body.data.contact ?? body.data
+  const phone: string = contactRow.phone_number
+  // The webhook overwrites profile_name from this payload, so it repeats the
+  // scoped name rather than a literal — a literal renames the contact out of
+  // the E2E prefix and the teardown never finds it again.
+  const profileName: string = contactRow.profile_name
 
   const account = await ensureAccount(api)
   if (!account) return false
@@ -330,7 +342,7 @@ async function openConversationViaWebhook(api: ApiHelper, contactID: string): Pr
             value: {
               messaging_product: 'whatsapp',
               metadata: { display_phone_number: phone, phone_number_id: account.phone_id },
-              contacts: [{ profile: { name: 'Journey Conversation' }, wa_id: phone }],
+              contacts: [{ profile: { name: profileName }, wa_id: phone }],
               messages: [
                 {
                   from: phone,

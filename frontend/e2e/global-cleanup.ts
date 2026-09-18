@@ -34,6 +34,17 @@ const E2E_NAME_PREDICATE = `(name LIKE 'E2E-%' OR name LIKE 'E2E %')`
 // `e2e-` prefix so they're never touched.
 const E2E_USER_EMAIL_PREDICATE = `(email LIKE '%@e2e.test' OR email LIKE 'e2e-%@test.com')`
 
+// A contact is identified by its phone number, not its name. The webhook
+// rewrites profile_name from the payload it is given, and a contact created
+// from a phone number alone never had a name to match — so a name-only
+// predicate walked past both and the demo database grew a little every run.
+// Every phone the framework hands out sits in the reserved 9199 range (1555 is
+// the range an older generator in journeys.spec.ts used). Names still count,
+// for fixtures created before the range existed, including the two literal
+// names those webhook payloads used to hard-code.
+const E2E_LEGACY_CONTACT_NAMES = `('Message Actions', 'Journey Conversation')`
+const E2E_CONTACT_PREDICATE = `(profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %' OR profile_name IN ${E2E_LEGACY_CONTACT_NAMES} OR phone_number LIKE '9199%' OR phone_number LIKE '1555%')`
+
 // Statements run sequentially. Each is best-effort: a failure logs and
 // the loop continues. Phrased as "DELETE ... USING <child>" or scoped to
 // the prefix so stable rows (admin@test.com, system roles) are untouched.
@@ -43,50 +54,73 @@ const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
   // fk_tasks_contact" and left the contacts behind.
   {
     label: 'tasks on E2E contacts',
-    sql: `DELETE FROM tasks WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM tasks WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'deal stage history on E2E contacts',
-    sql: `DELETE FROM deal_stage_history WHERE deal_id IN (SELECT id FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %'))`,
+    sql: `DELETE FROM deal_stage_history WHERE deal_id IN (SELECT id FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE}))`,
   },
   {
     label: 'deals on E2E contacts',
-    sql: `DELETE FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'custom field values of E2E contacts',
-    sql: `DELETE FROM custom_field_values WHERE entity_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM custom_field_values WHERE entity_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'activity of E2E contacts',
-    sql: `DELETE FROM contact_activities WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM contact_activities WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'outbox events of E2E contacts',
-    sql: `DELETE FROM crm_event_outbox WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM crm_event_outbox WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'merge records of E2E contacts',
-    sql: `DELETE FROM contact_merges WHERE primary_contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %') OR secondary_contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM contact_merges WHERE primary_contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE}) OR secondary_contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'identities of E2E contacts',
-    sql: `DELETE FROM contact_identities WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM contact_identities WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   // Messages next — they reference contacts and users.
   {
     label: 'messages of E2E contacts',
-    sql: `DELETE FROM messages WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM messages WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   // Notes are scoped to contact + user.
   {
     label: 'conversation_notes for E2E contacts',
-    sql: `DELETE FROM conversation_notes WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM conversation_notes WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   // Agent transfers reference contacts + users + teams.
+  // Everything else that points at a contact. These were missing because the
+  // old name-only predicate never matched a contact that had a conversation,
+  // so the FK they hold was never reached.
+  {
+    label: 'conversations of E2E contacts',
+    sql: `DELETE FROM conversations WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
+  },
+  {
+    label: 'chatbot_sessions of E2E contacts',
+    sql: `DELETE FROM chatbot_sessions WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
+  },
+  {
+    label: 'call_transfers of E2E contacts',
+    sql: `DELETE FROM call_transfers WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
+  },
+  {
+    label: 'call_logs of E2E contacts',
+    sql: `DELETE FROM call_logs WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
+  },
+  {
+    label: 'call_permissions of E2E contacts',
+    sql: `DELETE FROM call_permissions WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
+  },
   {
     label: 'agent_transfers for E2E contacts',
-    sql: `DELETE FROM agent_transfers WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+    sql: `DELETE FROM agent_transfers WHERE contact_id IN (SELECT id FROM contacts WHERE ${E2E_CONTACT_PREDICATE})`,
   },
   {
     label: 'agent_transfers assigned to E2E users',
@@ -124,6 +158,25 @@ const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
     sql: `DELETE FROM canned_responses WHERE created_by_id IN (SELECT id FROM users WHERE role_id IN (SELECT id FROM custom_roles WHERE organization_id IN (SELECT id FROM organizations WHERE ${E2E_NAME_PREDICATE})))`,
   },
   // Now the entity tables.
+  //
+  // Contacts come before users: contacts.assigned_user_id points at a user, so
+  // deleting the users first fails on fk_contacts_assigned_user and then takes
+  // the roles down with it (fk_users_role), which is how every run used to end
+  // with its users and custom roles still sitting in the database.
+  {
+    label: 'E2E contacts',
+    sql: `DELETE FROM contacts WHERE ${E2E_CONTACT_PREDICATE}`,
+  },
+  // A demo contact an E2E user was assigned to outlives this run, so the
+  // reference is released rather than the contact deleted.
+  {
+    label: 'assignments of demo contacts to E2E users',
+    sql: `UPDATE contacts SET assigned_user_id = NULL WHERE assigned_user_id IN (SELECT id FROM users WHERE ${E2E_USER_EMAIL_PREDICATE})`,
+  },
+  {
+    label: 'assignments of demo contacts to users in E2E orgs',
+    sql: `UPDATE contacts SET assigned_user_id = NULL WHERE assigned_user_id IN (SELECT id FROM users WHERE role_id IN (SELECT id FROM custom_roles WHERE organization_id IN (SELECT id FROM organizations WHERE ${E2E_NAME_PREDICATE})))`,
+  },
   {
     label: 'E2E users (by email pattern)',
     sql: `DELETE FROM users WHERE ${E2E_USER_EMAIL_PREDICATE}`,
@@ -142,10 +195,6 @@ const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
   {
     label: 'E2E custom roles',
     sql: `DELETE FROM custom_roles WHERE ${E2E_NAME_PREDICATE}`,
-  },
-  {
-    label: 'E2E contacts',
-    sql: `DELETE FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %'`,
   },
   {
     label: 'E2E teams',

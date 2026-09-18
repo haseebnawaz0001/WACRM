@@ -56,7 +56,17 @@ test.describe('Composer commands', () => {
 
     await input.fill(`/task ${title}`)
     await expect(page.locator('[data-command-hints]')).toBeVisible()
-    await input.press('Enter')
+    // The composer clears the line without waiting for the write, so an empty
+    // textarea does not mean the follow-up exists yet. `api` is a separate
+    // request context and will happily read the list before the browser's POST
+    // lands, which is how this passed most runs and failed the rest.
+    await Promise.all([
+      page.waitForResponse(
+        r => r.url().includes('/api/tasks') && r.request().method() === 'POST',
+        { timeout: 15000 }
+      ),
+      input.press('Enter')
+    ])
 
     // The line is not sent to the customer.
     await expect(input).toHaveValue('')
@@ -72,7 +82,13 @@ test.describe('Composer commands', () => {
     const input = page.locator('textarea').first()
 
     await input.fill(`/note ${body}`)
-    await input.press('Enter')
+    await Promise.all([
+      page.waitForResponse(
+        r => /\/api\/contacts\/[^/]+\/notes/.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 15000 }
+      ),
+      input.press('Enter')
+    ])
     await expect(input).toHaveValue('')
 
     const notes = await api.get(`/api/contacts/${contactId}/notes`)

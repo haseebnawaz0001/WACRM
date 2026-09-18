@@ -221,8 +221,9 @@ test.describe('Pick from queue — agent flow', () => {
       page.locator('[data-sonner-toast]').filter({ hasText: /Transfer picked/i }),
     ).toBeVisible({ timeout: 10_000 })
 
-    // After picking the page navigates to the contact's chat.
-    await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
+    // After picking the page navigates to the contact's conversation, which
+    // lives at /inbox since the chat and the inbox became one surface.
+    await page.waitForURL(new RegExp(`/inbox/${contactId}`), { timeout: 10_000 })
 
     // DB sanity: the transfer is now assigned to this agent and out of queue.
     const rows = await execSQL(
@@ -241,7 +242,7 @@ test.describe('Pick from queue — agent flow', () => {
     await ensureSeedVisible(page, reseed)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
-    await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
+    await page.waitForURL(new RegExp(`/inbox/${contactId}`), { timeout: 10_000 })
 
     // Navigate back; the agent role's view shows their assigned transfers
     // directly (no tabs), so the just-picked contact must be in the table.
@@ -547,7 +548,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     await ensureSeedVisible(page, reseed)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
-    await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
+    await page.waitForURL(new RegExp(`/inbox/${contactId}`), { timeout: 10_000 })
 
     expect(await readContactAssignedUser(contactId)).toBe(agent.user.id)
   })
@@ -564,7 +565,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     await ensureSeedVisible(page, reseed)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
-    await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
+    await page.waitForURL(new RegExp(`/inbox/${contactId}`), { timeout: 10_000 })
 
     // After pickup the agent has visibility through the active transfer
     // (agent_transfers.agent_id), but the relationship-manager pointer must

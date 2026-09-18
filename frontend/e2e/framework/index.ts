@@ -16,7 +16,7 @@
  *   - One-call permission-scoped user creation.
  */
 
-export { createTestScope, type TestScope } from './scope'
+export { createTestScope, e2ePhone, E2E_PHONE_PREFIX, type TestScope } from './scope'
 export {
   loginAs,
   loginAsSuperAdmin,

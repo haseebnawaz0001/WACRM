@@ -59,7 +59,15 @@ test.describe('Message actions', () => {
 
   test('a follow-up is raised with the message as its title', async ({ page }) => {
     await openMessageMenu(page)
-    await page.getByRole('button', { name: 'Create a follow-up' }).click()
+    // The menu fires the write and closes without waiting for it, which is the
+    // right thing for somebody clicking. It does mean the assertion below has
+    // to wait for the write itself: `api` is a separate request context, so it
+    // is perfectly capable of reading the tasks list before the browser's POST
+    // has been committed, and did.
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/tasks') && r.request().method() === 'POST'),
+      page.getByRole('button', { name: 'Create a follow-up' }).click()
+    ])
 
     const tasks = await api.get(`/api/tasks?view=all&contact_id=${contactId}`)
     expect(tasks.status()).toBe(200)
@@ -69,7 +77,10 @@ test.describe('Message actions', () => {
 
   test('a note quotes the message, so it still reads once the thread moves on', async ({ page }) => {
     await openMessageMenu(page)
-    await page.getByRole('button', { name: 'Add a note about it' }).click()
+    await Promise.all([
+      page.waitForResponse(r => /\/api\/contacts\/[^/]+\/notes/.test(r.url()) && r.request().method() === 'POST'),
+      page.getByRole('button', { name: 'Add a note about it' }).click()
+    ])
 
     const notes = await api.get(`/api/contacts/${contactId}/notes`)
     expect(notes.status()).toBe(200)
@@ -85,7 +96,13 @@ test.describe('Message actions', () => {
 async function sendInbound(api: ApiHelper, contactID: string, body: string): Promise<boolean> {
   const contact = await api.get(`/api/contacts/${contactID}`)
   const payload = await contact.json()
-  const phone: string = (payload.data.contact ?? payload.data).phone_number
+  const contactRow = payload.data.contact ?? payload.data
+  const phone: string = contactRow.phone_number
+  // The webhook overwrites profile_name from this payload, so it has to repeat
+  // the scoped name. A literal here renamed the contact out of the E2E prefix
+  // and the teardown then walked straight past it, which is how six "Message
+  // Actions" rows ended up living in the demo database.
+  const profileName: string = contactRow.profile_name
 
   const account = await ensureAccount(api)
   if (!account) return false
@@ -99,7 +116,7 @@ async function sendInbound(api: ApiHelper, contactID: string, body: string): Pro
         value: {
           messaging_product: 'whatsapp',
           metadata: { display_phone_number: phone, phone_number_id: account.phone_id },
-          contacts: [{ profile: { name: 'Message Actions' }, wa_id: phone }],
+          contacts: [{ profile: { name: profileName }, wa_id: phone }],
           messages: [{
             from: phone,
             id: `wamid.actions.${Date.now()}`,
