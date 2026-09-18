@@ -85,7 +85,7 @@ import {
   StickyNote,
   ArrowLeft
 } from 'lucide-vue-next'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
+import { getInitials, getAvatarColor } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
@@ -2635,7 +2635,7 @@ async function sendMediaMessage() {
           >
             <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="row.avatarUrl" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(row.name)">
+              <AvatarFallback :class="'text-xs text-white ' + getAvatarColor(row.name)">
                 {{ getInitials(row.name) }}
               </AvatarFallback>
             </Avatar>
@@ -2655,9 +2655,12 @@ async function sendMediaMessage() {
                 <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
                   {{ row.preview || row.phone }}
                 </p>
-                <Badge v-if="row.unread > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
-                  {{ row.unread }}
-                </Badge>
+                <span
+                  v-if="row.unread > 0"
+                  class="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none tabular-nums bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700"
+                >
+                  {{ row.unread > 99 ? '99+' : row.unread }}
+                </span>
               </div>
 
               <!-- What the queue knows and a contact list cannot: who holds it,
@@ -2778,7 +2781,7 @@ async function sendMediaMessage() {
             </Button>
             <Avatar class="max-sm:hidden h-8 w-8 shrink-0 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contactsStore.currentContact.avatar_url" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)">
+              <AvatarFallback :class="'text-xs text-white ' + getAvatarColor(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)">
                 {{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}
               </AvatarFallback>
             </Avatar>

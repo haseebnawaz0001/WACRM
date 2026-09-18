@@ -31,7 +31,7 @@ import {
 } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { wsService } from '@/services/websocket'
-import { getInitials, getAvatarGradient, formatDateTime } from '@/lib/utils'
+import { getInitials, getAvatarColor, formatDateTime } from '@/lib/utils'
 import {
   User, MessageSquare, ListChecks, KanbanSquare, Tag, ArrowLeft,
   RefreshCw, FileText, Phone, ArrowRightLeft
@@ -310,7 +310,7 @@ onUnmounted(() => {
             <CardContent class="space-y-3 p-4">
               <div class="flex items-center gap-3">
                 <Avatar class="h-12 w-12">
-                  <AvatarFallback :class="getAvatarGradient(name)" class="text-white">
+                  <AvatarFallback :class="getAvatarColor(name)" class="text-white">
                     {{ getInitials(name) }}
                   </AvatarFallback>
                 </Avatar>

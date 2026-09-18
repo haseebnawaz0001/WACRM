@@ -89,7 +89,7 @@ const activeChildPath = computed(() => {
         <span
           v-if="badgeCount > 0"
           :class="[
-            'ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
+            'ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[11px] font-semibold tabular-nums',
             'bg-emerald-500/15 text-emerald-400 light:bg-emerald-100 light:text-emerald-700',
             collapsed && 'md:absolute md:right-0.5 md:top-0.5 md:ml-0 md:px-1 md:py-0 md:text-[10px]'
           ]"

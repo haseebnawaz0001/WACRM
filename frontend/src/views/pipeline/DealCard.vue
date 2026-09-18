@@ -10,7 +10,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
+import { getInitials, getAvatarColor } from '@/lib/utils'
 import { AlertTriangle, CalendarDays } from 'lucide-vue-next'
 import type { Deal } from '@/services/api'
 
@@ -61,7 +61,7 @@ const name = computed(() => props.deal.contact_name || props.deal.contact_phone 
     <div class="mt-2 flex items-center justify-between gap-2">
       <div class="flex min-w-0 items-center gap-1.5">
         <Avatar class="h-5 w-5">
-          <AvatarFallback :class="getAvatarGradient(name)" class="text-[10px] text-white">
+          <AvatarFallback :class="getAvatarColor(name)" class="text-[10px] text-white">
             {{ getInitials(name) }}
           </AvatarFallback>
         </Avatar>

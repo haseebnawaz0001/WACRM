@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'vue-sonner'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
+import { getInitials, getAvatarColor } from '@/lib/utils'
 import {
   StickyNote, Pencil, Trash2, X, Check, Loader2, Send
 } from 'lucide-vue-next'
@@ -235,7 +235,7 @@ function formatNoteTime(dateStr: string) {
             <template v-else>
               <div class="flex items-start gap-2.5 mt-1">
                 <Avatar class="h-6 w-6 shrink-0 ring-1 ring-white/[0.08] light:ring-gray-200">
-                  <AvatarFallback :class="'text-[10px] bg-gradient-to-br text-white ' + getAvatarGradient(note.created_by_name)">
+                  <AvatarFallback :class="'text-[10px] text-white ' + getAvatarColor(note.created_by_name)">
                     {{ getInitials(note.created_by_name) }}
                   </AvatarFallback>
                 </Avatar>

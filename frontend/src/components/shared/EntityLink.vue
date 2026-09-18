@@ -14,7 +14,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
+import { getInitials, getAvatarColor } from '@/lib/utils'
 
 const props = withDefaults(
   defineProps<{
@@ -50,7 +50,7 @@ const textSize = computed(() => (props.size === 'sm' ? 'text-xs' : 'text-sm'))
       :class="[
         'flex shrink-0 items-center justify-center rounded-full text-[10px] font-medium text-white',
         size === 'sm' ? 'h-5 w-5' : 'h-6 w-6',
-        getAvatarGradient(label)
+        getAvatarColor(label)
       ]"
       aria-hidden="true"
     >

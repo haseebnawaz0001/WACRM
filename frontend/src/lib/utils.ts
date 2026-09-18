@@ -99,26 +99,46 @@ export function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-const avatarGradients = [
-  'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-600',
-  'from-rose-500 to-pink-600',
-  'from-amber-500 to-orange-600',
-  'from-emerald-500 to-teal-600',
-  'from-indigo-500 to-blue-600',
-  'from-fuchsia-500 to-purple-600',
-  'from-cyan-500 to-blue-600',
-  'from-orange-500 to-red-600',
-  'from-teal-500 to-emerald-600',
+/**
+ * The colours an avatar can take.
+ *
+ * Flat, not gradients. A two-stop gradient on a 36px circle is decoration at a
+ * size too small to read as one — it shows up as a slightly dirty colour and
+ * makes twenty avatars in a list look like a smudge rather than a set.
+ *
+ * Every entry is deep enough that white initials clear 4.5:1 against it, which
+ * rules out the yellow-to-green part of the wheel at this lightness; the ten
+ * hues left are spaced far enough apart that two rows next to each other are
+ * always told apart. Light mode uses the same colours: they are already dark,
+ * and lightening them would drop the initials below readable.
+ */
+const avatarColors = [
+  'bg-[#2563eb]', // blue
+  'bg-[#4f46e5]', // indigo
+  'bg-[#7c3aed]', // violet
+  'bg-[#9333ea]', // purple
+  'bg-[#c026d3]', // fuchsia
+  'bg-[#db2777]', // pink
+  'bg-[#e11d48]', // rose
+  'bg-[#dc2626]', // red
+  'bg-[#0e7490]', // cyan
+  'bg-[#0f766e]'  // teal
 ]
 
-export function getAvatarGradient(name: string): string {
-  if (!name) return avatarGradients[0]
+/**
+ * Picks a stable colour for a name.
+ *
+ * The same person keeps the same colour everywhere they appear — the list, the
+ * thread header, a note, a deal card — because the colour is doing the work of
+ * recognition before the name is read.
+ */
+export function getAvatarColor(name: string): string {
+  if (!name) return avatarColors[0]
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)
   }
-  return avatarGradients[Math.abs(hash) % avatarGradients.length]
+  return avatarColors[Math.abs(hash) % avatarColors.length]
 }
 
 export function formatLabel(key: string): string {
