@@ -33,6 +33,26 @@ const flowCategories = [
   { value: 'SURVEY', label: 'Survey' }, { value: 'OTHER', label: 'Other' },
 ]
 
+/**
+ * The written name for a category, and for a status.
+ *
+ * flowCategories above already holds "Appointment Booking" and "Lead
+ * Generation"; the create dialog has been using them all along while the table
+ * beside it printed APPOINTMENT_BOOKING and LEAD_GENERATION straight from
+ * Meta. The same list answers both.
+ */
+function categoryLabel(value?: string) {
+  if (!value) return ''
+  return flowCategories.find(c => c.value === value)?.label ?? value
+}
+
+function statusLabel(value?: string) {
+  if (!value) return ''
+  const key = `flows.${value.toLowerCase()}`
+  const translated = t(key)
+  return translated === key ? value : translated
+}
+
 const flows = ref<WhatsAppFlow[]>([])
 const accounts = ref<Account[]>([])
 const isLoading = ref(true)
@@ -277,10 +297,10 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                   <Badge v-if="flow.status?.toUpperCase() === 'DEPRECATED'" variant="destructive" class="text-xs">
                     <Archive class="h-3 w-3 mr-1" />{{ $t('flows.deprecated') }}
                   </Badge>
-                  <Badge v-else variant="outline" :class="[getStatusClass(flow.status), 'text-xs']">{{ flow.status }}</Badge>
+                  <Badge v-else variant="outline" :class="[getStatusClass(flow.status), 'text-xs']">{{ statusLabel(flow.status) }}</Badge>
                 </template>
                 <template #cell-category="{ item: flow }">
-                  <Badge v-if="flow.category" variant="outline" class="text-xs">{{ flow.category }}</Badge>
+                  <Badge v-if="flow.category" variant="outline" class="text-xs">{{ categoryLabel(flow.category) }}</Badge>
                   <span v-else class="text-muted-foreground">—</span>
                 </template>
                 <template #cell-created_at="{ item: flow }">
@@ -310,7 +330,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                     <IconButton
                       :icon="Trash2"
                       :label="$t('flows.deleteTooltip')"
-                      class="h-8 w-8 text-destructive"
+                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
                       @click="flowToDelete = flow; deleteDialogOpen = true"
                     />

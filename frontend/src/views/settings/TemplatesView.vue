@@ -267,17 +267,29 @@ function getStatusBadgeClass(status: string) {
   }
 }
 
-function getCategoryBadgeClass(category: string) {
-  switch (category) {
-    case 'UTILITY':
-      return 'bg-blue-900 text-blue-300 light:bg-blue-100 light:text-blue-800'
-    case 'MARKETING':
-      return 'bg-purple-900 text-purple-300 light:bg-purple-100 light:text-purple-800'
-    case 'AUTHENTICATION':
-      return 'bg-orange-900 text-orange-300 light:bg-orange-100 light:text-orange-800'
-    default:
-      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
-  }
+/**
+ * One quiet treatment for every category.
+ *
+ * Utility, Marketing and Authentication each had a saturated hue of their own,
+ * so a row could carry three coloured pills and the table read as a wall of
+ * colour with nothing standing out. A category is a classification you filter
+ * by, not a state you scan for — the status beside it is the state, and it
+ * keeps its colour.
+ */
+function getCategoryBadgeClass(_category: string) {
+  return 'bg-white/[0.06] text-white/70 light:bg-gray-100 light:text-gray-700'
+}
+
+/**
+ * Meta's enums are shouted: APPROVED, MARKETING, AUTHENTICATION. The locale
+ * files already hold a written form of each; this prefers it and falls back to
+ * the raw value for a status Meta adds that we have no word for yet.
+ */
+function enumLabel(namespace: string, value?: string) {
+  if (!value) return ''
+  const key = `${namespace}.${value.toLowerCase()}`
+  const translated = t(key)
+  return translated === key ? value : translated
 }
 
 function getHeaderIcon(type: string) {
@@ -373,12 +385,12 @@ function getHeaderIcon(type: string) {
                 </template>
                 <template #cell-category="{ item: template }">
                   <Badge :class="getCategoryBadgeClass(template.category)" class="text-xs">
-                    {{ template.category }}
+                    {{ enumLabel('templates', template.category) }}
                   </Badge>
                 </template>
                 <template #cell-status="{ item: template }">
                   <Badge :class="getStatusBadgeClass(template.status)" class="text-xs">
-                    {{ template.status }}
+                    {{ enumLabel('templates', template.status) }}
                   </Badge>
                 </template>
                 <template #cell-quality_rating="{ item: template }">
@@ -393,7 +405,7 @@ function getHeaderIcon(type: string) {
                 <template #cell-header_type="{ item: template }">
                   <div class="flex items-center gap-1">
                     <component :is="getHeaderIcon(template.header_type)" class="h-4 w-4 text-muted-foreground" />
-                    <span class="text-muted-foreground text-sm">{{ template.header_type || 'NONE' }}</span>
+                    <span class="text-muted-foreground text-sm">{{ enumLabel('templates', template.header_type || 'NONE') }}</span>
                   </div>
                 </template>
                 <template #cell-actions="{ item: template }">

@@ -1022,10 +1022,10 @@
     "templateSubmission": "Template Submission",
     "templateSubmissionHint": "This creates a local draft. After saving, click the publish button on the template card to submit it to Meta for approval.",
     "updateTemplate": "Update Template",
-    "approved": "APPROVED",
-    "pending": "PENDING",
-    "rejected": "REJECTED",
-    "draft": "DRAFT",
+    "approved": "Approved",
+    "pending": "Pending",
+    "rejected": "Rejected",
+    "draft": "Draft",
     "utility": "Utility",
     "utilityDesc": "Order updates, account alerts",
     "marketing": "Marketing",
@@ -1690,7 +1690,9 @@
     "saveToMetaConfirmTitle": "Save Flow to Meta",
     "saveToMetaConfirmDescription": "This will push the current version of \"{name}\" to Meta. Are you sure you want to continue?",
     "fetchErrorTitle": "Failed to load flows",
-    "fetchErrorDescription": "Something went wrong while loading flows. Please try again."
+    "fetchErrorDescription": "Something went wrong while loading flows. Please try again.",
+    "published": "Published",
+    "draft": "Draft"
   },
   "businessProfile": {
     "title": "Business Profile",
