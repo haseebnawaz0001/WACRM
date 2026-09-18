@@ -1375,7 +1375,9 @@
     "openTasks": "Open follow-ups",
     "merges": "Merged records",
     "mergedOn": "Another record was merged in on {when}.",
-    "noFields": "No details recorded yet."
+    "noFields": "No details recorded yet.",
+    "today": "Today",
+    "yesterday": "Yesterday"
   },
   "profile": {
     "title": "Profile",
@@ -3319,5 +3321,14 @@
     "dueWeek": "In a week",
     "dueMonth": "In a month",
     "dueMinutes": "In {count} minutes"
+  },
+  "dataTable": {
+    "view": "View",
+    "columns": "Columns",
+    "density": "Density",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "reset": "Reset to defaults",
+    "resizeColumn": "Resize the {column} column"
   }
 }

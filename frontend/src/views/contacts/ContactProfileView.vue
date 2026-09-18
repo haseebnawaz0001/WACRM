@@ -34,7 +34,8 @@ import { wsService } from '@/services/websocket'
 import { getInitials, getAvatarColor, formatDateTime } from '@/lib/utils'
 import {
   User, MessageSquare, ListChecks, KanbanSquare, Tag, ArrowLeft,
-  RefreshCw, FileText, Phone, ArrowRightLeft
+  RefreshCw, FileText, Phone, ArrowRightLeft, Megaphone, Bot, UserCheck,
+  CircleDot, AlertTriangle
 } from 'lucide-vue-next'
 
 const { t, locale } = useI18n()
@@ -76,18 +77,115 @@ const contactId = computed(() => String(route.params.id))
 const canSeeDeals = computed(() => authStore.hasPermission('deals', 'read'))
 const canSeeTasks = computed(() => authStore.hasPermission('tasks', 'read'))
 
-/** The icon for each kind of timeline entry, so the feed can be skimmed. */
-const iconFor: Record<string, any> = {
+/**
+ * The icon for each kind of entry, so the feed can be skimmed.
+ *
+ * These keys have to be the ones the API sends. Three of them were not: the map
+ * looked for `deal`, `conversation` and nothing at all for lifecycle changes,
+ * campaign sends or chatbot sessions, while the server sends `activity`,
+ * `conversation_status`, `lifecycle_stage`, `campaign_send` and
+ * `chatbot_session`. Five of the thirteen kinds therefore fell through to the
+ * fallback, and since those five cover deals, conversations and lifecycle
+ * moves, most of the column was the same grey circular arrow — an icon per row
+ * that told you nothing.
+ */
+const iconForType: Record<string, any> = {
   message_burst: MessageSquare,
   note: FileText,
   call: Phone,
   task: ListChecks,
-  deal: KanbanSquare,
   tag: Tag,
   transfer: ArrowRightLeft,
-  assignment: User,
-  conversation: MessageSquare,
-  field_change: RefreshCw
+  assignment: UserCheck,
+  conversation_status: CircleDot,
+  field_change: RefreshCw,
+  lifecycle_stage: RefreshCw,
+  campaign_send: Megaphone,
+  chatbot_session: Bot,
+  activity: CircleDot
+}
+
+/**
+ * An `activity` covers deals, tasks and the contact record itself, so the row's
+ * subject is a better answer than its type where the server gives us one.
+ */
+const iconForSubject: Record<string, any> = {
+  deal: KanbanSquare,
+  task: ListChecks,
+  contact: User,
+  conversation: MessageSquare
+}
+
+function iconFor(item: TimelineItem) {
+  if (item.type === 'task' && /overdue/i.test(item.summary)) return AlertTriangle
+  const subject = item.data?.subject_type as string | undefined
+  if (item.type === 'activity' && subject && iconForSubject[subject]) {
+    return iconForSubject[subject]
+  }
+  return iconForType[item.type] ?? RefreshCw
+}
+
+/**
+ * Entries in the order they happened, under the day they happened on.
+ *
+ * The list repeated the full date on every row — "Sep 17, 2026 11:42 PM" three
+ * times in a row — which is the part the eye already knows and the time is the
+ * part it wants. The day is said once, at the top of its own group.
+ */
+const groupedItems = computed(() => {
+  const groups: Array<{ key: string; label: string; items: TimelineItem[] }> = []
+  for (const item of items.value) {
+    const date = new Date(item.occurred_at)
+    const key = date.toDateString()
+    const existing = groups.find(g => g.key === key)
+    if (existing) {
+      existing.items.push(item)
+      continue
+    }
+    groups.push({ key, label: dayLabel(date), items: [item] })
+  }
+  return groups
+})
+
+function dayLabel(date: Date) {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (date.toDateString() === today.toDateString()) return t('contactProfile.today')
+  if (date.toDateString() === yesterday.toDateString()) return t('contactProfile.yesterday')
+  return new Intl.DateTimeFormat(locale.value, {
+    day: 'numeric', month: 'long', year: 'numeric'
+  }).format(date)
+}
+
+function timeOf(value: string) {
+  return new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit' })
+    .format(new Date(value))
+}
+
+/**
+ * The actor, but only when the sentence above has not already said it.
+ *
+ * Every summary that has an actor ends "... by Omar Haddad", and the line
+ * underneath repeated "Omar Haddad" on its own. Same for a message burst: "9
+ * messages · 4 from the customer" sat above "9 messages, 4 from them", which
+ * also said "1 messages" when there was one.
+ */
+/**
+ * The entries worth noticing in a wall of them.
+ *
+ * A task going overdue and an SLA being breached are the two things on this
+ * feed somebody has to act on, and they were rendered exactly like a tag being
+ * added. Nothing else is coloured, so these are the only rows that catch.
+ */
+function isAlert(item: TimelineItem) {
+  return /overdue|breached|failed|lost/i.test(item.summary)
+}
+
+function actorLine(item: TimelineItem) {
+  const name = item.actor?.name
+  if (!name) return null
+  return item.summary.includes(name) ? null : name
 }
 
 async function load() {
@@ -417,50 +515,72 @@ onUnmounted(() => {
               {{ t('contactProfile.noHistory') }}
             </p>
 
-            <ol v-else class="relative space-y-4 border-l pl-6">
-              <li
-                v-for="item in items"
-                :key="item.id"
-                class="relative rounded-md px-2 py-1 -mx-2 transition-colors"
-                :class="linkFor(item)
-                  ? 'cursor-pointer hover:bg-muted/60 focus-within:bg-muted/60'
-                  : ''"
-                @click="openItem(item)"
-              >
-                <span class="absolute -left-[31px] flex h-5 w-5 items-center justify-center rounded-full bg-background ring-4 ring-background">
-                  <component :is="iconFor[item.type] || RefreshCw" class="h-3.5 w-3.5 text-muted-foreground" />
-                </span>
+            <div v-else class="space-y-5">
+              <section v-for="group in groupedItems" :key="group.key">
+                <!-- The day, said once. -->
+                <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {{ group.label }}
+                </h3>
 
-                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                  <!-- A real link where there is somewhere to go, so the entry
-                       can be opened in a new tab, reached by keyboard and read
-                       by a screen reader as the action it is. -->
-                  <component
-                    :is="linkFor(item) ? 'a' : 'p'"
-                    :href="linkFor(item) ?? undefined"
-                    class="text-sm"
-                    :class="linkFor(item) ? 'hover:underline' : ''"
-                    @click.prevent="openItem(item)"
-                  >{{ item.summary }}</component>
-                  <time class="shrink-0 text-xs text-muted-foreground">
-                    {{ formatDateTime(item.occurred_at) }}
-                  </time>
-                </div>
+                <!--
+                  A rail with a node per entry. The line is drawn behind the
+                  nodes rather than as a border on the list, so it stops at the
+                  last entry of a day instead of running past it.
+                -->
+                <ol class="relative space-y-px">
+                  <li
+                    v-for="(item, index) in group.items"
+                    :key="item.id"
+                    class="group/entry relative flex gap-3 rounded-sm px-2 py-2 -mx-2 transition-colors"
+                    :class="linkFor(item) ? 'cursor-pointer hover:bg-muted/50' : ''"
+                    @click="openItem(item)"
+                  >
+                    <span
+                      v-if="index < group.items.length - 1"
+                      class="absolute left-[15px] top-[30px] h-[calc(100%-22px)] w-px bg-white/[0.09] light:bg-gray-200"
+                      aria-hidden="true"
+                    />
+                    <span
+                      class="relative z-[1] mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border bg-background"
+                      :class="isAlert(item) && 'border-destructive/40 text-destructive'"
+                    >
+                      <component :is="iconFor(item)" class="h-3.5 w-3.5" :class="!isAlert(item) && 'text-muted-foreground'" />
+                    </span>
 
-                <p v-if="item.group" class="text-xs text-muted-foreground">
-                  {{ t('contactProfile.exchange', {
-                    count: item.group.count, from: item.group.from_customer
-                  }) }}
-                </p>
-                <p v-else-if="item.actor?.name" class="text-xs text-muted-foreground">
-                  {{ item.actor.name }}
-                </p>
-              </li>
-            </ol>
+                    <div class="flex min-w-0 flex-1 items-baseline gap-3">
+                      <!-- A real link where there is somewhere to go, so the
+                           entry can be opened in a new tab, reached by keyboard
+                           and read by a screen reader as the action it is. -->
+                      <component
+                        :is="linkFor(item) ? 'a' : 'p'"
+                        :href="linkFor(item) ?? undefined"
+                        class="min-w-0 flex-1 text-sm"
+                        :class="[
+                          linkFor(item) ? 'group-hover/entry:underline' : '',
+                          isAlert(item) ? 'font-medium text-destructive' : 'text-foreground'
+                        ]"
+                        @click.prevent="openItem(item)"
+                      >{{ item.summary }}<span
+                        v-if="actorLine(item)"
+                        class="text-muted-foreground"
+                      > · {{ actorLine(item) }}</span></component>
 
-            <Button v-if="nextBefore" variant="ghost" size="sm" class="mt-3" @click="loadMore">
-              {{ t('contactProfile.loadMore') }}
-            </Button>
+                      <time
+                        class="shrink-0 text-xs tabular-nums text-muted-foreground"
+                        :datetime="item.occurred_at"
+                        :title="formatDateTime(item.occurred_at)"
+                      >{{ timeOf(item.occurred_at) }}</time>
+                    </div>
+                  </li>
+                </ol>
+              </section>
+            </div>
+
+            <div v-if="nextBefore" class="mt-4 flex justify-center border-t pt-4">
+              <Button variant="outline" size="sm" @click="loadMore">
+                {{ t('contactProfile.loadMore') }}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
