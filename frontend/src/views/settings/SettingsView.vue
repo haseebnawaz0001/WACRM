@@ -291,9 +291,9 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('settings.title')" :description="$t('settings.subtitle')" :icon="Settings" />
     <ScrollArea class="flex-1">
-      <div class="p-6 space-y-4 max-w-4xl mx-auto">
+      <div class="p-6 space-y-4 max-w-4xl">
         <Tabs default-value="general" class="w-full">
-          <TabsList class="grid w-full grid-cols-3 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
+          <TabsList class="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
             <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Settings class="h-4 w-4 mr-2" />
               {{ $t('settings.general') }}

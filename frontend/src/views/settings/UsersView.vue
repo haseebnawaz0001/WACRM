@@ -262,11 +262,21 @@ async function copyInviteLink() {
                       <component :is="getRoleIcon(getRoleName(user))" class="h-4 w-4 text-primary" />
                     </div>
                     <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <p class="font-medium truncate">{{ user.full_name }}</p>
-                        <Badge v-if="user.id === currentUserId" variant="outline" class="text-xs">{{ $t('users.you') }}</Badge>
-                        <Badge v-if="user.is_super_admin" variant="default" class="text-xs">{{ $t('users.superAdmin') }}</Badge>
-                        <Badge v-if="user.is_member" variant="secondary" class="text-xs">{{ $t('users.member') }}</Badge>
+                      <!--
+                        The name gets the room, and the badges take what is
+                        left. They were peers in a flex row, so three of them on
+                        one person squeezed the name to "Ad…" — the one thing in
+                        the row nobody can guess — and wrapped "Super Admin"
+                        onto two lines, which made that row taller than the
+                        rest.
+                      -->
+                      <div class="flex min-w-0 items-center gap-2">
+                        <p class="min-w-0 flex-1 truncate font-medium">{{ user.full_name }}</p>
+                        <div class="flex shrink-0 items-center gap-1.5">
+                          <Badge v-if="user.id === currentUserId" variant="outline" class="whitespace-nowrap text-xs">{{ $t('users.you') }}</Badge>
+                          <Badge v-if="user.is_super_admin" variant="secondary" class="whitespace-nowrap text-xs">{{ $t('users.superAdmin') }}</Badge>
+                          <Badge v-if="user.is_member" variant="secondary" class="whitespace-nowrap text-xs">{{ $t('users.member') }}</Badge>
+                        </div>
                       </div>
                     </div>
                   </RouterLink>
@@ -278,7 +288,13 @@ async function copyInviteLink() {
                   <Badge :variant="getRoleBadgeVariant(getRoleName(user))" class="capitalize">{{ getRoleName(user) }}</Badge>
                 </template>
                 <template #cell-status="{ item: user }">
-                  <Badge variant="outline" :class="user.is_active ? 'border-green-600 text-green-600' : ''">{{ user.is_active ? $t('common.active') : $t('common.inactive') }}</Badge>
+                  <!-- Inactive is the exception worth seeing. Active was the
+                       coloured one on eight of nine rows, which is a colour
+                       spent on the answer you already expected. -->
+                  <Badge
+                    variant="outline"
+                    :class="user.is_active ? '' : 'border-amber-600/50 text-amber-500'"
+                  >{{ user.is_active ? $t('common.active') : $t('common.inactive') }}</Badge>
                 </template>
                 <template #cell-created="{ item: user }">
                   <span class="text-muted-foreground">{{ formatDate(user.created_at) }}</span>
@@ -292,11 +308,11 @@ async function copyInviteLink() {
                       :label="user.is_member
                         ? $t('users.removeMemberTooltip')
                         : (user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip'))"
-                      class="h-8 w-8"
+                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       :disabled="user.id === currentUserId"
                       @click="openDeleteDialog(user)"
                     >
-                      <component :is="user.is_member ? UserMinus : Trash2" class="h-4 w-4 text-destructive" />
+                      <component :is="user.is_member ? UserMinus : Trash2" class="h-4 w-4" />
                     </IconButton>
                   </div>
                 </template>
