@@ -398,3 +398,83 @@ func TestAssignConversation_UnassigningNotifiesNobody(t *testing.T) {
 	assert.Len(t, notificationsFor(t, app, agent.ID, models.NotificationConversationAssigned), 1,
 		"only the assignment notified, not the unassignment")
 }
+
+// The unanswered view is "who is waiting on us right now", which is not the
+// same question as "who has never been answered".
+//
+// A conversation answered yesterday with a fresh question in it today is
+// exactly the one that gets forgotten, and first_response_at cannot see it —
+// that field was set the first time anybody replied and never moves again.
+func TestListInbox_UnansweredFindsAConversationAnsweredBefore(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	me := adminFor(t, app, org)
+	orgID, userID := org.ID, me.ID
+	ctx := context.Background()
+
+	// Answered once, so first_response_at is set and stays set.
+	answered := testutil.CreateTestContactWith(t, app.DB, orgID, testutil.WithPhoneNumber("919990000001"))
+	_, err := app.Conversations().TouchInbound(ctx, orgID, answered.ID, "acct", time.Now().UTC(), false)
+	require.NoError(t, err)
+	_, err = app.Conversations().RecordOutbound(ctx, orgID, answered.ID,
+		models.SenderAgent, &userID, time.Now().UTC())
+	require.NoError(t, err)
+
+	// …and then the customer writes again, so somebody is waiting.
+	_, err = app.Conversations().TouchInbound(ctx, orgID, answered.ID,
+		"acct", time.Now().UTC(), false)
+	require.NoError(t, err)
+
+	page := listInbox(t, app, orgID, userID, handlers.InboxViewUnanswered)
+	assert.True(t, inboxIDs(page)[answered.ID.String()],
+		"a conversation with a new unanswered message belongs in the unanswered view")
+}
+
+// Answering it takes it out of the view, which is the only behaviour that makes
+// the view worth opening twice.
+func TestListInbox_UnansweredDropsOnceAnswered(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	me := adminFor(t, app, org)
+	orgID, userID := org.ID, me.ID
+	ctx := context.Background()
+
+	waiting := testutil.CreateTestContactWith(t, app.DB, orgID, testutil.WithPhoneNumber("919990000002"))
+	_, err := app.Conversations().TouchInbound(ctx, orgID, waiting.ID, "acct", time.Now().UTC(), false)
+	require.NoError(t, err)
+
+	page := listInbox(t, app, orgID, userID, handlers.InboxViewUnanswered)
+	require.True(t, inboxIDs(page)[waiting.ID.String()], "should start out waiting")
+
+	_, err = app.Conversations().RecordOutbound(ctx, orgID, waiting.ID,
+		models.SenderAgent, &userID, time.Now().UTC())
+	require.NoError(t, err)
+
+	page = listInbox(t, app, orgID, userID, handlers.InboxViewUnanswered)
+	assert.False(t, inboxIDs(page)[waiting.ID.String()],
+		"answering should take it out of the unanswered view")
+}
+
+// The view exists to be worked top to bottom, so the longest wait comes first.
+// Sorted by recency — the inbox default — that person is at the bottom.
+func TestListInbox_UnansweredPutsTheLongestWaitFirst(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	me := adminFor(t, app, org)
+	orgID, userID := org.ID, me.ID
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	oldest := testutil.CreateTestContactWith(t, app.DB, orgID, testutil.WithPhoneNumber("919990000003"))
+	_, err := app.Conversations().TouchInbound(ctx, orgID, oldest.ID, "acct", now.Add(-4*time.Hour), false)
+	require.NoError(t, err)
+
+	newest := testutil.CreateTestContactWith(t, app.DB, orgID, testutil.WithPhoneNumber("919990000004"))
+	_, err = app.Conversations().TouchInbound(ctx, orgID, newest.ID, "acct", now.Add(-5*time.Minute), false)
+	require.NoError(t, err)
+
+	page := listInbox(t, app, orgID, userID, handlers.InboxViewUnanswered)
+	require.GreaterOrEqual(t, len(page.Data.Conversations), 2)
+	assert.Equal(t, oldest.ID.String(), page.Data.Conversations[0].ContactID,
+		"the person waiting longest should be the one to answer next")
+}

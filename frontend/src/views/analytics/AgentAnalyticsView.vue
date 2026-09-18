@@ -38,6 +38,9 @@ interface AgentAnalyticsSummary {
   avg_queue_time_mins: number
   avg_first_response_mins: number
   avg_resolution_mins: number
+  response_rate_percent: number
+  answered_conversations: number
+  awaiting_conversations: number
   transfers_by_source: Record<string, number>
   total_break_time_mins: number
   break_count: number
@@ -404,6 +407,33 @@ void _displayStats.value // Suppress unused warning
                     : (analytics.my_stats?.avg_resolution_mins ?? 0)) }}
                 </div>
                 <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.timeToResolve') }}</p>
+              </div>
+            </div>
+
+            <!--
+              Response rate, which is the question the response *times* beside
+              it cannot answer: a conversation nobody ever replied to drops out
+              of an average, so the worst outcome there improves the number.
+              Whole-organisation only — per agent, the denominator would have
+              to decide which unanswered conversations were whose, and any
+              answer to that is an argument rather than a measurement.
+            -->
+            <div v-if="isAdminOrManager && selectedAgentId === 'all'" class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('agentAnalytics.responseRate') }}</span>
+                <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <MessageSquare class="h-5 w-5 text-emerald-400" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
+                  {{ (analytics.summary?.response_rate_percent ?? 0).toFixed(0) }}%
+                </div>
+                <p class="text-xs text-white/40 light:text-gray-500 mt-1">
+                  {{ (analytics.summary?.awaiting_conversations ?? 0) > 0
+                    ? $t('agentAnalytics.awaitingCount', { count: analytics.summary?.awaiting_conversations ?? 0 })
+                    : $t('agentAnalytics.everyoneAnswered') }}
+                </p>
               </div>
             </div>
 

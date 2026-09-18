@@ -11,14 +11,30 @@ import (
 
 // AgentAnalyticsSummary represents overall agent analytics
 type AgentAnalyticsSummary struct {
-	TotalTransfersHandled int64            `json:"total_transfers_handled"`
-	ActiveTransfers       int64            `json:"active_transfers"`
-	AvgQueueTimeMins      float64          `json:"avg_queue_time_mins"`
-	AvgFirstResponseMins  float64          `json:"avg_first_response_mins"`
-	AvgResolutionMins     float64          `json:"avg_resolution_mins"`
-	TransfersBySource     map[string]int64 `json:"transfers_by_source"`
-	TotalBreakTimeMins    float64          `json:"total_break_time_mins"`
-	BreakCount            int64            `json:"break_count"`
+	TotalTransfersHandled int64   `json:"total_transfers_handled"`
+	ActiveTransfers       int64   `json:"active_transfers"`
+	AvgQueueTimeMins      float64 `json:"avg_queue_time_mins"`
+	AvgFirstResponseMins  float64 `json:"avg_first_response_mins"`
+	AvgResolutionMins     float64 `json:"avg_resolution_mins"`
+
+	// How often a customer who wrote in got an answer at all, as a percentage.
+	//
+	// The product measured how *fast* people replied and never whether they
+	// replied: a conversation nobody ever answered simply dropped out of the
+	// average, so the slowest possible outcome improved the number it should
+	// have ruined.
+	//
+	// The denominator is conversations where a customer actually said
+	// something, because one nobody wrote into is not one anybody failed to
+	// answer. The counts are returned with the rate so a small denominator is
+	// visible rather than hidden behind a confident percentage.
+	ResponseRatePercent   float64 `json:"response_rate_percent"`
+	AnsweredConversations int64   `json:"answered_conversations"`
+	AwaitingConversations int64   `json:"awaiting_conversations"`
+
+	TransfersBySource  map[string]int64 `json:"transfers_by_source"`
+	TotalBreakTimeMins float64          `json:"total_break_time_mins"`
+	BreakCount         int64            `json:"break_count"`
 }
 
 // AgentPerformanceStats represents performance metrics for an agent
@@ -254,6 +270,27 @@ func (a *App) calculateSummaryStats(orgID uuid.UUID, start, end time.Time, summa
 		Where("opened_at >= ? AND opened_at <= ?", start, end).
 		Scan(&firstResponseResult)
 	summary.AvgFirstResponseMins = firstResponseResult.Avg
+
+	// Response rate, over the same conversations the average above is drawn
+	// from — except this one counts the ones that never got a reply, which is
+	// the whole point of it.
+	type responseRate struct {
+		Answered int64
+		Asked    int64
+	}
+	var rate responseRate
+	a.DB.Model(&models.Conversation{}).
+		Select(`
+			count(*) FILTER (WHERE first_response_at IS NOT NULL) AS answered,
+			count(*) AS asked`).
+		Where("organization_id = ? AND first_customer_message_at IS NOT NULL", orgID).
+		Where("opened_at >= ? AND opened_at <= ?", start, end).
+		Scan(&rate)
+	summary.AnsweredConversations = rate.Answered
+	summary.AwaitingConversations = rate.Asked - rate.Answered
+	if rate.Asked > 0 {
+		summary.ResponseRatePercent = float64(rate.Answered) / float64(rate.Asked) * 100
+	}
 
 	// Average resolution time (time from transfer to resume)
 	var resolutionTimeResult AvgResult

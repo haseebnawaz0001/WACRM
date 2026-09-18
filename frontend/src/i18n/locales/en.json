@@ -2315,7 +2315,10 @@
     "performanceComparison": "Performance comparison across agents",
     "noDataAvailable": "No data available",
     "noAgentsFound": "No agents found",
-    "errorLoadingAnalytics": "Failed to load agent analytics. Please try again."
+    "errorLoadingAnalytics": "Failed to load agent analytics. Please try again.",
+    "responseRate": "Response rate",
+    "awaitingCount": "{count} still waiting on a reply",
+    "everyoneAnswered": "Everyone who wrote in got a reply"
   },
   "metaInsights": {
     "title": "Meta Insights",
@@ -3186,7 +3189,9 @@
     "viewContacts": "Contacts",
     "pickNextHint": "Take the next waiting conversation and open it",
     "waitingNow": "just now",
-    "searchConversations": "Search conversations"
+    "searchConversations": "Search conversations",
+    "viewUnanswered": "Waiting",
+    "unansweredEmpty": "Nobody is waiting on a reply"
   },
   "segments": {
     "title": "Segments",

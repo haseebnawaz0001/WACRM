@@ -120,14 +120,14 @@ const { t } = useI18n()
  * conversations; `contacts` reads the contact list, which is the only way to
  * reach somebody you have never exchanged a message with.
  */
-type ListView = 'mine' | 'unassigned' | 'bot' | 'all' | 'contacts'
+type ListView = 'mine' | 'unassigned' | 'unanswered' | 'bot' | 'all' | 'contacts'
 
 const LIST_VIEW_KEY = 'inbox-view'
 
 function readListView(): ListView {
   try {
     const saved = localStorage.getItem(LIST_VIEW_KEY)
-    return (['mine', 'unassigned', 'bot', 'all', 'contacts'] as const).includes(saved as ListView)
+    return (['mine', 'unassigned', 'unanswered', 'bot', 'all', 'contacts'] as const).includes(saved as ListView)
       ? (saved as ListView)
       : 'mine'
   } catch {
@@ -2538,7 +2538,7 @@ async function sendMediaMessage() {
       <div class="border-b border-white/[0.08] px-2 py-2 light:border-gray-200">
         <div class="flex items-center gap-0.5 overflow-x-auto pb-1">
           <button
-            v-for="v in (['mine', 'unassigned', 'bot', 'all'] as const)"
+            v-for="v in (['mine', 'unassigned', 'unanswered', 'bot', 'all'] as const)"
             :key="v"
             type="button"
             :class="[
@@ -2746,7 +2746,13 @@ async function sendMediaMessage() {
           <div v-if="listRows.length === 0 && !isQueueLoading" class="px-3 py-8 text-center text-white/50 light:text-gray-500">
             <Check v-if="isQueueView" class="h-6 w-6 mx-auto mb-1.5 text-emerald-400/70" />
             <User v-else class="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-            <p class="text-sm">{{ isQueueView ? $t('inbox.queueEmpty') : $t('chat.noContacts') }}</p>
+            <!-- An empty Waiting list is a different piece of news from an
+                 empty queue, and worth saying in its own words. -->
+            <p class="text-sm">
+              {{ listView === 'unanswered'
+                ? $t('inbox.unansweredEmpty')
+                : isQueueView ? $t('inbox.queueEmpty') : $t('chat.noContacts') }}
+            </p>
           </div>
         </div>
       </ScrollArea>

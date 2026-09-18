@@ -26,6 +26,15 @@ const (
 	InboxViewBot = "bot"
 	// InboxViewAll is everything the viewer may see.
 	InboxViewAll = "all"
+
+	// InboxViewUnanswered is everybody currently waiting on a reply, whoever
+	// owns the conversation.
+	//
+	// waiting_since is the arrival time of the oldest customer message nobody
+	// has answered, so it is the right question to ask: first_response_at
+	// would only find conversations never answered at all, and miss the one
+	// answered yesterday that has an unanswered question in it today.
+	InboxViewUnanswered = "unanswered"
 )
 
 const (
@@ -109,6 +118,11 @@ func (a *App) ListInbox(r *fastglue.Request) error {
 	case InboxViewBot:
 		query = query.Where("conversations.handling = ? AND conversations.assignee_id IS NULL",
 			models.HandlingBot)
+	case InboxViewUnanswered:
+		// Bot-handled conversations are excluded for the same reason they are
+		// excluded from the queue: nobody is waiting on a person there.
+		query = query.Where("conversations.waiting_since IS NOT NULL AND conversations.handling <> ?",
+			models.HandlingBot)
 	case InboxViewAll:
 		// No extra predicate; the visibility scope below still applies.
 	default:
@@ -138,10 +152,24 @@ func (a *App) ListInbox(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load inbox", nil, "")
 	}
 
+	// Newest first is right for reading an inbox and wrong for clearing one:
+	// the person who has waited longest is the one to answer next, and they
+	// are at the bottom of a list sorted by recency. `sort=waiting` puts them
+	// first, and the unanswered view takes it as its default because that is
+	// the only order that view is for.
+	sort := strings.ToLower(string(r.RequestCtx.QueryArgs().Peek("sort")))
+	if sort == "" && view == InboxViewUnanswered {
+		sort = "waiting"
+	}
+	order := "conversations.last_message_at DESC NULLS LAST, conversations.opened_at DESC"
+	if sort == "waiting" {
+		order = "conversations.waiting_since ASC NULLS LAST, conversations.last_message_at DESC NULLS LAST"
+	}
+
 	var rows []models.Conversation
 	if err := query.
 		Preload("Contact").
-		Order("conversations.last_message_at DESC NULLS LAST, conversations.opened_at DESC").
+		Order(order).
 		Offset((page - 1) * limit).Limit(limit).
 		Find(&rows).Error; err != nil {
 		a.Log.Error("Failed to list inbox", "error", err, "org_id", orgID)
@@ -212,6 +240,7 @@ func (a *App) GetInboxCounts(r *fastglue.Request) error {
 		Mine       int64
 		Unassigned int64
 		Bot        int64
+		Unanswered int64
 		All        int64
 	}
 	var out counts
@@ -221,6 +250,7 @@ func (a *App) GetInboxCounts(r *fastglue.Request) error {
 			count(*) FILTER (WHERE assignee_id = ?) AS mine,
 			count(*) FILTER (WHERE assignee_id IS NULL AND handling <> 'bot') AS unassigned,
 			count(*) FILTER (WHERE assignee_id IS NULL AND handling = 'bot') AS bot,
+			count(*) FILTER (WHERE waiting_since IS NOT NULL AND handling <> 'bot') AS unanswered,
 			count(*) AS all`, userID).
 		Where("organization_id = ? AND status <> ?", orgID, models.ConversationResolved).
 		Scan(&out).Error
@@ -230,7 +260,8 @@ func (a *App) GetInboxCounts(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"mine": out.Mine, "unassigned": out.Unassigned, "bot": out.Bot, "all": out.All,
+		"mine": out.Mine, "unassigned": out.Unassigned, "bot": out.Bot,
+		"unanswered": out.Unanswered, "all": out.All,
 	})
 }
 

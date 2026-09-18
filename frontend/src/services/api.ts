@@ -438,11 +438,13 @@ export interface InboxCounts {
   mine: number
   unassigned: number
   bot: number
+  /** Conversations with a customer message nobody has answered yet. */
+  unanswered: number
   all: number
 }
 
 export const inboxService = {
-  list: (params: { view?: string; status?: string; limit?: number; offset?: number } = {}) =>
+  list: (params: { view?: string; status?: string; sort?: string; limit?: number; offset?: number } = {}) =>
     api.get<{ conversations: InboxRow[]; total: number }>(`/inbox${toQuery(params)}`),
   counts: () => api.get<InboxCounts>('/inbox/counts'),
   resolve: (contactId: string, reason?: string) =>
