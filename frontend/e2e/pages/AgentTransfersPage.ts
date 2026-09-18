@@ -17,7 +17,11 @@ export class AgentTransfersPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.locator('h1').filter({ hasText: 'Transfers' })
+    // "Transfer SLA", the name the sidebar uses for this destination. It used
+    // to read "Transfers", which is also what /chatbot/transfers redirects to —
+    // the inbox's unassigned view — so two different places answered to one
+    // name.
+    this.heading = page.locator('h1').filter({ hasText: 'Transfer SLA' })
     this.pickNextButton = page.getByRole('button', { name: /Pick Next/i })
     this.myTransfersTab = page.getByRole('tab', { name: /My Transfers/i })
     this.queueTab = page.getByRole('tab', { name: /Queue/i })

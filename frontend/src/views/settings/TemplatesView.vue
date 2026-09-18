@@ -296,7 +296,7 @@ function getHeaderIcon(type: string) {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('templates.title')" :subtitle="$t('templates.subtitle')" :icon="FileText">
+    <PageHeader :title="$t('templates.title')" :description="$t('templates.subtitle')" :icon="FileText">
       <template #actions>
         <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'">
           <Loader2 v-if="isSyncing" class="h-4 w-4 mr-2 animate-spin" />

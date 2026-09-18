@@ -317,7 +317,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('agentTransfers.title')" :subtitle="$t('agentTransfers.subtitle')" :icon="UserX">
+    <PageHeader :title="$t('agentTransfers.title')" :description="$t('agentTransfers.subtitle')" :icon="UserX">
       <template v-if="!isAdminOrManager" #actions>
         <div class="flex items-center gap-4">
           <div class="text-sm text-white/50 light:text-gray-500">

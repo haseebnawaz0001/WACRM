@@ -373,7 +373,7 @@ function removeEscalationUser(userId: string) {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('chatbotSettings.title')" :subtitle="$t('chatbotSettings.subtitle')" :icon="Bot" />
+    <PageHeader :title="$t('chatbotSettings.title')" :description="$t('chatbotSettings.subtitle')" :icon="Bot" />
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-4 max-w-4xl mx-auto">
         <Tabs default-value="messages" class="w-full">

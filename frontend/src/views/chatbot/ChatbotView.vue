@@ -224,8 +224,8 @@ const statCards = computed(() => [
           <RouterLink to="/chatbot/keywords" class="card-interactive rounded-lg border border-white/[0.08] bg-white/[0.02] h-full light:bg-white light:border-gray-200">
             <div class="p-6">
               <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                  <Key class="h-5 w-5 text-white" />
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
+                  <Key class="h-5 w-5 text-white/70 light:text-gray-600" />
                 </div>
                 <div>
                   <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.keywordRules') }}</h3>
@@ -243,8 +243,8 @@ const statCards = computed(() => [
           <RouterLink to="/chatbot/flows" class="card-interactive rounded-lg border border-white/[0.08] bg-white/[0.02] h-full light:bg-white light:border-gray-200">
             <div class="p-6">
               <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
-                  <Workflow class="h-5 w-5 text-white" />
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
+                  <Workflow class="h-5 w-5 text-white/70 light:text-gray-600" />
                 </div>
                 <div>
                   <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.conversationFlows') }}</h3>
@@ -262,8 +262,8 @@ const statCards = computed(() => [
           <RouterLink to="/chatbot/ai" class="card-interactive rounded-lg border border-white/[0.08] bg-white/[0.02] h-full light:bg-white light:border-gray-200">
             <div class="p-6">
               <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
-                  <Sparkles class="h-5 w-5 text-white" />
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
+                  <Sparkles class="h-5 w-5 text-white/70 light:text-gray-600" />
                 </div>
                 <div>
                   <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.aiContexts') }}</h3>

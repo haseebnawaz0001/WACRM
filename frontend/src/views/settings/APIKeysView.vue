@@ -106,7 +106,7 @@ onMounted(() => fetchItems())
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('apiKeys.title')" :subtitle="$t('apiKeys.subtitle')" :icon="Key" back-link="/settings">
+    <PageHeader :title="$t('apiKeys.title')" :description="$t('apiKeys.subtitle')" :icon="Key" back-link="/settings">
       <template #actions>
         <RouterLink v-if="canWrite" to="/settings/api-keys/new">
           <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>

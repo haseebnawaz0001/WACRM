@@ -245,7 +245,7 @@ function getProgressPercentage(campaign: Campaign): number {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
       :title="$t('campaigns.title')"
-      :subtitle="$t('campaigns.subtitle')"
+      :description="$t('campaigns.subtitle')"
       :icon="Megaphone"
     >
       <template #actions>

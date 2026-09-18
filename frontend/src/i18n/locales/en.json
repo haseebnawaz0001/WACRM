@@ -1996,8 +1996,8 @@
     "slaSaveFailed": "Failed to save SLA settings"
   },
   "agentTransfers": {
-    "title": "Transfers",
-    "subtitle": "Manage agent transfers and queue",
+    "title": "Transfer SLA",
+    "subtitle": "Who is waiting on a handover, and how long they have been waiting.",
     "waitingInQueue": "{count} waiting in queue",
     "pickNext": "Pick Next",
     "queuePickupDisabled": "Queue pickup is disabled by your administrator",

@@ -201,8 +201,8 @@ onMounted(async () => {
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div class="h-10 w-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
-              <Key class="h-5 w-5 text-white" />
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+              <Key class="h-5 w-5 text-muted-foreground" />
             </div>
             <div class="min-w-0">
               <p class="font-medium truncate">{{ apiKey?.name }}</p>

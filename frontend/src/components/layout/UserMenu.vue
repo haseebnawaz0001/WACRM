@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { LogOut, User } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import { getInitials } from '@/lib/utils'
+import { getInitials, getAvatarColor } from '@/lib/utils'
 import ThemeSwitcher from './ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
@@ -176,7 +176,12 @@ const handleLogout = () => {
         >
           <Avatar class="h-7 w-7 ring-2 ring-white/[0.1] light:ring-gray-200">
             <AvatarImage :src="undefined" />
-            <AvatarFallback class="text-xs bg-gradient-to-br from-emerald-500 to-green-600 text-white">
+            <!-- The same flat palette every other avatar in the product uses.
+                 This one kept its gradient, so the one avatar always on screen
+                 was the only one that still had it — and it was emerald for
+                 everybody, which is the opposite of what an avatar colour is
+                 for. -->
+            <AvatarFallback :class="'text-xs text-white ' + getAvatarColor(authStore.user?.full_name || 'U')">
               {{ getInitials(authStore.user?.full_name || 'U') }}
             </AvatarFallback>
           </Avatar>

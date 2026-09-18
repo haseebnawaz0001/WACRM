@@ -236,7 +236,7 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('sso.title')" :subtitle="$t('sso.subtitle')" :icon="ShieldCheck" />
+    <PageHeader :title="$t('sso.title')" :description="$t('sso.subtitle')" :icon="ShieldCheck" />
 
     <ErrorState
       v-if="fetchError && !isLoading"
