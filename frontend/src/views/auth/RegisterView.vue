@@ -152,7 +152,7 @@ const handleRegister = async () => {
       </form>
 
       <div v-if="organizationId" class="px-8 pb-8">
-        <p class="text-sm text-center text-white/40 light:text-gray-500">
+        <p class="text-sm text-center text-white/50 light:text-gray-500">
           {{ $t('auth.alreadyHaveAccount') }}
           <RouterLink to="/login" class="text-emerald-400 light:text-emerald-600 hover:underline">
             {{ $t('auth.signIn') }}

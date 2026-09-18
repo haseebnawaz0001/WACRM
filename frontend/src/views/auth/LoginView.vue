@@ -145,7 +145,7 @@ const initiateSSO = (provider: string) => {
       <div v-if="ssoProviders.length > 0" class="px-8 pb-4 space-y-3">
         <div class="relative my-2">
           <Separator class="bg-white/[0.08] light:bg-gray-200" />
-          <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0a0a0b] light:bg-white px-2 text-xs text-white/40 light:text-gray-500">
+          <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0a0a0b] light:bg-white px-2 text-xs text-white/50 light:text-gray-500">
             {{ $t('auth.orContinueWith') }}
           </span>
         </div>
@@ -166,7 +166,7 @@ const initiateSSO = (provider: string) => {
       </div>
 
       <div class="px-8 pb-8">
-        <p class="text-sm text-center text-white/40 light:text-gray-500">
+        <p class="text-sm text-center text-white/50 light:text-gray-500">
           {{ $t('auth.noAccount') }}
           <RouterLink to="/register" class="text-emerald-400 light:text-emerald-600 hover:underline">
             {{ $t('auth.signUp') }}

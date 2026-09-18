@@ -196,7 +196,7 @@ const handleLogout = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" class="w-52 p-1.5 bg-[#141414] light:bg-white border-white/[0.08] light:border-gray-200">
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.myAccount') }}</div>
+        <div class="text-xs font-medium px-2 py-1 text-white/50 light:text-gray-500">{{ $t('userMenu.myAccount') }}</div>
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
         <!-- Availability Toggle -->
         <div class="flex items-center justify-between px-2 py-1.5">
@@ -209,7 +209,7 @@ const handleLogout = () => {
             >
               {{ authStore.isAvailable ? $t('userMenu.available') : $t('userMenu.away') }}
             </Badge>
-            <span v-if="!authStore.isAvailable && breakDuration" class="text-[10px] text-white/40 light:text-gray-400">
+            <span v-if="!authStore.isAvailable && breakDuration" class="text-[10px] text-white/50 light:text-gray-400">
               {{ breakDuration }}
             </span>
           </div>
@@ -232,10 +232,10 @@ const handleLogout = () => {
           </Button>
         </RouterLink>
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.theme') }}</div>
+        <div class="text-xs font-medium px-2 py-1 text-white/50 light:text-gray-500">{{ $t('userMenu.theme') }}</div>
         <ThemeSwitcher />
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.language') }}</div>
+        <div class="text-xs font-medium px-2 py-1 text-white/50 light:text-gray-500">{{ $t('userMenu.language') }}</div>
         <div class="px-1.5 py-1">
           <LanguageSwitcher />
         </div>

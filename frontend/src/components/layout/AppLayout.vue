@@ -329,7 +329,7 @@ const handleLogout = async () => {
         <button
           type="button"
           :class="[
-            'sidebar-link group/search flex w-full items-center gap-2.5 rounded-sm border border-white/[0.07] bg-white/[0.02] px-2.5 py-[7px] max-md:py-3.5 text-[13px] text-white/45 transition-colors duration-150 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-white/80 light:border-gray-200 light:bg-gray-50 light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-700',
+            'sidebar-link group/search flex w-full items-center gap-2.5 rounded-sm border border-white/[0.07] bg-white/[0.02] px-2.5 py-[7px] max-md:py-3.5 text-[13px] text-white/50 transition-colors duration-150 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-white/80 light:border-gray-200 light:bg-gray-50 light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-700',
             isCollapsed && 'md:justify-center md:px-2'
           ]"
           :aria-label="$t('nav.searchLabel')"
@@ -339,7 +339,7 @@ const handleLogout = async () => {
           <span :class="isCollapsed && 'md:sr-only'">{{ $t('nav.search') }}</span>
           <kbd
             v-if="!isCollapsed"
-            class="ml-auto hidden shrink-0 rounded border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] font-medium text-white/40 md:block light:border-gray-200 light:bg-white light:text-gray-400"
+            class="ml-auto hidden shrink-0 rounded border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] font-medium text-white/50 md:block light:border-gray-200 light:bg-white light:text-gray-400"
           >&#8984;K</kbd>
         </button>
       </div>
@@ -350,7 +350,7 @@ const handleLogout = async () => {
             <!-- Pinned: only when somebody has made it theirs. An empty
                  "Pinned" heading is a chore the product hands the user. -->
             <div v-if="pinnedItems.length && !isCollapsed" class="space-y-px">
-              <div class="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/35 light:text-gray-400">
+              <div class="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/50 light:text-gray-400">
                 {{ $t('nav.pinned') }}
               </div>
               <SidebarNavItem
@@ -424,7 +424,7 @@ const handleLogout = async () => {
                 'h-4 w-4 shrink-0 transition-colors duration-150',
                 manageActive
                   ? 'text-emerald-400 light:text-emerald-600'
-                  : 'text-white/45 group-hover/manage:text-white/80 light:text-gray-400 light:group-hover/manage:text-gray-600'
+                  : 'text-white/50 group-hover/manage:text-white/80 light:text-gray-400 light:group-hover/manage:text-gray-600'
               ]"
               aria-hidden="true"
             />

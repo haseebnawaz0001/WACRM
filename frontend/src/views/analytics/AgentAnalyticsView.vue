@@ -370,7 +370,7 @@ void _displayStats.value // Suppress unused warning
                     ? (analytics.summary?.total_transfers_handled ?? 0)
                     : (analytics.my_stats?.transfers_handled ?? 0) }}
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.completedConversations') }}</p>
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('agentAnalytics.completedConversations') }}</p>
               </div>
             </div>
 
@@ -388,7 +388,7 @@ void _displayStats.value // Suppress unused warning
                     ? (analytics.summary?.active_transfers ?? 0)
                     : (analytics.my_stats?.active_transfers ?? 0) }}
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.currentlyInProgress') }}</p>
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('agentAnalytics.currentlyInProgress') }}</p>
               </div>
             </div>
 
@@ -406,7 +406,7 @@ void _displayStats.value // Suppress unused warning
                     ? (analytics.summary?.avg_resolution_mins ?? 0)
                     : (analytics.my_stats?.avg_resolution_mins ?? 0)) }}
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.timeToResolve') }}</p>
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('agentAnalytics.timeToResolve') }}</p>
               </div>
             </div>
 
@@ -429,7 +429,7 @@ void _displayStats.value // Suppress unused warning
                 <div class="text-3xl font-bold text-white light:text-gray-900">
                   {{ (analytics.summary?.response_rate_percent ?? 0).toFixed(0) }}%
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">
                   {{ (analytics.summary?.awaiting_conversations ?? 0) > 0
                     ? $t('agentAnalytics.awaitingCount', { count: analytics.summary?.awaiting_conversations ?? 0 })
                     : $t('agentAnalytics.everyoneAnswered') }}
@@ -449,7 +449,7 @@ void _displayStats.value // Suppress unused warning
                 <div class="text-3xl font-bold text-white light:text-gray-900">
                   {{ formatMinutes(analytics.summary?.avg_queue_time_mins || 0) }}
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.waitBeforeAssignment') }}</p>
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('agentAnalytics.waitBeforeAssignment') }}</p>
               </div>
             </div>
             <div v-else class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
@@ -463,7 +463,7 @@ void _displayStats.value // Suppress unused warning
                 <div class="text-3xl font-bold text-white light:text-gray-900">
                   {{ analytics.my_stats?.messages_sent || 0 }}
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.outgoingMessages') }}</p>
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('agentAnalytics.outgoingMessages') }}</p>
               </div>
             </div>
 
@@ -479,7 +479,7 @@ void _displayStats.value // Suppress unused warning
                 <div class="text-3xl font-bold text-white light:text-gray-900">
                   {{ formatMinutes(analytics.my_stats?.total_break_time_mins ?? analytics.summary?.total_break_time_mins ?? 0) }}
                 </div>
-                <p class="text-xs text-white/40 light:text-gray-500 mt-1">
+                <p class="text-xs text-white/50 light:text-gray-500 mt-1">
                   {{ $t('agentAnalytics.breaksTaken', { count: analytics.my_stats?.break_count ?? analytics.summary?.break_count ?? 0 }) }}
                 </p>
               </div>

@@ -232,7 +232,7 @@ async function copyInviteLink() {
                       {{ onlineCount }} {{ $t('users.online', 'online') }}
                     </Badge>
                   </div>
-                  <CardDescription>{{ $t('users.subtitle') }}. <RouterLink to="/settings/roles" class="text-primary hover:underline">{{ $t('users.manageRoles') }}</RouterLink></CardDescription>
+                  <CardDescription>{{ $t('users.subtitle') }}. <RouterLink to="/settings/roles" class="link">{{ $t('users.manageRoles') }}</RouterLink></CardDescription>
                 </div>
                 <div class="flex items-center gap-3 flex-wrap">
                   <Select v-model="roleFilter">

@@ -245,7 +245,7 @@ const destinations = computed(() => [
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.currentConfiguration') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.configOverview') }}</p>
+                <p class="text-sm text-white/50 light:text-gray-500">{{ $t('chatbot.configOverview') }}</p>
               </div>
               <RouterLink to="/settings/chatbot">
                 <Button variant="outline" size="sm">

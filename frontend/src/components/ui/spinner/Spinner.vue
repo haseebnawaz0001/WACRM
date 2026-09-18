@@ -33,7 +33,7 @@ const sizeClass = computed(() => {
     v-if="overlay"
     class="absolute inset-0 z-20 flex items-center justify-center"
   >
-    <Loader2 :class="cn('animate-spin text-white/40 light:text-gray-400', sizeClass, props.class)" />
+    <Loader2 :class="cn('animate-spin text-white/50 light:text-gray-400', sizeClass, props.class)" />
   </div>
   <Loader2
     v-else

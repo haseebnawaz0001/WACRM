@@ -2562,7 +2562,7 @@ async function sendMediaMessage() {
             {{ $t(`inbox.view${v.charAt(0).toUpperCase()}${v.slice(1)}`) }}
             <span
               v-if="queueCounts && (queueCounts as any)[v] > 0"
-              class="ml-1 tabular-nums text-white/45 light:text-gray-400"
+              class="ml-1 tabular-nums text-white/50 light:text-gray-400"
             >{{ (queueCounts as any)[v] }}</span>
           </button>
 
@@ -2578,7 +2578,7 @@ async function sendMediaMessage() {
                   'sidebar-link ml-auto shrink-0 rounded-md p-1 transition-colors duration-150',
                   listView === 'contacts'
                     ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
-                    : 'text-white/45 hover:bg-white/[0.04] hover:text-white light:text-gray-500 light:hover:bg-gray-100/70 light:hover:text-gray-900'
+                    : 'text-white/50 hover:bg-white/[0.04] hover:text-white light:text-gray-500 light:hover:bg-gray-100/70 light:hover:text-gray-900'
                 ]"
                 :aria-pressed="listView === 'contacts'"
                 :aria-label="$t('inbox.viewContacts')"
@@ -2697,7 +2697,7 @@ async function sendMediaMessage() {
                    two lines of nonsense. -->
               <div
                 v-if="isQueueView"
-                class="mt-0.5 flex items-center gap-2 overflow-hidden text-[11px] text-white/45 light:text-gray-500 [&>span]:whitespace-nowrap"
+                class="mt-0.5 flex items-center gap-2 overflow-hidden text-[11px] text-white/50 light:text-gray-500 [&>span]:whitespace-nowrap"
               >
                 <span v-if="row.handling === 'bot'" class="flex items-center gap-1">
                   <Bot class="h-3 w-3" aria-hidden="true" />{{ $t('inbox.botHandled') }}
@@ -2767,7 +2767,7 @@ async function sendMediaMessage() {
 
           <!-- Loading indicator for infinite scroll -->
           <div v-if="contactsStore.isLoadingMoreContacts" class="p-3 text-center">
-            <Loader2 class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
+            <Loader2 class="h-5 w-5 mx-auto animate-spin text-white/50 light:text-gray-400" />
           </div>
 
           <div v-if="listRows.length === 0 && !isQueueLoading" class="px-3 py-8 text-center text-white/50 light:text-gray-500">
@@ -2790,7 +2790,7 @@ async function sendMediaMessage() {
       <!-- No Contact Selected -->
       <div
         v-if="!contactsStore.currentContact"
-        class="flex-1 flex items-center justify-center text-white/40 light:text-gray-500"
+        class="flex-1 flex items-center justify-center text-white/50 light:text-gray-500"
       >
         <div class="text-center">
           <!-- A 64px emerald plaque used to sit here announcing that nothing
@@ -3012,7 +3012,7 @@ async function sendMediaMessage() {
             <div class="space-y-2">
               <!-- Loading indicator for older messages -->
               <div v-if="contactsStore.isLoadingOlderMessages" class="flex justify-center py-2">
-                <div class="flex items-center gap-2 text-white/40 light:text-gray-500 text-sm">
+                <div class="flex items-center gap-2 text-white/50 light:text-gray-500 text-sm">
                   <div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   <span>{{ $t('chat.loadingOlderMessages') }}...</span>
                 </div>
@@ -3027,7 +3027,7 @@ async function sendMediaMessage() {
                   class="flex items-center justify-center my-4"
                   :data-date-separator="getDateLabel(message.created_at)"
                 >
-                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
+                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/50 light:text-gray-600 font-medium">
                     {{ getDateLabel(message.created_at) }}
                   </div>
                 </div>
@@ -3041,7 +3041,7 @@ async function sendMediaMessage() {
                   class="flex items-center justify-center my-2"
                   data-activity-pill
                 >
-                  <div class="max-w-[80%] px-3 py-1 rounded-full bg-white/[0.04] light:bg-gray-100 text-[11px] text-white/45 light:text-gray-600 flex items-center gap-1.5">
+                  <div class="max-w-[80%] px-3 py-1 rounded-full bg-white/[0.04] light:bg-gray-100 text-[11px] text-white/50 light:text-gray-600 flex items-center gap-1.5">
                     <Activity class="h-3 w-3 shrink-0" />
                     <span class="truncate">{{ pill.summary }}</span>
                   </div>
@@ -3053,7 +3053,7 @@ async function sendMediaMessage() {
                   v-if="newMessagesCount > 0 && message.id === firstUnreadId"
                   class="flex items-center justify-center my-4"
                 >
-                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
+                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/50 light:text-gray-600 font-medium">
                     {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
                   </div>
                 </div>
@@ -3525,7 +3525,7 @@ async function sendMediaMessage() {
               class="flex items-center justify-center my-2"
               data-activity-pill
             >
-              <div class="max-w-[80%] px-3 py-1 rounded-full bg-white/[0.04] light:bg-gray-100 text-[11px] text-white/45 light:text-gray-600 flex items-center gap-1.5">
+              <div class="max-w-[80%] px-3 py-1 rounded-full bg-white/[0.04] light:bg-gray-100 text-[11px] text-white/50 light:text-gray-600 flex items-center gap-1.5">
                 <Activity class="h-3 w-3 shrink-0" />
                 <span class="truncate">{{ pill.summary }}</span>
               </div>
@@ -3604,7 +3604,7 @@ async function sendMediaMessage() {
                   <Popover v-model:open="emojiPickerOpen">
                     <PopoverTrigger as-child>
                       <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors">
-                        <Smile class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
+                        <Smile class="w-[18px] h-[18px] text-white/50 light:text-gray-500" />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent side="top" align="start" class="w-auto p-0">
@@ -3647,7 +3647,7 @@ async function sendMediaMessage() {
             <Tooltip>
               <TooltipTrigger as-child>
                 <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors" @click="openFilePicker">
-                  <Paperclip class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
+                  <Paperclip class="w-[18px] h-[18px] text-white/50 light:text-gray-500" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.attachFile') }}</TooltipContent>

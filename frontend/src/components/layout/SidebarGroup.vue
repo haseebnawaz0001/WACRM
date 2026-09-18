@@ -92,7 +92,7 @@ const itemCount = computed(() => props.section.items.length)
           'h-4 w-4 shrink-0 transition-colors duration-150',
           holdsCurrentPage
             ? 'text-emerald-400 light:text-emerald-600'
-            : 'text-white/45 group-hover/head:text-white/80 light:text-gray-400 light:group-hover/head:text-gray-600'
+            : 'text-white/50 group-hover/head:text-white/80 light:text-gray-400 light:group-hover/head:text-gray-600'
         ]"
         aria-hidden="true"
       />
@@ -106,7 +106,7 @@ const itemCount = computed(() => props.section.items.length)
       >{{ itemCount }}</span>
       <ChevronRight
         :class="[
-          'h-3.5 w-3.5 shrink-0 text-white/45 transition-transform duration-200 light:text-gray-400',
+          'h-3.5 w-3.5 shrink-0 text-white/50 transition-transform duration-200 light:text-gray-400',
           // The count takes ml-auto when closed, so the chevron only needs a
           // gap from it; open, there is no count and the chevron does the
           // pushing itself.

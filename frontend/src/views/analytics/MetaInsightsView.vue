@@ -903,7 +903,7 @@ const chartOptions = barLineOptions()
                           <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
                           <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
                         </div>
-                        <div v-if="Object.keys(group.agg.paidMessages.byCategory).length === 0" class="text-center text-white/40 light:text-gray-400 py-4">
+                        <div v-if="Object.keys(group.agg.paidMessages.byCategory).length === 0" class="text-center text-white/50 light:text-gray-400 py-4">
                           {{ $t('metaInsights.noPaidMessages') }}
                         </div>
                         <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded-md px-2 -mx-2">
@@ -1076,7 +1076,7 @@ const chartOptions = barLineOptions()
                         <CardDescription>{{ $t('metaInsights.performanceByTemplate') }}</CardDescription>
                       </div>
                       <div class="relative w-full sm:w-64">
-                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
+                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 light:text-gray-400" />
                         <Input
                           v-model="templateSearchQuery"
                           :placeholder="$t('metaInsights.searchTemplates')"

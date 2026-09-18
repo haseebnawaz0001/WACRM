@@ -17,7 +17,12 @@
 
     /* Emerald green primary (WhatsApp style) */
     --primary: 160 84% 39%;
-    --primary-foreground: 0 0% 100%;
+    /* Near-black, not white. The brand emerald is rgb(16,183,127), and a
+       white label on it measures 2.6:1 — every primary button, the tick in
+       a checked box and the selected day in a date picker were below the
+       4.5:1 a person needs to read them. The same green with a near-black
+       label is 7.7:1, so the colour stays and the text becomes legible. */
+    --primary-foreground: 0 0% 9%;
 
     /* Subtle secondary/muted for glass effect */
     --secondary: 0 0% 8%;
@@ -55,11 +60,13 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 9%;
     --primary: 160 84% 39%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    /* 40%, not 45%. At 45% the inactive tab labels across seven pages
+       measured 4.3:1 against the strip they sit on, just under the floor. */
+    --muted-foreground: 0 0% 40%;
     --accent: 0 0% 96%;
     --accent-foreground: 0 0% 9%;
     --destructive: 0 72% 51%;
@@ -83,7 +90,7 @@
     --popover: 0 0% 7%;
     --popover-foreground: 0 0% 98%;
     --primary: 160 84% 39%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 8%;
     --secondary-foreground: 0 0% 90%;
     --muted: 0 0% 10%;
@@ -161,6 +168,15 @@
 /* A link that reads as one: inside prose, beside a heading, under a form. */
 .link {
   @apply text-primary font-medium underline-offset-4 hover:underline;
+}
+
+/*
+ * The brand emerald is a light colour: bright on this app's near-black, and
+ * only 2.6:1 on white. A link has to be readable in both, so in light mode it
+ * takes a darker cut of the same hue — 5.0:1 — rather than a different colour.
+ */
+.light .link {
+  color: hsl(160 84% 27%);
 }
 
 /* Consistent focus states */

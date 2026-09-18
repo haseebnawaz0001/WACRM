@@ -175,7 +175,7 @@ function formatNoteTime(dateStr: string) {
       <Button
         variant="ghost"
         size="icon"
-        class="h-7 w-7 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+        class="h-7 w-7 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
         @click="emit('close')"
       >
         <X class="h-4 w-4" />
@@ -273,7 +273,7 @@ function formatNoteTime(dateStr: string) {
           <div class="h-12 w-12 rounded-lg bg-amber-500/10 light:bg-amber-50 flex items-center justify-center mb-3">
             <StickyNote class="h-6 w-6 text-amber-400/50 light:text-amber-400" />
           </div>
-          <p class="text-sm font-medium text-white/40 light:text-gray-500 mb-1">{{ t('chat.noNotes') }}</p>
+          <p class="text-sm font-medium text-white/50 light:text-gray-500 mb-1">{{ t('chat.noNotes') }}</p>
           <p class="text-xs text-white/25 light:text-gray-400">{{ t('chat.writeNote') }}</p>
         </div>
 

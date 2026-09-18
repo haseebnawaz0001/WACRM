@@ -740,7 +740,7 @@ onUnmounted(() => {
         <div class="flex min-w-0 items-center md:flex-1">
           <!-- The same quiet glyph every other page header carries, so the one
                page with a hand-rolled header still looks like the rest. -->
-          <LayoutDashboard class="mr-2.5 h-5 w-5 shrink-0 text-white/40 light:text-gray-400" aria-hidden="true" />
+          <LayoutDashboard class="mr-2.5 h-5 w-5 shrink-0 text-white/50 light:text-gray-400" aria-hidden="true" />
           <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ $t('dashboard.title') }}</h1>
         </div>
 
@@ -899,7 +899,7 @@ onUnmounted(() => {
                     </Transition>
                   </template>
                 </div>
-                <div v-if="getWidgetById(item.i)!.show_change && widgetData[item.i]" class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
+                <div v-if="getWidgetById(item.i)!.show_change && widgetData[item.i]" class="flex items-center text-xs text-white/50 light:text-gray-500 mt-1">
                   <component
                     :is="widgetData[item.i]?.change > 0 ? TrendingUp : widgetData[item.i]?.change < 0 ? TrendingDown : Minus"
                     :class="[
@@ -907,7 +907,7 @@ onUnmounted(() => {
                       widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-500'
                     ]"
                   />
-                  <span :class="widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/40 light:text-gray-500'">
+                  <span :class="widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/50 light:text-gray-500'">
                     {{ widgetData[item.i]?.change ? `${Math.abs(widgetData[item.i]!.change).toFixed(1)}%` : $t('dashboard.noChange') }}
                   </span>
                   <span class="ml-1">{{ comparisonPeriodLabel }}</span>
@@ -968,7 +968,7 @@ onUnmounted(() => {
                   <Doughnut v-else-if="getWidgetById(item.i)!.chart_type === 'pie'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="doughnutOptions" />
                 </template>
                 <template v-else>
-                  <div class="h-full flex items-center justify-center text-white/45 light:text-gray-500">
+                  <div class="h-full flex items-center justify-center text-white/50 light:text-gray-500">
                     {{ $t('dashboard.noDataInRange') }}
                   </div>
                 </template>
@@ -1011,8 +1011,8 @@ onUnmounted(() => {
                   <table class="w-full">
                     <thead>
                       <tr class="border-b border-white/[0.08] light:border-gray-200">
-                        <th class="text-left py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ getWidgetById(item.i)!.group_by_field }}</th>
-                        <th class="text-right py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ $t('dashboard.count') }}</th>
+                        <th class="text-left py-2 text-xs font-medium text-white/50 light:text-gray-500 uppercase">{{ getWidgetById(item.i)!.group_by_field }}</th>
+                        <th class="text-right py-2 text-xs font-medium text-white/50 light:text-gray-500 uppercase">{{ $t('dashboard.count') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1042,7 +1042,7 @@ onUnmounted(() => {
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between">
                           <p class="text-sm font-medium truncate text-white light:text-gray-900">{{ row.label }}</p>
-                          <span class="text-xs text-white/40 light:text-gray-500 flex items-center gap-1 shrink-0">
+                          <span class="text-xs text-white/50 light:text-gray-500 flex items-center gap-1 shrink-0">
                             <Clock class="h-3 w-3" />
                             {{ formatTime(row.created_at) }}
                           </span>
@@ -1076,7 +1076,7 @@ onUnmounted(() => {
                   </div>
                 </template>
                 <template v-else>
-                  <div class="h-full flex items-center justify-center text-white/45 light:text-gray-500">
+                  <div class="h-full flex items-center justify-center text-white/50 light:text-gray-500">
                     {{ $t('dashboard.noDataInRange') }}
                   </div>
                 </template>
@@ -1302,7 +1302,7 @@ onUnmounted(() => {
                 {{ $t('dashboard.addFilter') }}
               </Button>
             </div>
-            <p v-if="!widgetForm.data_source && widgetForm.filters.length === 0" class="text-xs text-white/40 light:text-gray-500">
+            <p v-if="!widgetForm.data_source && widgetForm.filters.length === 0" class="text-xs text-white/50 light:text-gray-500">
               {{ $t('dashboard.selectDataSourceFirst') }}
             </p>
             <div v-for="(filter, index) in widgetForm.filters" :key="index" class="flex items-center gap-2">

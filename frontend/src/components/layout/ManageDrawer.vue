@@ -105,7 +105,7 @@ function isCurrent(path: string) {
       <div class="flex h-16 shrink-0 items-center justify-between border-b border-white/[0.08] px-5 light:border-gray-200">
         <div>
           <h2 class="text-sm font-semibold text-white light:text-gray-900">{{ t('nav.manage') }}</h2>
-          <p class="text-xs text-white/45 light:text-gray-500">{{ t('nav.manageDesc') }}</p>
+          <p class="text-xs text-white/50 light:text-gray-500">{{ t('nav.manageDesc') }}</p>
         </div>
         <button
           type="button"
@@ -120,7 +120,7 @@ function isCurrent(path: string) {
       <div class="min-h-0 flex-1 overflow-y-auto sidebar-scroll px-5 py-5">
         <div class="grid gap-x-8 gap-y-6 sm:grid-cols-2">
           <section v-for="group in groups" :key="group.label">
-            <h3 class="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/40 light:text-gray-500">
+            <h3 class="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/50 light:text-gray-500">
               {{ t(group.label) }}
             </h3>
             <div class="space-y-px">
@@ -142,7 +142,7 @@ function isCurrent(path: string) {
                     'h-4 w-4 shrink-0 transition-colors duration-150',
                     isCurrent(page.path)
                       ? 'text-emerald-400 light:text-emerald-600'
-                      : 'text-white/40 group-hover/row:text-white/75 light:text-gray-400 light:group-hover/row:text-gray-600'
+                      : 'text-white/50 group-hover/row:text-white/75 light:text-gray-400 light:group-hover/row:text-gray-600'
                   ]"
                   aria-hidden="true"
                 />
@@ -152,7 +152,7 @@ function isCurrent(path: string) {
           </section>
 
           <section v-if="ungrouped.length">
-            <h3 class="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/40 light:text-gray-500">
+            <h3 class="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/50 light:text-gray-500">
               {{ t('nav.manageOther') }}
             </h3>
             <div class="space-y-px">
@@ -162,7 +162,7 @@ function isCurrent(path: string) {
                 :to="page.path"
                 class="sidebar-link flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-[13px] text-white/65 transition-colors hover:bg-white/[0.04] hover:text-white light:text-gray-600 light:hover:bg-gray-100/70"
               >
-                <component :is="page.icon" class="h-4 w-4 shrink-0 text-white/40 light:text-gray-400" aria-hidden="true" />
+                <component :is="page.icon" class="h-4 w-4 shrink-0 text-white/50 light:text-gray-400" aria-hidden="true" />
                 <span class="truncate">{{ t(page.name) }}</span>
               </RouterLink>
             </div>

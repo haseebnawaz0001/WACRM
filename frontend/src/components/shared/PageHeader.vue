@@ -48,7 +48,7 @@ defineProps<{
       <component
         v-if="icon"
         :is="icon"
-        class="mr-2.5 h-5 w-5 shrink-0 text-white/40 light:text-gray-400"
+        class="mr-2.5 h-5 w-5 shrink-0 text-white/50 light:text-gray-400"
         aria-hidden="true"
       />
       <div class="min-w-0 flex-1 basis-40">

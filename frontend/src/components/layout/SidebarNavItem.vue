@@ -81,7 +81,7 @@ const activeChildPath = computed(() => {
             nested ? 'h-3.5 w-3.5' : 'h-4 w-4',
             item.active
               ? 'text-emerald-400 light:text-emerald-600'
-              : 'text-white/45 group-hover/nav:text-white/80 light:text-gray-400 light:group-hover/nav:text-gray-600'
+              : 'text-white/50 group-hover/nav:text-white/80 light:text-gray-400 light:group-hover/nav:text-gray-600'
           ]"
           aria-hidden="true"
         />
@@ -111,7 +111,7 @@ const activeChildPath = computed(() => {
             badgeCount > 0 ? 'ml-1' : 'ml-auto',
             pinned
               ? 'text-emerald-400 opacity-100 light:text-emerald-600'
-              : 'text-white/40 opacity-0 hover:text-white group-hover/nav:opacity-100 light:text-gray-400 light:hover:text-gray-700'
+              : 'text-white/50 opacity-0 hover:text-white group-hover/nav:opacity-100 light:text-gray-400 light:hover:text-gray-700'
           ]"
           :aria-label="pinned ? $t('nav.unpinThis') : $t('nav.pinThis')"
           :aria-pressed="pinned"
@@ -149,7 +149,7 @@ const activeChildPath = computed(() => {
         :is="child.icon"
         :class="[
           'h-3.5 w-3.5 shrink-0',
-          activeChildPath === child.path ? 'text-emerald-400 light:text-emerald-600' : 'text-white/40 light:text-gray-400'
+          activeChildPath === child.path ? 'text-emerald-400 light:text-emerald-600' : 'text-white/50 light:text-gray-400'
         ]"
         aria-hidden="true"
       />

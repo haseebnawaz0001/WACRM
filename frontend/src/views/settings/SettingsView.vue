@@ -294,19 +294,19 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
       <div class="p-6 space-y-4 max-w-4xl">
         <Tabs default-value="general" class="w-full">
           <TabsList class="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
-            <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+            <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-600">
               <Settings class="h-4 w-4 mr-2" />
               {{ $t('settings.general') }}
             </TabsTrigger>
-            <TabsTrigger value="notifications" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+            <TabsTrigger value="notifications" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-600">
               <Bell class="h-4 w-4 mr-2" />
               {{ $t('settings.notifications') }}
             </TabsTrigger>
-            <TabsTrigger value="inbox" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+            <TabsTrigger value="inbox" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-600">
               <Inbox class="h-4 w-4 mr-2" />
               {{ $t('settings.inbox') }}
             </TabsTrigger>
-            <TabsTrigger value="calling" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+            <TabsTrigger value="calling" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-600">
               <Phone class="h-4 w-4 mr-2" />
               {{ $t('settings.calling') }}
             </TabsTrigger>
@@ -317,7 +317,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.generalSettings') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.generalSettingsDesc') }}</p>
+                <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.generalSettingsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="space-y-2">
@@ -356,13 +356,13 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     {{ $t('settings.language') }}
                   </Label>
                   <LanguageSwitcher class="max-w-xs" />
-                  <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.languageDesc') }}</p>
+                  <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.languageDesc') }}</p>
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.maskPhoneNumbers') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.maskPhoneNumbersDesc') }}</p>
+                    <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.maskPhoneNumbersDesc') }}</p>
                   </div>
                   <Switch
                     :checked="generalSettings.mask_phone_numbers"
@@ -379,7 +379,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     min="0"
                     class="max-w-xs bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-200 light:text-gray-900"
                   />
-                  <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.marketingFrequencyCapDesc') }}</p>
+                  <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.marketingFrequencyCapDesc') }}</p>
                 </div>
                 <div class="flex justify-end">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
@@ -394,7 +394,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <div v-if="canWriteAccounts" class="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.metaAppCredentials') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.metaAppCredentialsDesc') }}</p>
+                <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.metaAppCredentialsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
@@ -442,13 +442,13 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.notifications') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.notificationsDesc') }}</p>
+                <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.notificationsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.emailNotifications') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.emailNotificationsDesc') }}</p>
+                    <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.emailNotificationsDesc') }}</p>
                   </div>
                   <Switch
                     :checked="notificationSettings.email_notifications"
@@ -459,7 +459,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.newMessageAlerts') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.newMessageAlertsDesc') }}</p>
+                    <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.newMessageAlertsDesc') }}</p>
                   </div>
                   <Switch
                     :checked="notificationSettings.new_message_alerts"
@@ -470,7 +470,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.campaignUpdates') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.campaignUpdatesDesc') }}</p>
+                    <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.campaignUpdatesDesc') }}</p>
                   </div>
                   <Switch
                     :checked="notificationSettings.campaign_updates"
@@ -480,7 +480,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="space-y-2">
                   <p class="font-medium text-white light:text-gray-900">{{ $t('settings.myTimezone') }}</p>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.myTimezoneDesc') }}</p>
+                  <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.myTimezoneDesc') }}</p>
                   <TimezoneSelect
                     v-model="personalTimezone"
                     :inherit-label="$t('settings.useOrgTimezone')"
@@ -505,7 +505,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.inbox') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.inboxDesc') }}</p>
+                <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.inboxDesc') }}</p>
               </div>
               <div class="space-y-4 p-6 pt-3">
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -517,7 +517,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       type="number"
                       min="0"
                     />
-                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.reopenWindowDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.reopenWindowDesc') }}</p>
                   </div>
                   <div class="space-y-1.5">
                     <Label for="auto-resolve">{{ $t('settings.autoResolveIdle') }}</Label>
@@ -527,7 +527,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       type="number"
                       min="0"
                     />
-                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.autoResolveIdleDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.autoResolveIdleDesc') }}</p>
                   </div>
                   <div class="space-y-1.5">
                     <Label for="pending-timeout">{{ $t('settings.pendingTimeout') }}</Label>
@@ -537,14 +537,14 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       type="number"
                       min="0"
                     />
-                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.pendingTimeoutDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.pendingTimeoutDesc') }}</p>
                   </div>
                 </div>
 
                 <div class="flex items-center justify-between gap-4 rounded-md border border-white/[0.08] p-3 light:border-gray-200">
                   <div>
                     <Label for="auto-pending">{{ $t('settings.autoPending') }}</Label>
-                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.autoPendingDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.autoPendingDesc') }}</p>
                   </div>
                   <Switch id="auto-pending" v-model="inboxSettings.auto_pending_on_agent_reply" />
                 </div>
@@ -562,13 +562,13 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.callingSettings') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callingSettingsDesc') }}</p>
+                <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.callingSettingsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.callingEnabled') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callingEnabledDesc') }}</p>
+                    <p class="text-sm text-white/50 light:text-gray-500">{{ $t('settings.callingEnabledDesc') }}</p>
                   </div>
                   <Switch
                     :checked="callingSettings.calling_enabled"
@@ -586,7 +586,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       :min="60"
                       :max="3600"
                     />
-                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.maxCallDurationDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.maxCallDurationDesc') }}</p>
                   </div>
                   <div class="space-y-2">
                     <Label for="transfer_timeout" class="text-white/70 light:text-gray-700">{{ $t('settings.transferTimeout') }}</Label>
@@ -597,7 +597,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       :min="30"
                       :max="600"
                     />
-                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.transferTimeoutDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500">{{ $t('settings.transferTimeoutDesc') }}</p>
                   </div>
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
@@ -608,7 +608,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       <Music class="h-4 w-4" />
                       {{ $t('settings.holdMusic') }}
                     </Label>
-                    <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('settings.holdMusicDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('settings.holdMusicDesc') }}</p>
                   </div>
                   <div class="flex items-center gap-3">
                     <span class="text-sm text-white/50 light:text-gray-500">
@@ -642,7 +642,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                       <Phone class="h-4 w-4" />
                       {{ $t('settings.ringbackTone') }}
                     </Label>
-                    <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('settings.ringbackToneDesc') }}</p>
+                    <p class="text-xs text-white/50 light:text-gray-500 mt-1">{{ $t('settings.ringbackToneDesc') }}</p>
                   </div>
                   <div class="flex items-center gap-3">
                     <span class="text-sm text-white/50 light:text-gray-500">
