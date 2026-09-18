@@ -16,10 +16,8 @@ import {
   Sparkles,
   Power,
   Settings,
-  TrendingUp,
-  Users,
-  MessageSquare,
-  Clock
+  Clock,
+  ChevronRight
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -116,10 +114,35 @@ async function retryFetch() {
 }
 
 const statCards = computed(() => [
-  { title: t('chatbot.totalSessions'), key: 'total_sessions', icon: Users, color: 'text-blue-500' },
-  { title: t('chatbot.activeSessions'), key: 'active_sessions', icon: MessageSquare, color: 'text-green-500' },
-  { title: t('chatbot.messagesHandled'), key: 'messages_handled', icon: TrendingUp, color: 'text-purple-500' },
-  { title: t('chatbot.aiResponses'), key: 'ai_responses', icon: Sparkles, color: 'text-orange-500' }
+  { title: t('chatbot.totalSessions'), key: 'total_sessions' },
+  { title: t('chatbot.activeSessions'), key: 'active_sessions' },
+  { title: t('chatbot.messagesHandled'), key: 'messages_handled' },
+  { title: t('chatbot.aiResponses'), key: 'ai_responses' }
+])
+
+/**
+ * The three places this page sends you, as a list.
+ *
+ * They were three same-size cards of icon, heading and prose — the shape a
+ * page reaches for when it has nothing to structure. They are destinations
+ * with a count each, and a list says that in a third of the height.
+ */
+const destinations = computed(() => [
+  {
+    to: '/chatbot/keywords', icon: Key,
+    title: t('chatbot.keywordRules'), desc: t('chatbot.keywordRulesDesc'),
+    count: t('chatbot.rulesConfigured', { count: stats.value.keywords_count }),
+  },
+  {
+    to: '/chatbot/flows', icon: Workflow,
+    title: t('chatbot.conversationFlows'), desc: t('chatbot.flowsDesc'),
+    count: t('chatbot.flowsCreated', { count: stats.value.flows_count }),
+  },
+  {
+    to: '/chatbot/ai', icon: Sparkles,
+    title: t('chatbot.aiContexts'), desc: t('chatbot.aiContextsDesc'),
+    count: t('chatbot.contextsActive', { count: stats.value.ai_contexts_count }),
+  },
 ])
 </script>
 
@@ -175,107 +198,44 @@ const statCards = computed(() => [
     <!-- Content -->
     <ScrollArea v-else class="flex-1">
       <div class="p-6 space-y-6">
-        <!-- Stats -->
-        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <!-- Skeleton Loading State -->
-          <template v-if="isLoading">
-            <div v-for="i in 4" :key="i" class="rounded-lg border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton class="h-4 w-24 bg-white/[0.08] light:bg-gray-200" />
-                <Skeleton class="h-10 w-10 rounded-lg bg-white/[0.08] light:bg-gray-200" />
-              </div>
-              <div class="pt-2">
-                <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
-              </div>
+        <!--
+          Four counts, stated once.
+
+          These were four cards, each with a 40px tile in a hue of its own —
+          blue, green, purple, orange, chosen per metric and meaning nothing —
+          above a 3xl number, two of which are usually zero. One strip of
+          hairline-separated figures says the same thing in a quarter of the
+          room and does not imply that sessions are blue.
+        -->
+        <div class="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.08] sm:grid-cols-4 light:border-gray-200 light:bg-gray-200">
+          <div
+            v-for="card in statCards"
+            :key="card.key"
+            class="bg-[#0a0a0b] px-4 py-3 light:bg-white"
+          >
+            <div class="text-xs text-muted-foreground">{{ card.title }}</div>
+            <Skeleton v-if="isLoading" class="mt-1.5 h-7 w-14" />
+            <div v-else class="mt-0.5 text-2xl font-semibold tabular-nums">
+              {{ stats[card.key as keyof Stats].toLocaleString() }}
             </div>
-          </template>
-          <!-- Actual Stats -->
-          <template v-else>
-            <div v-for="card in statCards" :key="card.key" class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ card.title }}</span>
-                <div :class="[
-                  'h-10 w-10 rounded-lg flex items-center justify-center',
-                  card.key === 'total_sessions' ? 'bg-blue-500/20' : '',
-                  card.key === 'active_sessions' ? 'bg-emerald-500/20' : '',
-                  card.key === 'messages_handled' ? 'bg-purple-500/20' : '',
-                  card.key === 'ai_responses' ? 'bg-orange-500/20' : ''
-                ]">
-                  <component :is="card.icon" :class="[
-                    'h-5 w-5',
-                    card.key === 'total_sessions' ? 'text-blue-400' : '',
-                    card.key === 'active_sessions' ? 'text-emerald-400' : '',
-                    card.key === 'messages_handled' ? 'text-purple-400' : '',
-                    card.key === 'ai_responses' ? 'text-orange-400' : ''
-                  ]" />
-                </div>
-              </div>
-              <div class="pt-2">
-                <div class="text-3xl font-bold text-white light:text-gray-900">
-                  {{ stats[card.key as keyof Stats].toLocaleString() }}
-                </div>
-              </div>
-            </div>
-          </template>
+          </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="grid gap-4 md:grid-cols-3">
-          <RouterLink to="/chatbot/keywords" class="card-interactive rounded-lg border border-white/[0.08] bg-white/[0.02] h-full light:bg-white light:border-gray-200">
-            <div class="p-6">
-              <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
-                  <Key class="h-5 w-5 text-white/70 light:text-gray-600" />
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.keywordRules') }}</h3>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.rulesConfigured', { count: stats.keywords_count }) }}</p>
-                </div>
-              </div>
+        <!-- Where to go next. -->
+        <div class="overflow-hidden rounded-lg border border-white/[0.08] light:border-gray-200">
+          <RouterLink
+            v-for="d in destinations"
+            :key="d.to"
+            :to="d.to"
+            class="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3 transition-colors last:border-b-0 hover:bg-white/[0.03] light:border-gray-200 light:hover:bg-gray-50"
+          >
+            <component :is="d.icon" class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div class="min-w-0 flex-1">
+              <h3 class="font-medium">{{ d.title }}</h3>
+              <p class="truncate text-sm text-muted-foreground">{{ d.desc }}</p>
             </div>
-            <div class="px-6 pb-6">
-              <p class="text-sm text-white/50 light:text-gray-600">
-                {{ $t('chatbot.keywordRulesDesc') }}
-              </p>
-            </div>
-          </RouterLink>
-
-          <RouterLink to="/chatbot/flows" class="card-interactive rounded-lg border border-white/[0.08] bg-white/[0.02] h-full light:bg-white light:border-gray-200">
-            <div class="p-6">
-              <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
-                  <Workflow class="h-5 w-5 text-white/70 light:text-gray-600" />
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.conversationFlows') }}</h3>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.flowsCreated', { count: stats.flows_count }) }}</p>
-                </div>
-              </div>
-            </div>
-            <div class="px-6 pb-6">
-              <p class="text-sm text-white/50 light:text-gray-600">
-                {{ $t('chatbot.flowsDesc') }}
-              </p>
-            </div>
-          </RouterLink>
-
-          <RouterLink to="/chatbot/ai" class="card-interactive rounded-lg border border-white/[0.08] bg-white/[0.02] h-full light:bg-white light:border-gray-200">
-            <div class="p-6">
-              <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
-                  <Sparkles class="h-5 w-5 text-white/70 light:text-gray-600" />
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.aiContexts') }}</h3>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.contextsActive', { count: stats.ai_contexts_count }) }}</p>
-                </div>
-              </div>
-            </div>
-            <div class="px-6 pb-6">
-              <p class="text-sm text-white/50 light:text-gray-600">
-                {{ $t('chatbot.aiContextsDesc') }}
-              </p>
-            </div>
+            <span class="shrink-0 text-sm tabular-nums text-muted-foreground">{{ d.count }}</span>
+            <ChevronRight class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </RouterLink>
         </div>
 
