@@ -29,7 +29,7 @@ import {
   Coffee
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
-import { Line, Bar, Doughnut } from '@/lib/charts'
+import { Line, Bar, Doughnut, chartColors, barLineOptions, pieOptions } from '@/lib/charts'
 import { useDateRange } from '@/composables/useDateRange'
 
 interface AgentAnalyticsSummary {
@@ -194,23 +194,15 @@ const trendChartData = computed(() => {
   }
 })
 
-const trendChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      ticks: {
-        stepSize: 1
-      }
-    }
-  }
-}
+/**
+ * The same chart theme the dashboard uses.
+ *
+ * These three charts carried their own options, so this page kept Chart.js's
+ * defaults where the dashboard had already replaced them: 40px legend slabs,
+ * sub-contrast tick labels on the dark surface, and the browser's own tooltip
+ * styling. Two chart vocabularies in one product is one too many.
+ */
+const trendChartOptions = barLineOptions({ singleSeries: true })
 
 const sourceChartData = computed(() => {
   if (!analytics.value?.summary?.transfers_by_source) {
@@ -229,27 +221,14 @@ const sourceChartData = computed(() => {
     datasets: [
       {
         data,
-        backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(139, 92, 246, 0.8)'
-        ],
+        backgroundColor: chartColors(labels),
         borderWidth: 0
       }
     ]
   }
 })
 
-const sourceChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'bottom' as const
-    }
-  }
-}
+const sourceChartOptions = pieOptions()
 
 const comparisonChartData = computed(() => {
   if (!analytics.value?.agent_stats?.length) {
@@ -276,20 +255,7 @@ const comparisonChartData = computed(() => {
   }
 })
 
-const comparisonChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'bottom' as const
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true
-    }
-  }
-}
+const comparisonChartOptions = barLineOptions()
 
 // Stats to display based on role (reserved for future use)
 const _displayStats = computed(() => {

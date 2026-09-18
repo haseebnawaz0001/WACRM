@@ -57,7 +57,7 @@ import {
   MousePointerClick,
   Search
 } from 'lucide-vue-next'
-import { Line, Bar } from '@/lib/charts'
+import { Line, Bar, barLineOptions } from '@/lib/charts'
 import { toast } from 'vue-sonner'
 import { useDateRange } from '@/composables/useDateRange'
 
@@ -623,20 +623,9 @@ function formatDuration(seconds: number): string {
   return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`
 }
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'bottom' as const
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true
-    }
-  }
-}
+// The shared chart theme, like the dashboard and agent analytics. See
+// lib/charts.ts for what Chart.js ships that does not belong to this product.
+const chartOptions = barLineOptions()
 
 
 </script>
