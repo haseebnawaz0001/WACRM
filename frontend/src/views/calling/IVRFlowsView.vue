@@ -13,8 +13,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, Phone, RefreshCw } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Phone, RefreshCw, Workflow } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import PageHeader from '@/components/shared/PageHeader.vue'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog.vue'
 import IconButton from '@/components/shared/IconButton.vue'
@@ -188,23 +190,31 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold">{{ t('calling.ivrFlows') }}</h1>
-        <p class="text-muted-foreground">{{ t('calling.ivrFlowsDesc') }}</p>
-      </div>
-      <div class="flex gap-2">
+  <!--
+    The page's own header, and its own scroller.
+
+    This was the one page that hand-rolled a heading instead of using
+    PageHeader, so its title sat at a different size on a different background
+    from every other page and its actions did not wrap on a phone. And with
+    <main> overflow-hidden and no scroller here, the flow list stopped at the
+    fold.
+  -->
+  <div class="flex h-full flex-col">
+    <PageHeader :title="t('calling.ivrFlows')" :description="t('calling.ivrFlowsDesc')" :icon="Workflow">
+      <template #actions>
         <Button variant="outline" size="sm" @click="loadFlows()">
           <RefreshCw class="h-4 w-4 mr-2" />
           {{ t('common.refresh') }}
         </Button>
-        <Button @click="openCreate">
+        <Button size="sm" @click="openCreate">
           <Plus class="h-4 w-4 mr-2" />
           {{ t('calling.createFlow') }}
         </Button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
+
+    <ScrollArea class="flex-1">
+      <div class="p-6 space-y-6">
 
     <!-- Fetch Error -->
     <ErrorState
@@ -311,6 +321,9 @@ onMounted(async () => {
         </div>
       </CardContent>
     </Card>
+
+      </div>
+    </ScrollArea>
 
     <!-- Create Dialog -->
     <Dialog v-model:open="showCreateDialog">

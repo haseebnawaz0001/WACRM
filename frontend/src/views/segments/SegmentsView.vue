@@ -14,6 +14,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -182,7 +183,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <!-- <main> is overflow-hidden; a view without its own scroller clips
+       everything past the fold, with no scrollbar to say so. -->
+  <div class="flex h-full flex-col">
     <PageHeader :title="t('segments.title')" :description="t('segments.description')" :icon="Users">
       <template #actions>
         <Button v-if="canWrite" size="sm" @click="startNew">
@@ -191,6 +194,9 @@ onMounted(async () => {
         </Button>
       </template>
     </PageHeader>
+
+    <ScrollArea class="flex-1">
+      <div class="space-y-4 p-4">
 
     <SearchInput v-model="search" :placeholder="t('segments.searchPlaceholder')" class="w-64" />
 
@@ -271,6 +277,9 @@ onMounted(async () => {
     </ul>
 
     <!-- Builder -->
+      </div>
+    </ScrollArea>
+
     <Dialog :open="!!editing" @update:open="open => !open && (editing = null)">
       <DialogContent class="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>

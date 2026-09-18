@@ -13,6 +13,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -145,12 +146,17 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <!-- <main> is overflow-hidden; a view without its own scroller clips
+       everything past the fold, with no scrollbar to say so. -->
+  <div class="flex h-full flex-col">
     <PageHeader
       :title="t('crmReports.title')"
       :description="t('crmReports.description')"
       :icon="PieChart"
     />
+
+    <ScrollArea class="flex-1">
+      <div class="space-y-4 p-4">
 
     <!-- Range -->
     <div class="flex flex-wrap items-end gap-3">
@@ -473,5 +479,7 @@ onMounted(load)
         </Card>
       </TabsContent>
     </Tabs>
+      </div>
+    </ScrollArea>
   </div>
 </template>
