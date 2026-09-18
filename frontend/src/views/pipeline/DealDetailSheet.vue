@@ -78,9 +78,14 @@ async function loadOwners() {
   try {
     const { data: envelope } = await usersService.list()
     const data = (envelope as any)?.data ?? envelope
+    // full_name, which is what the users endpoint returns. It has never had a
+    // `name`, so this fell through to the email every time and the owner picker
+    // read "lena.fischer@demo.whatomate.local" where the rest of the product
+    // says "Lena Fischer". The email stays as the fallback for an account that
+    // genuinely has no name on it yet.
     owners.value = (data.users || data || []).map((u: any) => ({
       id: u.id,
-      name: u.name || u.email
+      name: u.full_name || u.email
     }))
   } catch {
     owners.value = []
@@ -220,7 +225,16 @@ onMounted(() => {
 
         <div v-if="canWrite" class="flex items-center gap-2">
           <Button :disabled="isSaving" @click="save">{{ t('common.save') }}</Button>
-          <Button v-if="canDelete" variant="ghost" size="icon" class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="remove">
+          <!-- Pushed away from Save: they were touching, and one of them cannot
+               be undone. -->
+          <Button
+            v-if="canDelete"
+            variant="ghost"
+            size="icon"
+            class="ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            :aria-label="t('common.delete')"
+            @click="remove"
+          >
             <Trash2 class="h-4 w-4" />
           </Button>
         </div>
