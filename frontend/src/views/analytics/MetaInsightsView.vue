@@ -753,49 +753,34 @@ const chartOptions = barLineOptions()
               </div>
             </template>
             <template v-else-if="aggregatedData && activeTab === 'analytics'">
-              <!-- Stats Cards -->
-              <div class="grid gap-4 md:grid-cols-3">
-                <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesSent') }}</span>
-                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                      <Send class="h-5 w-5 text-blue-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent.toLocaleString() }}
-                    </div>
+              <!--
+                Three figures, stated once.
+
+                These were three cards with a 40px tile each — blue, green,
+                purple, one hue per metric and none of them meaning anything —
+                over a 3xl number. On an account Meta has not reported on yet,
+                that is three large zeroes and a lot of furniture. The chatbot
+                overview reads the same way.
+              -->
+              <div class="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.08] sm:grid-cols-3 light:border-gray-200 light:bg-gray-200">
+                <div class="bg-[#0a0a0b] px-4 py-3 light:bg-white">
+                  <div class="text-xs text-muted-foreground">{{ $t('metaInsights.messagesSent') }}</div>
+                  <div class="mt-0.5 text-2xl font-semibold tabular-nums">
+                    {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent.toLocaleString() }}
                   </div>
                 </div>
-
-                <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesDelivered') }}</span>
-                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                      <CheckCircle class="h-5 w-5 text-emerald-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered.toLocaleString() }}
-                    </div>
+                <div class="bg-[#0a0a0b] px-4 py-3 light:bg-white">
+                  <div class="text-xs text-muted-foreground">{{ $t('metaInsights.messagesDelivered') }}</div>
+                  <div class="mt-0.5 text-2xl font-semibold tabular-nums">
+                    {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered.toLocaleString() }}
                   </div>
                 </div>
-
-                <div class="card-depth rounded-lg border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.deliveryRate') }}</span>
-                    <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <TrendingUp class="h-5 w-5 text-purple-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent > 0
-                        ? ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered / (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent * 100).toFixed(1)
-                        : 0) }}%
-                    </div>
+                <div class="bg-[#0a0a0b] px-4 py-3 light:bg-white">
+                  <div class="text-xs text-muted-foreground">{{ $t('metaInsights.deliveryRate') }}</div>
+                  <div class="mt-0.5 text-2xl font-semibold tabular-nums">
+                    {{ ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent > 0
+                      ? ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered / (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent * 100).toFixed(1)
+                      : 0) }}%
                   </div>
                 </div>
               </div>
