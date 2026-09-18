@@ -200,11 +200,8 @@ function formatNoteTime(dateStr: string) {
           <div
             v-for="note in notesStore.notes"
             :key="note.id"
-            class="group relative rounded-lg p-3 backdrop-blur-sm border border-white/[0.06] light:border-gray-200 bg-gradient-to-br from-white/[0.04] to-white/[0.02] light:from-gray-50 light:to-white hover:from-white/[0.06] hover:to-white/[0.03] light:hover:from-gray-100 light:hover:to-gray-50 transition-all duration-200"
+            class="group relative rounded-lg p-3 border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.05] light:border-gray-200 light:bg-gray-50 light:hover:bg-gray-100 transition-colors duration-200"
           >
-            <!-- Gradient accent line -->
-            <div class="absolute top-0 left-3 right-3 h-[2px] rounded-full bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-transparent" />
-
             <!-- Editing mode -->
             <template v-if="editingNoteId === note.id">
               <Textarea

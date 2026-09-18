@@ -92,7 +92,7 @@ const initiateSSO = (provider: string) => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-[#0a0a0b] light:bg-gradient-to-br light:from-gray-50 light:to-gray-100 p-4">
+  <div class="min-h-screen flex items-center justify-center bg-background p-4">
     <div class="w-full max-w-md rounded-lg border border-white/[0.08] bg-white/[0.02] backdrop-blur light:bg-white light:border-gray-200 light:shadow-xl">
       <div class="p-8 space-y-1 text-center">
         <div class="flex justify-center mb-4">

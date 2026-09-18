@@ -116,11 +116,6 @@
     @apply bg-background text-foreground font-sans;
     line-height: 1.5;
     font-weight: 400;
-    /* Subtle gradient for depth like Linear/Vercel */
-    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.08), transparent);
-  }
-  .light body {
-    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.05), transparent);
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-medium;
@@ -729,14 +724,6 @@
   position: relative;
 }
 
-.avatar-ring::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(160 84% 55%));
-  z-index: -1;
-}
 
 /* Online status dot */
 .avatar-status {
