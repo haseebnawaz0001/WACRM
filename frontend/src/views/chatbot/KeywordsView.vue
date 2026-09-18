@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
@@ -141,12 +141,8 @@ const emptyDescription = computed(() => {
       <div class="p-6">
         <div>
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between">
-                <div>
-                  <CardTitle>{{ $t('keywords.yourRules') }}</CardTitle>
-                  <CardDescription>{{ $t('keywords.yourRulesDesc') }}</CardDescription>
-                </div>
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end">
                 <SearchInput v-model="searchQuery" :placeholder="$t('keywords.searchKeywords') + '...'" class="w-64" />
               </div>
             </CardHeader>

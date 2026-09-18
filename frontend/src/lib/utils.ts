@@ -143,7 +143,10 @@ export function getAvatarColor(name: string): string {
 
 export function formatLabel(key: string): string {
   return key
-    .replace(/_/g, ' ')
+    // A dot separates a namespaced key the same way an underscore separates
+    // words, and it reached the audit log's resource column unhandled: rows
+    // read "Settings.Notification" where every neighbour read like English.
+    .replace(/[._]/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, c => c.toUpperCase())
 }

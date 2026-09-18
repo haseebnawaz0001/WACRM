@@ -11,6 +11,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -207,7 +208,9 @@ onMounted(fetchPipelines)
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <!-- <main> is overflow-hidden, so this page needs its own scroller;
+       without one everything past the fold was unreachable. -->
+  <div class="flex h-full flex-col">
     <PageHeader :title="t('pipelines.title')" :description="t('pipelines.description')" :icon="KanbanSquare">
       <template #actions>
         <Button v-if="canWrite" size="sm" @click="showCreate = true">
@@ -216,6 +219,9 @@ onMounted(fetchPipelines)
         </Button>
       </template>
     </PageHeader>
+
+    <ScrollArea class="flex-1">
+      <div class="space-y-4 p-4">
 
     <ErrorState v-if="fetchError" :message="t('pipelines.loadFailed')" @retry="fetchPipelines" />
     <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
@@ -341,6 +347,9 @@ onMounted(fetchPipelines)
     </template>
 
     <!-- New pipeline -->
+      </div>
+    </ScrollArea>
+
     <Dialog v-model:open="showCreate">
       <DialogContent>
         <DialogHeader>

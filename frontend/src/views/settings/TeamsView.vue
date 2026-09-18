@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -136,12 +136,8 @@ async function confirmDelete() {
       <div class="p-6">
         <div>
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between">
-                <div>
-                  <CardTitle>{{ $t('teams.yourTeams') }}</CardTitle>
-                  <CardDescription>{{ $t('teams.yourTeamsDesc') }}</CardDescription>
-                </div>
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end">
                 <SearchInput v-model="searchQuery" :placeholder="$t('teams.searchTeams') + '...'" class="w-64" />
               </div>
             </CardHeader>

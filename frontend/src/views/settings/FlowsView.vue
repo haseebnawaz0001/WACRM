@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -254,12 +254,8 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('flows.yourFlows') }}</CardTitle>
-                  <CardDescription>{{ $t('flows.yourFlowsDesc') }}</CardDescription>
-                </div>
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <div class="flex items-center gap-2">
                   <Label class="text-sm text-muted-foreground">{{ $t('flows.account') }}:</Label>
                   <Select v-model="selectedAccount" @update:model-value="onAccountChange">

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -208,12 +208,8 @@ onMounted(() => fetchActions())
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('customActions.yourActions') }}</CardTitle>
-                  <CardDescription>{{ $t('customActions.yourActionsDesc') }}</CardDescription>
-                </div>
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <SearchInput v-model="searchQuery" :placeholder="$t('customActions.searchActions') + '...'" class="w-64" />
               </div>
             </CardHeader>

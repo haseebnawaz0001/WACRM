@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -118,12 +118,8 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
       <div class="p-6">
         <div>
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('cannedResponses.yourResponses') }}</CardTitle>
-                  <CardDescription>{{ $t('cannedResponses.yourResponsesDesc') }}</CardDescription>
-                </div>
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <div class="flex items-center gap-2">
                   <Select v-model="selectedCategory">
                     <SelectTrigger class="w-[150px]" :aria-label="$t('common.all')"><SelectValue :placeholder="$t('common.all')" /></SelectTrigger>

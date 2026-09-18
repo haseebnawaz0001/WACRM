@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -283,11 +283,7 @@ onMounted(() => fetchFields())
     <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <Card>
-          <CardHeader>
-            <CardTitle>{{ $t('contactFields.yourFields') }}</CardTitle>
-            <CardDescription>{{ $t('contactFields.yourFieldsDesc') }}</CardDescription>
-          </CardHeader>
-          <CardContent>
+                    <CardContent>
             <DataTable
               :items="fields"
               :columns="columns"

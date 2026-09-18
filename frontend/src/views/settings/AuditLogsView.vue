@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
@@ -24,6 +23,7 @@ import { useUsersStore } from '@/stores/users'
 import { useDateRange } from '@/composables/useDateRange'
 import { ScrollText } from 'lucide-vue-next'
 import { formatDate, formatLabel } from '@/lib/utils'
+import StatusDot from '@/components/shared/StatusDot.vue'
 
 const { t } = useI18n()
 const usersStore = useUsersStore()
@@ -127,19 +127,26 @@ function applyFilter() {
   fetchLogs()
 }
 
-function actionVariant(action: string): string {
+/**
+ * Every row in this table records an action, so every row wore a filled badge
+ * and the page was a column of colour with nothing standing out. Deletion is
+ * the one people scan an audit log for; it keeps the loud colour, and the
+ * routine two settle down.
+ */
+function actionTone(action: string): 'good' | 'warn' | 'bad' | 'neutral' {
   switch (action) {
-    case 'created': return 'bg-green-500/10 text-green-500 border-green-500/20'
-    case 'updated': return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-    case 'deleted': return 'bg-red-500/10 text-red-500 border-red-500/20'
-    default: return ''
+    case 'created': return 'good'
+    case 'deleted': return 'bad'
+    default: return 'neutral'
   }
 }
 
 function changeSummary(log: AuditLogEntry): string {
   if (!log.changes || log.changes.length === 0) return '—'
+  // "10 fields set" next to a bare "7 fields" read as two different kinds of
+  // fact. Both are a count of what the action touched, so both say so.
   if (log.action === 'created') return `${log.changes.length} fields set`
-  if (log.action === 'deleted') return `${log.changes.length} fields`
+  if (log.action === 'deleted') return `${log.changes.length} fields removed`
   return log.changes.map(c => formatLabel(c.field)).join(', ')
 }
 
@@ -161,12 +168,12 @@ onMounted(async () => {
       <div class="p-6">
         <div>
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ t('auditLogs.allActivity') }}</CardTitle>
-                  <CardDescription>{{ t('auditLogs.allActivityDesc') }}</CardDescription>
-                </div>
+            <!-- The header above says "Track all changes made by users across
+                 the platform"; this said "Changes made across the platform by
+                 all users". The same sentence, turned around, one line below
+                 itself. -->
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <div class="flex items-center gap-2 flex-wrap">
                   <Select v-model="filterUser" @update:model-value="applyFilter">
                     <SelectTrigger class="w-[180px]" :aria-label="$t('auditLogs.allUsers')">
@@ -248,9 +255,7 @@ onMounted(async () => {
 
                 <template #cell-action="{ item: log }">
                   <div class="py-1">
-                    <Badge variant="outline" :class="[actionVariant(log.action), 'text-xs']">
-                      {{ t(`auditLogs.${log.action}`) }}
-                    </Badge>
+                    <StatusDot :label="t(`auditLogs.${log.action}`)" :tone="actionTone(log.action)" />
                   </div>
                 </template>
 

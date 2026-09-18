@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Key } from 'lucide-vue-next'
@@ -125,12 +125,8 @@ onMounted(() => fetchItems())
             @retry="fetchItems"
           />
           <Card v-else>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('apiKeys.yourApiKeys') }}</CardTitle>
-                  <CardDescription>{{ $t('apiKeys.yourApiKeysDesc') }}</CardDescription>
-                </div>
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <SearchInput v-model="searchQuery" :placeholder="$t('apiKeys.searchApiKeys') + '...'" class="w-64" />
               </div>
             </CardHeader>

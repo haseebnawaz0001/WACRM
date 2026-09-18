@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -295,12 +295,8 @@ async function confirmDelete() {
       <div class="p-6">
         <div>
           <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>{{ $t('accounts.yourAccounts') }}</CardTitle>
-                <CardDescription>{{ $t('accounts.yourAccountsDesc') }}</CardDescription>
-              </div>
-            </CardHeader>
+            <CardHeader class="pb-4">
+              </CardHeader>
             <CardContent>
               <DataTable
                 :items="accounts"

@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -227,9 +228,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <!--
+    AppLayout's <main> is overflow-hidden, so a view that does not bring its own
+    scroller simply clips. This page is a form several cards long: on a 500px
+    viewport its content ran to 1226px and 726px of it — including Save — could
+    not be reached, with no scrollbar to hint that it was there.
+  -->
+  <div class="flex h-full flex-col">
     <ErrorState v-if="fetchError" :message="t('automations.loadFailed')" @retry="load" />
-    <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
+    <p v-else-if="isLoading" class="p-4 text-muted-foreground">{{ t('common.loading') }}</p>
 
     <template v-else-if="rule">
       <PageHeader :title="rule.name" :icon="Zap">
@@ -259,6 +266,8 @@ onMounted(async () => {
         </template>
       </PageHeader>
 
+      <ScrollArea class="flex-1">
+        <div class="space-y-4 p-4">
       <Tabs default-value="build">
         <TabsList>
           <TabsTrigger value="build">{{ t('automations.tabBuild') }}</TabsTrigger>
@@ -462,6 +471,8 @@ onMounted(async () => {
           </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </ScrollArea>
     </template>
 
     <!-- Test -->

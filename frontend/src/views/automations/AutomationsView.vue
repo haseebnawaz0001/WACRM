@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -193,7 +194,9 @@ onMounted(fetchAutomations)
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <!-- <main> is overflow-hidden, so this page needs its own scroller;
+       without one everything past the fold was unreachable. -->
+  <div class="flex h-full flex-col">
     <PageHeader
       :title="t('automations.title')"
       :description="t('automations.description')"
@@ -206,6 +209,9 @@ onMounted(fetchAutomations)
         </Button>
       </template>
     </PageHeader>
+
+    <ScrollArea class="flex-1">
+      <div class="space-y-4 p-4">
 
     <ErrorState v-if="fetchError" :message="t('automations.loadFailed')" @retry="fetchAutomations" />
     <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
@@ -277,6 +283,9 @@ onMounted(fetchAutomations)
     </ul>
 
     <!-- Recipes -->
+      </div>
+    </ScrollArea>
+
     <Dialog v-model:open="showRecipes">
       <DialogContent>
         <DialogHeader>

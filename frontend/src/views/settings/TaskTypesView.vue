@@ -15,7 +15,7 @@
  */
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -79,6 +79,22 @@ const duePresets = [
 ]
 
 const colours = ['gray', 'blue', 'green', 'amber', 'purple', 'red']
+
+/**
+ * The swatch for a task type's colour.
+ *
+ * The column headed "Colour" printed the word "blue" in a grey pill, which is
+ * the one thing a colour column should not do. The colour a task type is
+ * actually tagged with is now the thing on screen.
+ */
+const SWATCH: Record<string, string> = {
+  gray: 'bg-gray-400',
+  blue: 'bg-blue-500',
+  green: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  purple: 'bg-purple-500',
+  red: 'bg-red-500',
+}
 
 const dialogOpen = ref(false)
 const isSaving = ref(false)
@@ -255,11 +271,7 @@ onMounted(() => fetchTypes())
     <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <Card>
-          <CardHeader>
-            <CardTitle>{{ $t('taskTypes.yourTypes') }}</CardTitle>
-            <CardDescription>{{ $t('taskTypes.yourTypesDesc') }}</CardDescription>
-          </CardHeader>
-          <CardContent>
+                    <CardContent>
             <DataTable
               :items="types"
               :columns="columns"
@@ -292,7 +304,13 @@ onMounted(() => fetchTypes())
               </template>
 
               <template #cell-color="{ item }">
-                <Badge variant="outline">{{ item.color }}</Badge>
+                <span class="inline-flex items-center gap-2 text-sm">
+                  <span
+                    :class="['h-3 w-3 shrink-0 rounded-full ring-1 ring-inset ring-white/20 light:ring-black/10', SWATCH[item.color] || SWATCH.gray]"
+                    aria-hidden="true"
+                  />
+                  <span class="capitalize">{{ item.color }}</span>
+                </span>
               </template>
 
               <template #cell-actions="{ item }">
@@ -370,7 +388,12 @@ onMounted(() => fetchTypes())
             <Select v-model="form.color">
               <SelectTrigger :aria-label="$t('taskTypes.colour')"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="colour in colours" :key="colour" :value="colour">{{ colour }}</SelectItem>
+                <SelectItem v-for="colour in colours" :key="colour" :value="colour">
+                  <span class="inline-flex items-center gap-2">
+                    <span :class="['h-3 w-3 shrink-0 rounded-full', SWATCH[colour]]" aria-hidden="true" />
+                    <span class="capitalize">{{ colour }}</span>
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
