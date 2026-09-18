@@ -477,7 +477,7 @@ const typeLabel: Record<string, string> = {
               placeholder="Button Title"
               class="h-7 text-xs flex-1"
             />
-            <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeButton(Number(idx))">
+            <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove button" @click="removeButton(Number(idx))">
               <Trash2 class="h-3 w-3" />
             </Button>
           </div>

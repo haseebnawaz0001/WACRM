@@ -17,6 +17,11 @@ import (
 // ErrNotFound is returned when a rule does not exist in the organization.
 var ErrNotFound = errors.New("automation: rule not found")
 
+// ErrNoActions is returned when somebody tries to switch on a rule that has
+// nothing to do. Saving such a rule is fine — that is a draft — but running
+// one is not.
+var ErrNoActions = errors.New("automation: add at least one action before turning this rule on")
+
 // Limits. These are low on purpose: a rule nobody can read is a rule nobody
 // can debug, and an organization with a thousand rules has a process problem
 // that more rules will not fix.
@@ -90,9 +95,11 @@ func (s *Service) Validate(ctx context.Context, orgID uuid.UUID, in Input) error
 	if err := validateTriggerConfig(in.TriggerType, in.TriggerConfig); err != nil {
 		return err
 	}
-	if len(in.Actions) == 0 {
-		return fmt.Errorf("automation: a rule with no actions does nothing")
-	}
+	// A rule with no actions is checked where it matters — at the point it is
+	// switched on — not here. Building one is how everybody starts: name it,
+	// pick the trigger, then work out what it should do. Refusing to save that
+	// meant "Start from scratch" could not be saved at all, because the blank
+	// rule it posts is precisely a rule with no actions yet.
 	if len(in.Actions) > MaxActionsPerRule {
 		return fmt.Errorf("automation: a rule may have at most %d actions", MaxActionsPerRule)
 	}
@@ -151,6 +158,12 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in Input) (*model
 		return nil, err
 	}
 
+	// Saving a rule with nothing to do is fine; saving one that is switched on
+	// with nothing to do is not.
+	if in.Enabled != nil && *in.Enabled && len(in.Actions) == 0 {
+		return nil, ErrNoActions
+	}
+
 	triggerConfig := models.JSONB(in.TriggerConfig)
 	if triggerConfig == nil {
 		triggerConfig = models.JSONB{}
@@ -189,6 +202,14 @@ func (s *Service) Update(ctx context.Context, orgID, ruleID uuid.UUID, in Input)
 		return nil, err
 	}
 
+	willBeEnabled := rule.Enabled
+	if in.Enabled != nil {
+		willBeEnabled = *in.Enabled
+	}
+	if willBeEnabled && len(in.Actions) == 0 {
+		return nil, ErrNoActions
+	}
+
 	updates := map[string]any{
 		"name":           strings.TrimSpace(in.Name),
 		"description":    in.Description,
@@ -218,7 +239,21 @@ func (s *Service) Update(ctx context.Context, orgID, ruleID uuid.UUID, in Input)
 }
 
 // SetEnabled turns a rule on or off.
+//
+// Turning one on is where "a rule with no actions does nothing" actually
+// bites, and where it was never checked: this path writes `enabled` straight
+// to the row, so a rule with an empty action list could be switched on and sit
+// there firing into nothing.
 func (s *Service) SetEnabled(ctx context.Context, orgID, ruleID uuid.UUID, enabled bool) (*models.AutomationRule, error) {
+	if enabled {
+		rule, err := s.Get(ctx, orgID, ruleID)
+		if err != nil {
+			return nil, err
+		}
+		if len(RuleActions(rule)) == 0 {
+			return nil, ErrNoActions
+		}
+	}
 	updates := map[string]any{"enabled": enabled}
 	if enabled {
 		// Re-enabling forgives the failures that turned it off, or it would

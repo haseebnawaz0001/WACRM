@@ -294,6 +294,11 @@ func (a *App) setAutomationEnabled(r *fastglue.Request, orgID, userID uuid.UUID,
 
 	rule, err := a.Automations().SetEnabled(context.Background(), orgID, ruleID, enabled)
 	if err != nil {
+		// Every failure here used to come back as "Automation not found",
+		// which is only one of the things that can go wrong.
+		if errors.Is(err, automation.ErrNoActions) {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Automation not found", nil, "")
 	}
 
