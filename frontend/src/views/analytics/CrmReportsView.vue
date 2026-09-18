@@ -13,6 +13,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatLabel } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -143,6 +144,21 @@ const maxPipeline = computed(() =>
 )
 
 onMounted(load)
+
+/**
+ * The written name of a contact's source.
+ *
+ * This column printed the value as stored — "inbound", "api", "unknown" — in
+ * lower case, in a report every other column of which reads like English.
+ * formatLabel title-cases it; the initialisms are spelled the way people write
+ * them rather than the way a title-caser would.
+ */
+const SOURCE_NAMES: Record<string, string> = { api: 'API', sms: 'SMS', crm: 'CRM' }
+
+function sourceLabel(source: string): string {
+  if (!source) return formatLabel('unknown')
+  return SOURCE_NAMES[source.toLowerCase()] || formatLabel(source)
+}
 </script>
 
 <template>
@@ -245,7 +261,7 @@ onMounted(load)
               </thead>
               <tbody class="divide-y">
                 <tr v-for="row in contacts.totals" :key="row.source">
-                  <td class="py-1.5">{{ row.source }}</td>
+                  <td class="py-1.5">{{ sourceLabel(row.source) }}</td>
                   <td class="py-1.5 text-right tabular-nums">{{ row.contacts }}</td>
                   <td class="py-1.5 text-right tabular-nums">{{ percent(row.share) }}</td>
                   <td class="py-1.5 text-right tabular-nums">{{ row.became_customer }}</td>
