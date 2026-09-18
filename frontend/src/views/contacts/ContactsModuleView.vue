@@ -325,7 +325,7 @@ onMounted(async () => {
           </Badge>
         </Button>
         <RouterLink v-if="canManageFields" to="/settings/contact-fields">
-          <Button variant="ghost" size="sm">
+          <Button variant="outline" size="sm">
             <ListChecks class="h-4 w-4 mr-2" />{{ $t('contactFields.title') }}
           </Button>
         </RouterLink>
@@ -430,7 +430,7 @@ onMounted(async () => {
 
         <Card>
           <CardContent class="pt-6">
-            <div class="flex items-center justify-end mb-4">
+            <div class="mb-4 flex items-center">
               <SearchInput
                 v-model="searchQuery"
                 :placeholder="$t('contacts.searchContacts') + '...'"

@@ -442,7 +442,17 @@ const handleLogout = async () => {
     </aside>
 
     <!-- Main content -->
-    <main id="main-content" class="flex-1 overflow-hidden pt-12 md:pt-0 bg-[#0a0a0b] light:bg-gray-50" role="main">
+    <!--
+      min-w-0 is what stops a wide table dragging the whole page sideways.
+
+      A flex item defaults to min-width:auto, so `flex-1` alone could not shrink
+      this below the widest thing inside it. On a phone the contacts table is
+      678px of columns, so the page became 678px wide: the header ran off the
+      right edge, the saved views were cut in half, and the only way to read a
+      column was to scroll the entire app. With the floor removed, the page is
+      the width of the screen and the table scrolls inside its own card.
+    -->
+    <main id="main-content" class="min-w-0 flex-1 overflow-hidden pt-12 md:pt-0 bg-[#0a0a0b] light:bg-gray-50" role="main">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="page" mode="out-in">
           <component :is="Component" :key="viewRoute.meta.stableKey ? String(viewRoute.name) : viewRoute.path" />
