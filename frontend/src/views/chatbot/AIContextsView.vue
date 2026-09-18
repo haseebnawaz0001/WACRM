@@ -226,7 +226,7 @@ async function toggleContext(context: AIContext) {
                 <template #cell-actions="{ item: context }">
                   <div class="flex items-center justify-end gap-1">
                     <RouterLink :to="`/chatbot/ai/${context.id}`"><IconButton :icon="Pencil" :label="$t('aiContexts.editContextLabel')" class="h-8 w-8" /></RouterLink>
-                    <IconButton :icon="Trash2" :label="$t('aiContexts.deleteContextLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(context)" />
+                    <IconButton :icon="Trash2" :label="$t('aiContexts.deleteContextLabel')" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="openDeleteDialog(context)" />
                   </div>
                 </template>
                 <template #empty-action>

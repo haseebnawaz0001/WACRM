@@ -1303,11 +1303,11 @@ onUnmounted(() => {
                   <Button
                     variant="ghost"
                     size="icon"
-                    class="h-7 w-7"
+                    class="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     :disabled="deletingRecipientId === recipient.id"
                     @click="deleteRecipient(recipient.id)"
                   >
-                    <Trash2 class="h-3.5 w-3.5 text-destructive" />
+                    <Trash2 class="h-3.5 w-3.5" />
                   </Button>
                 </TableCell>
               </TableRow>

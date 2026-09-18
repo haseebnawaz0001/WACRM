@@ -151,7 +151,7 @@ onMounted(() => fetchItems())
                     <RouterLink :to="`/settings/api-keys/${key.id}`">
                       <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" />
                     </RouterLink>
-                    <IconButton v-if="canDelete" :icon="Trash2" :label="$t('apiKeys.deleteApiKeyLabel')" variant="ghost" class="h-8 w-8 text-destructive" @click="keyToDelete = key; isDeleteDialogOpen = true" />
+                    <IconButton v-if="canDelete" :icon="Trash2" :label="$t('apiKeys.deleteApiKeyLabel')" variant="ghost" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="keyToDelete = key; isDeleteDialogOpen = true" />
                   </div>
                 </template>
                 <template #empty-action>

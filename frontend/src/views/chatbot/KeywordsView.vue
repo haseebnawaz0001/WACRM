@@ -206,7 +206,7 @@ const emptyDescription = computed(() => {
                 <template #cell-actions="{ item: rule }">
                   <div class="flex items-center justify-end gap-1">
                     <RouterLink :to="`/chatbot/keywords/${rule.id}`"><IconButton :icon="Pencil" :label="$t('keywords.editRuleLabel')" class="h-8 w-8" /></RouterLink>
-                    <IconButton :icon="Trash2" :label="$t('keywords.deleteRuleLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(rule)" />
+                    <IconButton :icon="Trash2" :label="$t('keywords.deleteRuleLabel')" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="openDeleteDialog(rule)" />
                   </div>
                 </template>
                 <template #empty-action>

@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import StatusDot from '@/components/shared/StatusDot.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, SearchInput, DeleteConfirmDialog, DataTable, IconButton, ErrorState, type Column } from '@/components/shared'
@@ -166,9 +167,16 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                 <template #cell-usage_count="{ item: response }">
                   <span class="text-muted-foreground">{{ response.usage_count }}</span>
                 </template>
+                <!--
+                  Eleven of twelve responses are active, so eleven filled green
+                  badges said nothing and the one retired response — the row
+                  worth noticing — was the quietest mark in the column.
+                -->
                 <template #cell-status="{ item: response }">
-                  <Badge v-if="response.is_active" class="bg-emerald-500/20 text-emerald-400 border-transparent text-xs">{{ $t('common.active') }}</Badge>
-                  <Badge v-else variant="secondary" class="text-xs">{{ $t('common.inactive') }}</Badge>
+                  <StatusDot
+                    :label="response.is_active ? $t('common.active') : $t('common.inactive')"
+                    :tone="response.is_active ? 'good' : 'neutral'"
+                  />
                 </template>
                 <template #cell-actions="{ item: response }">
                   <div class="flex items-center justify-end gap-1">
@@ -188,7 +196,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                       :icon="Trash2"
                       :label="$t('cannedResponses.deleteResponse')"
                       variant="ghost"
-                      class="h-8 w-8 text-destructive"
+                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       @click="openDeleteDialog(response)"
                     />
                   </div>

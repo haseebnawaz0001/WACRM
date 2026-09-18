@@ -276,8 +276,8 @@ const greetingTab = computed(() =>
   <div class="space-y-4 p-4">
     <div class="flex items-center justify-between">
       <h3 class="font-semibold text-sm capitalize">{{ node.type.replace('_', ' ') }}</h3>
-      <Button variant="ghost" size="icon" class="h-7 w-7" @click="emit('delete')">
-        <Trash2 class="h-3.5 w-3.5 text-destructive" />
+      <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="emit('delete')">
+        <Trash2 class="h-3.5 w-3.5" />
       </Button>
     </div>
 
@@ -357,8 +357,8 @@ const greetingTab = computed(() =>
         <div v-for="(opt, digit) in (config.options || {})" :key="String(digit)" class="flex items-center gap-1.5">
           <span class="font-mono text-xs font-bold w-5 text-center">{{ digit }}</span>
           <Input :model-value="(opt as any)?.label || ''" @update:model-value="(v: string) => updateMenuOption(String(digit), 'label', v)" placeholder="Label" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeMenuOption(String(digit))">
-            <Trash2 class="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeMenuOption(String(digit))">
+            <Trash2 class="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -414,8 +414,8 @@ const greetingTab = computed(() =>
         <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
           <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
           <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeHeader(String(key))">
+            <Trash2 class="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -484,8 +484,8 @@ const greetingTab = computed(() =>
               <div v-for="(val, key) in (getCallbackConfig(event).headers || {})" :key="String(key)" class="flex items-center gap-1">
                 <Input :model-value="String(key)" @update:model-value="(v: string) => updateCallbackHeaderKey(event, String(key), v)" placeholder="Key" class="h-6 text-[10px] flex-1" />
                 <Input :model-value="String(val)" @update:model-value="(v: string) => updateCallbackHeaderValue(event, String(key), v)" placeholder="Value" class="h-6 text-[10px] flex-1" />
-                <Button variant="ghost" size="icon" class="h-5 w-5" @click="removeCallbackHeader(event, String(key))">
-                  <Trash2 class="h-2.5 w-2.5 text-destructive" />
+                <Button variant="ghost" size="icon" class="h-5 w-5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeCallbackHeader(event, String(key))">
+                  <Trash2 class="h-2.5 w-2.5" />
                 </Button>
               </div>
             </div>

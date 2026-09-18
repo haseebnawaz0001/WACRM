@@ -382,8 +382,12 @@ export class ChatbotFlowBuilderPage extends BasePage {
     return this.page.locator('.p-2.border.rounded-md.space-y-2')
   }
 
-  /** Delete button on a per-button card. */
+  /** Delete button on a per-button card, found by what it is called.
+   *
+   * This used to look for a descendant carrying `.text-destructive`, which tied
+   * the test to the delete button wearing its colour at rest — and that resting
+   * colour was the thing being removed, so the locator went with it. */
   getButtonDeleteButton(index: number) {
-    return this.buttonCards.nth(index).locator('button').filter({ has: this.page.locator('.text-destructive') })
+    return this.buttonCards.nth(index).getByRole('button', { name: /Remove button/i })
   }
 }

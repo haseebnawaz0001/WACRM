@@ -352,7 +352,7 @@ onMounted(async () => {
                 v-if="canWrite"
                 :icon="Trash2"
                 :label="$t('keywords.removeButtonLabel', 'Remove button')"
-                class="text-destructive"
+                class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 @click="removeButton(index)"
               />
             </div>

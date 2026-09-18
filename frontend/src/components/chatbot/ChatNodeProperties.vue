@@ -334,8 +334,8 @@ const typeLabel: Record<string, string> = {
   <div class="space-y-4 p-4">
     <div class="flex items-center justify-between">
       <h3 class="font-semibold text-sm">{{ typeLabel[node.type] || node.type }}</h3>
-      <Button v-if="node.type !== 'start'" variant="ghost" size="icon" class="h-7 w-7" @click="emit('delete')">
-        <Trash2 class="h-3.5 w-3.5 text-destructive" />
+      <Button v-if="node.type !== 'start'" variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="emit('delete')">
+        <Trash2 class="h-3.5 w-3.5" />
       </Button>
     </div>
 
@@ -477,8 +477,8 @@ const typeLabel: Record<string, string> = {
               placeholder="Button Title"
               class="h-7 text-xs flex-1"
             />
-            <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeButton(Number(idx))">
-              <Trash2 class="h-3 w-3 text-destructive" />
+            <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeButton(Number(idx))">
+              <Trash2 class="h-3 w-3" />
             </Button>
           </div>
           <Input
@@ -563,8 +563,8 @@ const typeLabel: Record<string, string> = {
         <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
           <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
           <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeHeader(String(key))">
+            <Trash2 class="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -588,8 +588,8 @@ const typeLabel: Record<string, string> = {
         <div v-for="(val, key) in (config.response_mapping || {})" :key="String(key)" class="flex items-center gap-1">
           <Input :model-value="String(key)" @update:model-value="(v: string) => updateResponseMappingKey(String(key), v)" placeholder="var_name" class="h-7 text-xs flex-1 font-mono" />
           <Input :model-value="String(val)" @update:model-value="(v: string) => updateResponseMappingValue(String(key), v)" placeholder="path.to.field" class="h-7 text-xs flex-1 font-mono" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeResponseMapping(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeResponseMapping(String(key))">
+            <Trash2 class="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -620,8 +620,8 @@ const typeLabel: Record<string, string> = {
             placeholder="path.to.field"
             class="h-7 flex-1 text-xs font-mono"
           />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeFieldMapping(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeFieldMapping(String(key))">
+            <Trash2 class="h-3 w-3" />
           </Button>
         </div>
       </div>
@@ -866,8 +866,8 @@ const typeLabel: Record<string, string> = {
         <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
           <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
           <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" class="h-6 w-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeHeader(String(key))">
+            <Trash2 class="h-3 w-3" />
           </Button>
         </div>
       </div>

@@ -184,7 +184,7 @@ onMounted(() => fetchWebhooks())
                     <RouterLink :to="`/settings/webhooks/${webhook.id}`">
                       <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" />
                     </RouterLink>
-                    <IconButton v-if="canDelete" :icon="Trash2" :label="$t('common.delete')" class="h-8 w-8 text-destructive" @click="webhookToDelete = webhook; isDeleteDialogOpen = true" />
+                    <IconButton v-if="canDelete" :icon="Trash2" :label="$t('common.delete')" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="webhookToDelete = webhook; isDeleteDialogOpen = true" />
                   </div>
                 </template>
                 <template #empty-action>

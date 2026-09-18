@@ -890,8 +890,8 @@ onMounted(async () => {
                           placeholder="Value"
                           class="h-6 text-[10px] flex-1"
                         />
-                        <Button variant="ghost" size="icon" class="h-5 w-5" @click="removeCompletionHeader(String(key))">
-                          <Trash2 class="h-3 w-3 text-destructive" />
+                        <Button variant="ghost" size="icon" class="h-5 w-5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="removeCompletionHeader(String(key))">
+                          <Trash2 class="h-3 w-3" />
                         </Button>
                       </div>
                     </div>

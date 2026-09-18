@@ -226,7 +226,7 @@ onMounted(() => fetchActions())
                 <template #cell-actions="{ item: action }">
                   <div class="flex items-center justify-end gap-1">
                     <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" @click="openEditDialog(action)" />
-                    <IconButton :icon="Trash2" :label="$t('common.delete')" class="h-8 w-8 text-destructive" @click="actionToDelete = action; isDeleteDialogOpen = true" />
+                    <IconButton :icon="Trash2" :label="$t('common.delete')" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="actionToDelete = action; isDeleteDialogOpen = true" />
                   </div>
                 </template>
                 <template #empty-action>

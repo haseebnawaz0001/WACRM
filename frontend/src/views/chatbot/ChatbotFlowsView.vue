@@ -210,7 +210,7 @@ async function confirmDeleteFlow() {
                 <template #cell-actions="{ item: flow }">
                   <div class="flex items-center justify-end gap-1">
                     <IconButton :icon="Pencil" :label="$t('chatbotFlows.editFlowLabel')" class="h-8 w-8" @click="editFlow(flow)" />
-                    <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(flow)" />
+                    <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" @click="openDeleteDialog(flow)" />
                   </div>
                 </template>
                 <template #empty-action>
