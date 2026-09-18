@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Trash2 } from 'lucide-vue-next'
+import { Trash2, ArrowUp, ArrowDown } from 'lucide-vue-next'
 import { fieldsFor, configList, setConfigList, type CrmActionSpec } from './schema'
 
 const props = withDefaults(
@@ -49,19 +49,35 @@ const isLast = computed(() => props.index === props.total - 1)
           {{ t(`automations.actions.${action.type}`, action.type) }}
         </span>
       </div>
+      <!-- Drawn icons, not typed ones. These two were the literal characters
+           ↑ and ↓ set in the body font, so they sat at a different weight and
+           optical size from every other control in the app and shifted with
+           whatever font the system resolved. -->
       <div v-if="editable" class="flex items-center gap-1">
         <Button
-          variant="ghost" size="sm" :disabled="isFirst"
+          variant="ghost" size="icon" :disabled="isFirst"
           :aria-label="t('common.moveUp')"
           @click="emit('move', -1)"
-        >↑</Button>
+        >
+          <ArrowUp class="h-4 w-4" />
+        </Button>
         <Button
-          variant="ghost" size="sm" :disabled="isLast"
+          variant="ghost" size="icon" :disabled="isLast"
           :aria-label="t('common.moveDown')"
           @click="emit('move', 1)"
-        >↓</Button>
-        <Button variant="ghost" size="icon" :aria-label="t('common.delete')" @click="emit('remove')">
-          <Trash2 class="h-4 w-4 text-destructive" />
+        >
+          <ArrowDown class="h-4 w-4" />
+        </Button>
+        <!-- Destructive on hover, like every other delete in the product. Red
+             at rest made it the loudest thing in a group of three peers. -->
+        <Button
+          variant="ghost"
+          size="icon"
+          class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          :aria-label="t('common.delete')"
+          @click="emit('remove')"
+        >
+          <Trash2 class="h-4 w-4" />
         </Button>
       </div>
     </div>
