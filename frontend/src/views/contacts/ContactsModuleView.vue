@@ -315,7 +315,6 @@ onMounted(async () => {
     <PageHeader
       :title="$t('contacts.title')"
       :icon="ContactIcon"
-      icon-gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20"
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="showFilters = !showFilters">

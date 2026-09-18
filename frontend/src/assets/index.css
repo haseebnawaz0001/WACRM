@@ -141,10 +141,31 @@
   h4, h5, h6 {
     @apply text-base;
   }
+  /*
+   * An anchor takes the colour of whatever it sits in.
+   *
+   * This used to be `text-primary font-medium`, which painted every link in the
+   * app accent green and semibold. Almost nothing here is a link in a sentence:
+   * links are rows, cards, table cells and nav items, so the rule turned whole
+   * screens green — an agent's Home was eight lines of emerald with no way to
+   * tell the urgent one from the rest — and it spent the one colour reserved for
+   * "this is the action" on every piece of text that happened to navigate.
+   *
+   * It was also being fought by hand. Table cells across settings carry
+   * `text-inherit no-underline hover:opacity-80` for no reason other than
+   * undoing it, which is the clearest sign a base rule is wrong.
+   *
+   * A link that really is a word in a sentence asks for `.link`.
+   */
   a {
-    @apply text-primary font-medium;
+    color: inherit;
     text-decoration: none;
   }
+}
+
+/* A link that reads as one: inside prose, beside a heading, under a form. */
+.link {
+  @apply text-primary font-medium underline-offset-4 hover:underline;
 }
 
 /* Consistent focus states */

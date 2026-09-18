@@ -9,7 +9,6 @@ defineProps<{
   title: string
   description?: string
   icon?: Component
-  iconGradient?: string
   backLink: string
   breadcrumbs?: Array<{ label: string; href?: string }>
   isLoading?: boolean
@@ -25,7 +24,6 @@ defineProps<{
       :title="title"
       :description="description"
       :icon="icon"
-      :icon-gradient="iconGradient"
       :back-link="backLink"
       :breadcrumbs="breadcrumbs"
     >

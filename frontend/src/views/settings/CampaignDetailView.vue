@@ -980,7 +980,6 @@ onUnmounted(() => {
   <DetailPageLayout
     :title="isNew ? $t('campaigns.newCampaign', 'New Campaign') : (campaign?.name || '')"
     :icon="Megaphone"
-    icon-gradient="bg-gradient-to-br from-pink-500 to-rose-600 shadow-pink-500/20"
     back-link="/campaigns"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"

@@ -117,7 +117,7 @@ async function confirmDelete() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('teams.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('teams.title')" :icon="Users" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
         <RouterLink v-if="canWriteTeams" to="/settings/teams/new"><Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button></RouterLink>
       </template>
@@ -151,7 +151,7 @@ async function confirmDelete() {
                   <RouterLink v-if="canWriteTeams" to="/settings/teams/new"><Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button></RouterLink>
                 </template>
                 <template #cell-team="{ item: team }">
-                  <RouterLink :to="`/settings/teams/${team.id}`" class="flex items-center gap-3 text-inherit no-underline hover:opacity-80">
+                  <RouterLink :to="`/settings/teams/${team.id}`" class="flex items-center gap-3 hover:opacity-80">
                     <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Users class="h-4 w-4 text-primary" /></div>
                     <p class="font-medium truncate">{{ team.name }}</p>
                   </RouterLink>

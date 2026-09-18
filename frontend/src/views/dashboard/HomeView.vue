@@ -16,6 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/shared'
 import { Inbox, ListChecks, AlertCircle } from 'lucide-vue-next'
 import { inboxService, tasksService, type InboxRow, type Task } from '@/services/api'
@@ -74,19 +75,40 @@ const greeting = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <div class="flex h-full flex-col">
+    <!-- Full width, like every other page: this header was nested inside the
+         page padding, so its rule stopped short of both edges and the page
+         started with a line that did not line up with anything. -->
     <PageHeader :title="greeting" :description="t('home.subtitle')" />
 
-    <p v-if="isLoading" class="text-sm text-muted-foreground">{{ t('common.loading') }}</p>
+    <div class="flex-1 overflow-y-auto p-6 max-md:p-4">
+      <!-- Capped, because the two lists are a name at one end of the row and a
+           time at the other. Across a 1600px column the eye cannot carry one to
+           the other, and the widest this page ever needs to be is two readable
+           lists side by side. Left-aligned, not centred: centring floated the
+           cards away from the heading they belong to. -->
+      <div class="w-full max-w-5xl">
+        <!-- A skeleton in the shape of the answer, not the word "Loading". -->
+        <div v-if="isLoading" class="grid gap-4 lg:grid-cols-2">
+          <div v-for="i in 2" :key="i" class="rounded-lg border bg-card p-4">
+            <Skeleton class="mb-4 h-5 w-40" />
+            <div class="space-y-3">
+              <div v-for="row in 4" :key="row" class="flex items-center gap-3">
+                <Skeleton class="h-4 flex-1" />
+                <Skeleton class="h-4 w-20" />
+              </div>
+            </div>
+          </div>
+        </div>
 
-    <div v-else class="grid gap-4 lg:grid-cols-2">
+        <div v-else class="grid gap-4 lg:grid-cols-2">
       <Card v-if="canSeeInbox">
         <CardHeader class="flex flex-row items-center justify-between gap-2 space-y-0">
           <CardTitle class="flex items-center gap-2 text-base">
             <Inbox class="h-4 w-4" />
             {{ t('home.myConversations') }}
           </CardTitle>
-          <RouterLink to="/inbox" class="text-sm underline-offset-2 hover:underline">
+          <RouterLink to="/inbox" class="link text-sm">
             {{ t('common.viewAll') }}
           </RouterLink>
         </CardHeader>
@@ -124,7 +146,7 @@ const greeting = computed(() => {
               {{ t('home.dueTodayCount', { count: dueToday }) }}
             </Badge>
           </CardTitle>
-          <RouterLink to="/tasks" class="text-sm underline-offset-2 hover:underline">
+          <RouterLink to="/tasks" class="link text-sm">
             {{ t('common.viewAll') }}
           </RouterLink>
         </CardHeader>
@@ -144,12 +166,21 @@ const greeting = computed(() => {
               :aria-label="t('home.overdue')"
             />
             <span class="min-w-0 flex-1 truncate text-sm">{{ task.title }}</span>
-            <span class="shrink-0 text-xs text-muted-foreground">
+            <!-- Overdue reads in the date as well as the icon: the date is
+                 the thing being compared down the column. -->
+            <span
+              :class="[
+                'shrink-0 text-xs',
+                task.overdue ? 'font-medium text-destructive' : 'text-muted-foreground'
+              ]"
+            >
               {{ formatRelative(task.due_at) }}
             </span>
           </RouterLink>
         </CardContent>
       </Card>
+        </div>
+      </div>
     </div>
   </div>
 </template>

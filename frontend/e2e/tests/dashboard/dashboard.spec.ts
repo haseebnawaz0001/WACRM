@@ -10,7 +10,10 @@ test.describe('Dashboard', () => {
 
   test('should display dashboard page', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('Dashboard')
-    await expect(page.getByText('Customizable analytics overview')).toBeVisible()
+    // The header used to carry "Customizable analytics overview" under the
+    // title. It said nothing the two buttons beside it do not say better, so
+    // the page is identified by its title and its controls instead.
+    await expect(page.getByRole('button', { name: /add widget/i })).toBeVisible()
   })
 
   test('should display stat cards', async ({ page }) => {

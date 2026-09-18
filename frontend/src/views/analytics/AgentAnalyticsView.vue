@@ -307,7 +307,6 @@ void _displayStats.value // Suppress unused warning
       :title="$t('agentAnalytics.title')"
       :description="isAdminOrManager ? $t('agentAnalytics.subtitle') : $t('agentAnalytics.myMetrics')"
       :icon="BarChart3"
-      icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
     >
       <template #actions>
         <!-- Agent Filter (Admin/Manager only) -->

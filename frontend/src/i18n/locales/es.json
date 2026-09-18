@@ -1266,7 +1266,6 @@
   },
   "dashboard": {
     "title": "Panel de control",
-    "subtitle": "Resumen de analíticas personalizable",
     "addWidget": "Agregar widget",
     "createWidget": "Crear widget",
     "editWidget": "Editar widget",

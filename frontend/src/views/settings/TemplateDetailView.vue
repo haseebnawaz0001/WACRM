@@ -665,7 +665,6 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('templates.newTemplate', 'New Template') : (template?.display_name || template?.name || '')"
     :icon="FileText"
-    icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
     back-link="/templates"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"

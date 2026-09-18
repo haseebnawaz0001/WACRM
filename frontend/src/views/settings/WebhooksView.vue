@@ -133,7 +133,7 @@ onMounted(() => fetchWebhooks())
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('webhooks.title')" :subtitle="$t('webhooks.subtitle')" :icon="WebhookIcon" icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20" back-link="/settings">
+    <PageHeader :title="$t('webhooks.title')" :subtitle="$t('webhooks.subtitle')" :icon="WebhookIcon" back-link="/settings">
       <template #actions>
         <RouterLink v-if="canWrite" to="/settings/webhooks/new">
           <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('webhooks.addWebhook') }}</Button>
@@ -166,7 +166,7 @@ onMounted(() => fetchWebhooks())
             <CardContent>
               <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" :empty-title="searchQuery ? $t('webhooks.noMatchingWebhooks') : $t('webhooks.noWebhooksYet')" :empty-description="searchQuery ? $t('webhooks.noMatchingWebhooksDesc') : $t('webhooks.noWebhooksYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="webhooks" @page-change="handlePageChange">
                 <template #cell-name="{ item: webhook }">
-                  <RouterLink :to="`/settings/webhooks/${webhook.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ webhook.name }}</RouterLink>
+                  <RouterLink :to="`/settings/webhooks/${webhook.id}`" class="font-medium hover:opacity-80">{{ webhook.name }}</RouterLink>
                 </template>
                 <template #cell-url="{ item: webhook }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ webhook.url }}</span></template>
                 <template #cell-events="{ item: webhook }">

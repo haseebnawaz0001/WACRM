@@ -296,7 +296,7 @@ function getHeaderIcon(type: string) {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('templates.title')" :subtitle="$t('templates.subtitle')" :icon="FileText" icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20">
+    <PageHeader :title="$t('templates.title')" :subtitle="$t('templates.subtitle')" :icon="FileText">
       <template #actions>
         <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'">
           <Loader2 v-if="isSyncing" class="h-4 w-4 mr-2 animate-spin" />
@@ -366,7 +366,7 @@ function getHeaderIcon(type: string) {
                 v-model:sort-direction="sortDirection"
               >
                 <template #cell-name="{ item: template }">
-                  <RouterLink :to="`/templates/${template.id}`" class="text-inherit no-underline hover:opacity-80">
+                  <RouterLink :to="`/templates/${template.id}`" class="hover:opacity-80">
                     <span class="font-medium">{{ template.display_name || template.name }}</span>
                     <p class="text-xs font-mono text-muted-foreground">{{ template.name }}</p>
                   </RouterLink>

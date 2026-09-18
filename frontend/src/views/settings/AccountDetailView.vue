@@ -278,7 +278,6 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('accounts.newAccount', 'New Account') : (account?.name || '')"
     :icon="Phone"
-    icon-gradient="bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/20"
     back-link="/settings/accounts"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"

@@ -124,7 +124,6 @@ const emptyDescription = computed(() => {
     <PageHeader
       :title="$t('keywords.title')"
       :icon="Key"
-      icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20"
       back-link="/chatbot"
       :breadcrumbs="[{ label: $t('keywords.backToChatbot'), href: '/chatbot' }, { label: $t('nav.keywords') }]"
     >
@@ -177,7 +176,7 @@ const emptyDescription = computed(() => {
                 @page-change="handlePageChange"
               >
                 <template #cell-keywords="{ item: rule }">
-                  <RouterLink :to="`/chatbot/keywords/${rule.id}`" class="flex flex-wrap gap-1 text-inherit no-underline hover:opacity-80">
+                  <RouterLink :to="`/chatbot/keywords/${rule.id}`" class="flex flex-wrap gap-1 hover:opacity-80">
                     <Badge v-for="keyword in rule.keywords.slice(0, 3)" :key="keyword" variant="outline" class="text-xs">
                       {{ keyword }}
                     </Badge>

@@ -233,7 +233,6 @@ onMounted(() => fetchTypes())
     <PageHeader
       :title="$t('taskTypes.title')"
       :icon="ListTodo"
-      icon-gradient="bg-gradient-to-br from-sky-500 to-blue-600 shadow-sky-500/20"
       back-link="/settings"
       :breadcrumbs="breadcrumbs"
     >

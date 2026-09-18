@@ -1253,7 +1253,6 @@
   },
   "dashboard": {
     "title": "डैशबोर्ड",
-    "subtitle": "अवलोकन",
     "addWidget": "जोड़ें",
     "createWidget": "बनाएं",
     "editWidget": "संपादित",

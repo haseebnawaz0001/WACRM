@@ -156,7 +156,6 @@ onMounted(async () => {
     <DetailPageLayout
       :title="isNew ? $t('apiKeys.newApiKey', 'New API Key') : (apiKey?.name || '')"
       :icon="Key"
-      icon-gradient="bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20"
       back-link="/settings/api-keys"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"

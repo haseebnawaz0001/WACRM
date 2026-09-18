@@ -247,7 +247,6 @@ function getProgressPercentage(campaign: Campaign): number {
       :title="$t('campaigns.title')"
       :subtitle="$t('campaigns.subtitle')"
       :icon="Megaphone"
-      icon-gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/20"
     >
       <template #actions>
         <RouterLink to="/campaigns/new">
@@ -318,7 +317,7 @@ function getProgressPercentage(campaign: Campaign): number {
                 @page-change="handlePageChange"
               >
                 <template #cell-name="{ item: campaign }">
-                  <RouterLink :to="`/campaigns/${campaign.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ campaign.name }}</RouterLink>
+                  <RouterLink :to="`/campaigns/${campaign.id}`" class="font-medium hover:opacity-80">{{ campaign.name }}</RouterLink>
                 </template>
                 <template #cell-template="{ item: campaign }">
                   <span class="text-sm text-muted-foreground">{{ campaign.template_name || '—' }}</span>

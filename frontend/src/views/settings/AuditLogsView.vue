@@ -155,7 +155,6 @@ onMounted(async () => {
       :title="t('auditLogs.title')"
       :description="t('auditLogs.description')"
       :icon="ScrollText"
-      icon-gradient="bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20"
     />
 
     <ScrollArea class="flex-1">
@@ -240,7 +239,7 @@ onMounted(async () => {
                   <div class="py-1">
                     <RouterLink
                       :to="`/settings/audit-logs/${log.id}`"
-                      class="font-medium text-inherit no-underline hover:opacity-80"
+                      class="font-medium hover:opacity-80"
                     >
                       {{ log.user_name }}
                     </RouterLink>

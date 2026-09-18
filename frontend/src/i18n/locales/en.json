@@ -1539,7 +1539,6 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "subtitle": "Customizable analytics overview",
     "addWidget": "Add Widget",
     "createWidget": "Create Widget",
     "editWidget": "Edit Widget",

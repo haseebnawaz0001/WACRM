@@ -143,7 +143,6 @@ async function toggleContext(context: AIContext) {
     <PageHeader
       :title="$t('aiContexts.title')"
       :icon="Sparkles"
-      icon-gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/20"
       back-link="/chatbot"
       :breadcrumbs="[{ label: $t('aiContexts.backToChatbot'), href: '/chatbot' }, { label: $t('nav.aiContexts') }]"
     >
@@ -196,7 +195,7 @@ async function toggleContext(context: AIContext) {
                 @page-change="handlePageChange"
               >
                 <template #cell-name="{ item: context }">
-                  <RouterLink :to="`/chatbot/ai/${context.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ context.name }}</RouterLink>
+                  <RouterLink :to="`/chatbot/ai/${context.id}`" class="font-medium hover:opacity-80">{{ context.name }}</RouterLink>
                 </template>
                 <template #cell-context_type="{ item: context }">
                   <Badge

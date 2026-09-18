@@ -52,6 +52,7 @@ import {
   BarChart3,
   X,
   GripVertical,
+  LayoutDashboard,
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Doughnut, chartColors, barLineOptions, pieOptions } from '@/lib/charts'
@@ -729,7 +730,10 @@ onUnmounted(() => {
            controls used to run off the right edge, taking the date range with
            them, and the title sat underneath the app's own top bar. -->
       <div class="flex min-h-16 flex-col gap-3 px-6 py-3 max-md:px-4 md:flex-row md:items-center">
-        <div class="min-w-0 md:flex-1">
+        <div class="flex min-w-0 items-center md:flex-1">
+          <!-- The same quiet glyph every other page header carries, so the one
+               page with a hand-rolled header still looks like the rest. -->
+          <LayoutDashboard class="mr-2.5 h-5 w-5 shrink-0 text-white/40 light:text-gray-400" aria-hidden="true" />
           <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ $t('dashboard.title') }}</h1>
         </div>
 

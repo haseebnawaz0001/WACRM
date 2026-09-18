@@ -106,7 +106,7 @@ onMounted(() => fetchItems())
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('apiKeys.title')" :subtitle="$t('apiKeys.subtitle')" :icon="Key" icon-gradient="bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20" back-link="/settings">
+    <PageHeader :title="$t('apiKeys.title')" :subtitle="$t('apiKeys.subtitle')" :icon="Key" back-link="/settings">
       <template #actions>
         <RouterLink v-if="canWrite" to="/settings/api-keys/new">
           <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>
@@ -137,7 +137,7 @@ onMounted(() => fetchItems())
             <CardContent>
               <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" :empty-title="searchQuery ? $t('apiKeys.noMatchingApiKeys') : $t('apiKeys.noApiKeysYet')" :empty-description="searchQuery ? $t('apiKeys.noMatchingApiKeysDesc') : $t('apiKeys.noApiKeysYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="API keys" @page-change="handlePageChange">
                 <template #cell-name="{ item: key }">
-                  <RouterLink :to="`/settings/api-keys/${key.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ key.name }}</RouterLink>
+                  <RouterLink :to="`/settings/api-keys/${key.id}`" class="font-medium hover:opacity-80">{{ key.name }}</RouterLink>
                 </template>
                 <template #cell-key="{ item: key }"><code class="bg-muted px-2 py-1 rounded-md text-sm">whm_{{ key.key_prefix }}...</code></template>
                 <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>

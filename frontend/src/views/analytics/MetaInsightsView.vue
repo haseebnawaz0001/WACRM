@@ -647,7 +647,6 @@ const chartOptions = {
       :title="$t('metaInsights.title')"
       :description="$t('metaInsights.subtitle')"
       :icon="BarChart3"
-      icon-gradient="bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/20"
     >
       <template #actions>
         <!-- Account Filter -->

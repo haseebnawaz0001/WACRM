@@ -15,7 +15,6 @@ defineProps<{
   title: string
   description?: string
   icon?: Component
-  iconGradient?: string
   backLink?: string
   breadcrumbs?: Array<{ label: string; href?: string }>
 }>()
@@ -29,13 +28,21 @@ defineProps<{
           <ArrowLeft class="h-5 w-5" />
         </Button>
       </RouterLink>
-      <div
+      <!--
+        The page's glyph, flat.
+
+        Every view used to hand this header a gradient of its own — thirty-eight
+        of them, from "blue-500 to indigo-600" to "yellow-500 to orange-600" —
+        so each page opened with a saturated plaque in a different hue, none of
+        which meant anything. The sidebar already says which page you are on;
+        this is a quiet marker beside the title, not a badge announcing it.
+      -->
+      <component
         v-if="icon"
-        class="h-8 w-8 rounded-lg flex items-center justify-center mr-3 shadow-lg"
-        :class="iconGradient || 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20'"
-      >
-        <component :is="icon" class="h-4 w-4 text-white" />
-      </div>
+        :is="icon"
+        class="mr-2.5 h-5 w-5 shrink-0 text-white/40 light:text-gray-400"
+        aria-hidden="true"
+      />
       <div class="flex-1">
         <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ title }}</h1>
         <template v-if="breadcrumbs?.length">

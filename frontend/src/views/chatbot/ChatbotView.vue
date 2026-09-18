@@ -129,7 +129,6 @@ const statCards = computed(() => [
       :title="$t('chatbot.title')"
       :description="$t('chatbot.subtitle')"
       :icon="Bot"
-      icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20"
     >
       <template #actions>
         <div class="flex items-center gap-3">

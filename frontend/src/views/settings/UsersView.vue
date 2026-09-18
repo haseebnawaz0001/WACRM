@@ -200,7 +200,7 @@ async function copyInviteLink() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('users.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('users.title')" :icon="Users" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
         <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('users.copyInviteLink') }}</Button>
         <Button v-if="organizationsStore.isMultiOrg && authStore.hasPermission('organizations', 'assign')" variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
@@ -257,7 +257,7 @@ async function copyInviteLink() {
             <CardContent>
               <DataTable :items="users" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? $t('users.noMatchingUsers') : $t('users.noUsersFound')" :empty-description="searchQuery ? $t('users.noMatchingUsersDesc') : $t('users.noUsersFoundDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="users" @page-change="handlePageChange">
                 <template #cell-user="{ item: user }">
-                  <RouterLink :to="`/settings/users/${user.id}`" class="flex items-center gap-3 text-inherit no-underline hover:opacity-80">
+                  <RouterLink :to="`/settings/users/${user.id}`" class="flex items-center gap-3 hover:opacity-80">
                     <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <component :is="getRoleIcon(getRoleName(user))" class="h-4 w-4 text-primary" />
                     </div>

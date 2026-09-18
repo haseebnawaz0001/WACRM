@@ -99,12 +99,22 @@ onUnmounted(() => store.disconnect())
       >
         <span class="relative inline-flex">
           <Bell class="h-4 w-4" aria-hidden="true" />
+          <!-- Collapsed there is no room for a number, so the rail gets a dot:
+               the count itself is unreadable at that size anyway, and the badge
+               that used to hold it was 14px square sitting on a 14px bell,
+               covering nearly half the icon it was meant to annotate. -->
           <span
-            v-if="store.unreadCount > 0"
-            class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold leading-none text-white"
-          >{{ badge }}</span>
+            v-if="props.collapsed && store.unreadCount > 0"
+            class="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-[#0a0a0b] light:ring-white"
+          />
         </span>
         <span v-if="!props.collapsed" class="text-[13px]">{{ t('notifications.title') }}</span>
+        <!-- Expanded, the count goes where every other count in this sidebar
+             goes: the end of the row, in the same pill. -->
+        <span
+          v-if="!props.collapsed && store.unreadCount > 0"
+          class="ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-500/15 px-1 text-[11px] font-semibold tabular-nums text-emerald-400 light:bg-emerald-100 light:text-emerald-700"
+        >{{ badge }}</span>
       </Button>
     </PopoverTrigger>
 

@@ -1461,7 +1461,6 @@
   },
   "dashboard": {
     "title": "Painel",
-    "subtitle": "Visão geral de relatórios personalizados",
     "addWidget": "Adicionar Widget",
     "createWidget": "Criar Widget",
     "editWidget": "Editar Widget",

@@ -179,7 +179,6 @@ onMounted(async () => {
     <DetailPageLayout
       :title="user?.full_name || ''"
       :icon="UserIcon"
-      icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
       back-link="/settings/users"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"

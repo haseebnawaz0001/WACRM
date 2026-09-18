@@ -222,7 +222,6 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('aiContexts.newContext', 'New AI Context') : (contextData?.name || '')"
     :icon="Sparkles"
-    icon-gradient="bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20"
     back-link="/chatbot/ai"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"

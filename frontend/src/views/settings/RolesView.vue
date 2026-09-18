@@ -103,7 +103,7 @@ function editTooltip(role: Role): string {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('roles.title')" :subtitle="$t('roles.subtitle')" :icon="Shield" icon-gradient="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20" back-link="/settings">
+    <PageHeader :title="$t('roles.title')" :subtitle="$t('roles.subtitle')" :icon="Shield" back-link="/settings">
       <template #actions>
         <RouterLink v-if="canWrite" to="/settings/roles/new">
           <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
@@ -136,7 +136,7 @@ function editTooltip(role: Role): string {
             <CardContent>
               <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
                 <template #cell-role="{ item: role }">
-                  <RouterLink :to="`/settings/roles/${role.id}`" class="flex items-center gap-2 text-inherit no-underline hover:opacity-80">
+                  <RouterLink :to="`/settings/roles/${role.id}`" class="flex items-center gap-2 hover:opacity-80">
                     <span class="font-medium">{{ role.name }}</span>
                     <Badge v-if="role.is_system" variant="secondary"><Lock class="h-3 w-3 mr-1" />{{ $t('roles.system') }}</Badge>
                     <Badge v-if="role.is_default" variant="outline"><Star class="h-3 w-3 mr-1" />{{ $t('roles.default') }}</Badge>

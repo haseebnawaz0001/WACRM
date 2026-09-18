@@ -256,7 +256,6 @@ async function confirmDelete() {
     <PageHeader
       :title="$t('accounts.title')"
       :icon="Phone"
-      icon-gradient="bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/20"
       back-link="/settings"
       :breadcrumbs="breadcrumbs"
     >
@@ -336,7 +335,7 @@ async function confirmDelete() {
                   </div>
                 </template>
                 <template #cell-account="{ item: account }">
-                  <RouterLink :to="`/settings/accounts/${account.id}`" class="flex items-center gap-3 text-inherit no-underline hover:opacity-80">
+                  <RouterLink :to="`/settings/accounts/${account.id}`" class="flex items-center gap-3 hover:opacity-80">
                     <div class="h-9 w-9 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
                       <Phone class="h-4 w-4 text-emerald-500" />
                     </div>
