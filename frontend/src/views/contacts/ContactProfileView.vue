@@ -190,8 +190,8 @@ function linkFor(item: TimelineItem): string | null {
   switch (item.type) {
     case 'message_burst':
       return data.message_id
-        ? `/chat/${contactId.value}?around=${data.message_id}`
-        : `/chat/${contactId.value}`
+        ? `/inbox/${contactId.value}?around=${data.message_id}`
+        : `/inbox/${contactId.value}`
     case 'campaign_send':
       return data.campaign_id ? `/campaigns/${data.campaign_id}` : null
     case 'call':
@@ -292,7 +292,7 @@ onUnmounted(() => {
             <ArrowLeft class="mr-1.5 h-4 w-4" />
             {{ t('common.back') }}
           </Button>
-          <Button size="sm" @click="router.push(`/chat/${contactId}`)">
+          <Button size="sm" @click="router.push(`/inbox/${contactId}`)">
             <MessageSquare class="mr-1.5 h-4 w-4" />
             {{ t('contactProfile.openChat') }}
           </Button>

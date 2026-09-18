@@ -97,7 +97,7 @@ const greeting = computed(() => {
           <RouterLink
             v-for="row in conversations"
             :key="row.id"
-            :to="`/chat/${row.contact_id}`"
+            :to="`/inbox/${row.contact_id}`"
             class="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-accent/40"
           >
             <span class="min-w-0 flex-1 truncate text-sm">

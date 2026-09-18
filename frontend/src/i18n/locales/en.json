@@ -3173,7 +3173,10 @@
       "tomorrow": "Tomorrow morning",
       "mondayMorning": "Monday morning",
       "nextWeek": "Next week"
-    }
+    },
+    "viewContacts": "Contacts",
+    "pickNextHint": "Take the next waiting conversation and open it",
+    "waitingNow": "just now"
   },
   "segments": {
     "title": "Segments",

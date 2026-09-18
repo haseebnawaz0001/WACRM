@@ -306,7 +306,7 @@ func (a *App) applyImportRow(orgID, userID uuid.UUID, fieldSvc *customfields.Ser
 			First(&account).Error; err != nil {
 			return fmt.Errorf("unknown WhatsApp account %q", row.WhatsAppAccount)
 		}
-		updates["whatsapp_account"] = account.Name
+		updates["whats_app_account"] = account.Name
 	}
 	if row.AssignedUserID != "" {
 		assignee, err := uuid.Parse(row.AssignedUserID)

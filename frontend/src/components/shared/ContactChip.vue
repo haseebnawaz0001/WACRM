@@ -27,7 +27,7 @@ const auth = useAuthStore()
 
 const to = computed(() => {
   if (!props.id || !auth.hasPermission('chat', 'read')) return null
-  return `/chat/${props.id}`
+  return `/inbox/${props.id}`
 })
 </script>
 

@@ -38,7 +38,42 @@ const E2E_USER_EMAIL_PREDICATE = `(email LIKE '%@e2e.test' OR email LIKE 'e2e-%@
 // the loop continues. Phrased as "DELETE ... USING <child>" or scoped to
 // the prefix so stable rows (admin@test.com, system roles) are untouched.
 const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
-  // Messages first — they reference contacts and users.
+  // The CRM tables reference contacts too, and were added after this list was
+  // written — so every run ended with "violates foreign key constraint
+  // fk_tasks_contact" and left the contacts behind.
+  {
+    label: 'tasks on E2E contacts',
+    sql: `DELETE FROM tasks WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'deal stage history on E2E contacts',
+    sql: `DELETE FROM deal_stage_history WHERE deal_id IN (SELECT id FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %'))`,
+  },
+  {
+    label: 'deals on E2E contacts',
+    sql: `DELETE FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'custom field values of E2E contacts',
+    sql: `DELETE FROM custom_field_values WHERE entity_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'activity of E2E contacts',
+    sql: `DELETE FROM contact_activities WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'outbox events of E2E contacts',
+    sql: `DELETE FROM crm_event_outbox WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'merge records of E2E contacts',
+    sql: `DELETE FROM contact_merges WHERE primary_contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %') OR secondary_contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'identities of E2E contacts',
+    sql: `DELETE FROM contact_identities WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  // Messages next — they reference contacts and users.
   {
     label: 'messages of E2E contacts',
     sql: `DELETE FROM messages WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,

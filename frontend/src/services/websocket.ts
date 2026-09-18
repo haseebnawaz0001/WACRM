@@ -29,7 +29,7 @@ function showNotification(title: string, body: string, contactId: string) {
     action: {
       label: 'View',
       onClick: () => {
-        router.push(`/chat/${contactId}`)
+        router.push(`/inbox/${contactId}`)
       },
       actionButtonStyle: {
         background: 'transparent',

@@ -1576,7 +1576,9 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 
 	updates := map[string]any{}
 	if req.WhatsAppAccount != "" {
-		updates["whatsapp_account"] = req.WhatsAppAccount
+		// The column is whats_app_account: GORM derived it from the Go field
+		// name, and a map update names columns rather than fields.
+		updates["whats_app_account"] = req.WhatsAppAccount
 	}
 	if req.Tags != nil {
 		tagsArray := make(models.JSONBArray, len(req.Tags))

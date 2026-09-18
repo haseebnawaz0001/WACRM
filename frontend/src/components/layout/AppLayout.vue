@@ -137,8 +137,8 @@ function filterItems(items: NavSection['items']) {
       const originalPath = item.path
       const isActive = originalPath === '/'
         ? route.name === 'dashboard'
-        : originalPath === '/chat'
-          ? route.name === 'chat' || route.name === 'chat-conversation'
+        : originalPath === '/inbox'
+          ? route.name === 'inbox'
           : route.path.startsWith(originalPath)
 
       return {

@@ -59,9 +59,11 @@ test.describe('Custom Role with Limited Permissions', () => {
 
   test('user with limited role can access permitted pages', async ({ page }) => {
     await loginAs(page, user)
+    // /chat is the pre-merge address and redirects to the surface that
+    // replaced it; links written before the merge still have to work.
     await page.goto('/chat')
     await page.waitForLoadState('networkidle')
-    expect(page.url()).toContain('/chat')
+    expect(page.url()).toContain('/inbox')
     await expect(page.locator('body')).not.toContainText('forbidden', { ignoreCase: true })
   })
 

@@ -132,7 +132,7 @@ watch(open, isOpen => {
           v-for="contact in contacts"
           :key="contact.id"
           :value="`contact-${contact.id}`"
-          @select="go(`/chat/${contact.id}`)"
+          @select="go(`/inbox/${contact.id}`)"
         >
           <span class="truncate">{{ contact.name }}</span>
           <span class="ml-2 truncate text-xs text-muted-foreground">{{ contact.phone }}</span>

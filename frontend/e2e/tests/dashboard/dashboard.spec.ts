@@ -53,16 +53,16 @@ test.describe('Dashboard', () => {
     await expect(main.getByText('Common tasks and shortcuts')).toBeVisible()
 
     // Check for quick action links - scope to main to avoid sidebar duplicates
-    await expect(main.locator('a[href="/chat"]')).toBeVisible()
+    await expect(main.locator('a[href="/inbox"]')).toBeVisible()
     await expect(main.locator('a[href="/campaigns"]')).toBeVisible()
     await expect(main.locator('a[href="/templates"]')).toBeVisible()
     await expect(main.locator('a[href="/chatbot"]')).toBeVisible()
   })
 
-  test('should navigate to chat from quick actions', async ({ page }) => {
+  test('should navigate to the inbox from quick actions', async ({ page }) => {
     // Use main to scope to quick actions, not sidebar
-    await page.locator('main a[href="/chat"]').click()
-    await expect(page).toHaveURL(/\/chat/)
+    await page.locator('main a[href="/inbox"]').click()
+    await expect(page).toHaveURL(/\/inbox/)
   })
 
   test('should navigate to campaigns from quick actions', async ({ page }) => {

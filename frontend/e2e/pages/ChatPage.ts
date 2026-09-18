@@ -34,9 +34,9 @@ export class ChatPage extends BasePage {
 
   async goto(contactId?: string) {
     if (contactId) {
-      await this.page.goto(`/chat/${contactId}`)
+      await this.page.goto(`/inbox/${contactId}`)
     } else {
-      await this.page.goto('/chat')
+      await this.page.goto('/inbox')
     }
     await this.page.waitForLoadState('networkidle')
   }

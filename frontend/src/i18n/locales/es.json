@@ -2336,6 +2336,16 @@
       "tomorrow": "Tomorrow morning",
       "mondayMorning": "Monday morning",
       "nextWeek": "Next week"
-    }
+    },
+    "viewMine": "Mine",
+    "viewUnassigned": "Unassigned",
+    "viewBot": "Bot",
+    "viewAll": "All",
+    "viewContacts": "Contacts",
+    "pickNextHint": "Take the next waiting conversation and open it",
+    "waitingNow": "just now",
+    "waitingMinutes": "waiting {count}m",
+    "waitingHours": "waiting {count}h",
+    "waitingDays": "waiting {count}d"
   }
 }

@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Home,
-  MessageSquare,
   Bot,
   FileText,
   Megaphone,
@@ -103,12 +102,8 @@ export const navigationSections: NavSection[] = [
         icon: Home
       },
       {
-        name: 'nav.chat',
-        path: '/chat',
-        icon: MessageSquare,
-        permission: 'chat'
-      },
-      {
+        // The queue and the thread are one surface now (plan 10, §8): the list
+        // picks what to work on, the pane beside it is where the work happens.
         name: 'nav.inbox',
         badgeKey: 'inboxUnread',
         path: '/inbox',
@@ -319,7 +314,7 @@ export interface NavShortcut {
 // navigation working. Users have these keys stored against their dashboard; a
 // key that no longer resolves renders as a gap they cannot remove.
 const legacyShortcutKeys: Record<string, string> = {
-  chat: '/chat',
+  chat: '/inbox',
   campaigns: '/campaigns',
   templates: '/templates',
   chatbot: '/chatbot',

@@ -185,3 +185,33 @@ func TestCreateContact_AppliesFieldDefaultsAndRequiredRules(t *testing.T) {
 	assert.Equal(t, "free", values["plan_tier"],
 		"a default that only exists in the editor is not a default")
 }
+
+// The column GORM derived for Contact.WhatsAppAccount is whats_app_account,
+// and a map-based update names columns rather than fields — so a single
+// mistyped key turns every create that names an account into a 400 that no
+// unit test which omits the field will ever see. It reached the e2e suite
+// once; this is the cheaper place to catch it.
+func TestCreateContact_StoresTheWhatsAppAccount(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	require.NoError(t, orgseed.Seed(app.DB, org.ID))
+	user := contactWriter(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"phone_number":     "14155559911",
+		"profile_name":     "Routed Contact",
+		"whatsapp_account": account.Name,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	require.NoError(t, app.CreateContact(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req),
+		string(testutil.GetResponseBody(req)))
+
+	var contact models.Contact
+	require.NoError(t, app.DB.Where("organization_id = ? AND phone_number = ?",
+		org.ID, "14155559911").First(&contact).Error)
+	assert.Equal(t, account.Name, contact.WhatsAppAccount,
+		"the account decides which number the reply goes out from")
+}

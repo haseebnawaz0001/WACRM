@@ -54,11 +54,22 @@ const router = createRouter({
           component: () => import('@/views/dashboard/HomeView.vue')
         },
         {
-          path: 'chat/:contactId?',
-          name: 'chat-conversation',
-          component: () => import('@/views/chat/ChatView.vue'),
+          // The merged conversation surface: the queue and the thread, which
+          // were two doors onto the same conversations table (plan 10, §8).
+          path: 'inbox/:contactId?',
+          name: 'inbox',
+          component: () => import('@/views/inbox/InboxView.vue'),
           props: true,
           meta: { permission: 'chat', stableKey: true }
+        },
+        {
+          // Everything written before the merge — bookmarks, notification
+          // deep links, the transfer toast — still points at /chat.
+          path: 'chat/:contactId?',
+          redirect: to => ({
+            name: 'inbox',
+            params: to.params.contactId ? { contactId: to.params.contactId } : {}
+          })
         },
         {
           path: 'profile',
@@ -227,12 +238,7 @@ const router = createRouter({
           component: () => import('@/views/pipeline/PipelineBoardView.vue'),
           meta: { permission: 'deals' }
         },
-        {
-          path: 'inbox',
-          name: 'inbox',
-          component: () => import('@/views/inbox/InboxView.vue'),
-          meta: { permission: 'chat' }
-        },
+
         {
           path: 'tasks',
           name: 'tasks',
