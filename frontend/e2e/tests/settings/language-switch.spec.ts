@@ -143,7 +143,11 @@ test.describe('Language Switching', () => {
       // Sidebar nav items should be in Spanish
       const sidebar = page.locator('aside')
       await expect(sidebar.getByText('Panel')).toBeVisible() // Dashboard -> Panel
-      await expect(sidebar.getByText('Configuración')).toBeVisible() // Settings -> Configuración
+      await expect(sidebar.getByText('Bandeja')).toBeVisible() // Inbox -> Bandeja
+      // Manage, not Settings: the sixteen settings pages moved behind one
+      // section when the sidebar was redesigned. This assertion is the thing
+      // that caught every nav string that redesign left untranslated.
+      await expect(sidebar.getByText('Configuración')).toBeVisible() // Manage -> Configuración
     })
   })
 })

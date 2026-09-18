@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -105,5 +106,31 @@ func TestViewerColumnsAreFilterable(t *testing.T) {
 			}
 		}
 		assert.True(t, used, "%q can be resolved to the viewer but no source can filter on it", column)
+	}
+}
+
+// A group-by column that holds a reference has somewhere to read a name from.
+//
+// Without this the axis carries the raw column: "Deals by stage" rendered three
+// rotated UUIDs spilling out of the card. The guard is on the whitelist rather
+// than on one chart, because the field picker offers every allowed column and
+// the next `*_id` added there would arrive with the same defect.
+func TestEveryIDGroupByResolvesToAName(t *testing.T) {
+	for field := range allowedGroupByFields {
+		if !strings.HasSuffix(field, "_id") {
+			continue
+		}
+		src, ok := idLabelSources[field]
+		assert.True(t, ok, "%s is groupable but has no name source, so it would chart as raw IDs", field)
+		assert.NotEmpty(t, src.table, "%s names no table to read from", field)
+		assert.NotEmpty(t, src.nameCol, "%s names no column to read", field)
+	}
+}
+
+// The name sources have to point at tables the product actually has.
+func TestIDLabelSourcesNameRealTables(t *testing.T) {
+	known := map[string]bool{"pipeline_stages": true, "users": true}
+	for field, src := range idLabelSources {
+		assert.True(t, known[src.table], "%s reads names from unknown table %q", field, src.table)
 	}
 }

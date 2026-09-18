@@ -126,13 +126,19 @@ test.describe('Create Organization via Sidebar', () => {
     }
   }
 
-  // Helper to find the plus button in the org switcher
+  /**
+   * The plus button in the org switcher.
+   *
+   * By its accessible name, not by hunting for a visible "Organization"
+   * heading next to it: the redesigned sidebar dropped that heading, because a
+   * label above a control that already reads "Demo" was a row of the rail spent
+   * saying nothing. The button's own name is what a screen reader announces and
+   * what survives the next layout.
+   */
   async function getOrgPlusButton(page: any) {
-    const sidebar = page.locator('aside')
-    // Use exact match for the "Organization" label to avoid matching "No organizations found"
-    const orgLabel = sidebar.getByText('Organization', { exact: true })
-    await expect(orgLabel).toBeVisible({ timeout: 10000 })
-    return orgLabel.locator('..').locator('button').filter({ has: page.locator('.lucide-plus-icon') })
+    const button = page.locator('aside').getByRole('button', { name: 'Create Organization' })
+    await expect(button).toBeVisible({ timeout: 10000 })
+    return button
   }
 
   test('should show plus button in org switcher for super admin', async ({ page }) => {

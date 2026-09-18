@@ -261,15 +261,20 @@ test.describe('Roles Management', () => {
     await expect(permissionBadge).toBeVisible()
   })
 
-  test('should navigate to roles from settings', async ({ page }) => {
-    // Go to settings first
+  test('should navigate to roles from the Manage drawer', async ({ page }) => {
+    // Roles is reached through Manage, which is where the sixteen settings
+    // pages live since the sidebar redesign. /settings used to be a hub that
+    // listed them; it is the General settings page now, and clicking the word
+    // "Roles" on it finds nothing because nothing on it says Roles.
     await page.goto('/settings')
     await page.waitForLoadState('networkidle')
 
-    // Click on Roles card/link
-    await page.locator('text=Roles').click()
+    await page.locator('aside').getByRole('button', { name: /^manage$/i }).click()
+    const drawer = page.getByRole('dialog', { name: /manage/i })
+    await expect(drawer).toBeVisible()
 
-    // Should be on roles page
+    await drawer.getByRole('link', { name: /^roles$/i }).click()
+
     await expect(page).toHaveURL(/\/settings\/roles/)
     await expect(page.locator('h1:has-text("Roles")')).toBeVisible()
   })

@@ -1202,6 +1202,63 @@ func appendFilterSQL(dataSource string, query string, args []any, filters []Filt
 }
 
 // getGroupedData returns aggregated counts grouped by a field (for bar/pie charts)
+// idLabelSources says which group-by columns hold a reference rather than a
+// value, and where the name for that reference lives.
+//
+// Grouping by one of these used to put the raw column straight on the axis, so
+// "Deals by stage" came out as three rotated UUIDs overflowing the card — a
+// chart that could not be read at all, and the only thing on it that a person
+// could not guess. Dashboards are built by picking a field from a menu, so any
+// column offered there has to be presentable.
+var idLabelSources = map[string]struct{ table, nameCol string }{
+	"stage_id":         {"pipeline_stages", "name"},
+	"assigned_user_id": {"users", "full_name"},
+}
+
+// resolveGroupLabels swaps reference IDs for the names they point at.
+//
+// One query for the whole set, not one per row. An ID with no row behind it
+// keeps its own value: a deleted stage should still show its slice rather than
+// vanish from the total.
+func (a *App) resolveGroupLabels(orgID uuid.UUID, field string, labels []string) map[string]string {
+	src, ok := idLabelSources[field]
+	if !ok || len(labels) == 0 {
+		return nil
+	}
+
+	ids := make([]string, 0, len(labels))
+	for _, l := range labels {
+		if _, err := uuid.Parse(l); err == nil {
+			ids = append(ids, l)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	type row struct {
+		ID   string
+		Name string
+	}
+	var rows []row
+	q := fmt.Sprintf("SELECT id::text AS id, %s AS name FROM %s WHERE id IN ?", src.nameCol, src.table)
+	// users are global; everything else is scoped to the organization asking.
+	if src.table != "users" {
+		q += " AND organization_id = ?"
+		a.DB.Raw(q, ids, orgID).Scan(&rows)
+	} else {
+		a.DB.Raw(q, ids).Scan(&rows)
+	}
+
+	names := make(map[string]string, len(rows))
+	for _, r := range rows {
+		if r.Name != "" {
+			names[r.ID] = r.Name
+		}
+	}
+	return names
+}
+
 func (a *App) getGroupedData(orgID uuid.UUID, widget models.Widget, filters []FilterInput, start, end time.Time) []DataPoint {
 	dataPoints := make([]DataPoint, 0)
 
@@ -1240,8 +1297,17 @@ func (a *App) getGroupedData(orgID uuid.UUID, widget models.Widget, filters []Fi
 	var results []GroupedCount
 	a.DB.Raw(query, args...).Scan(&results)
 
+	raw := make([]string, 0, len(results))
+	for _, r := range results {
+		raw = append(raw, r.Label)
+	}
+	names := a.resolveGroupLabels(orgID, widget.GroupByField, raw)
+
 	for _, r := range results {
 		label := r.Label
+		if name, ok := names[label]; ok {
+			label = name
+		}
 		if label == "" {
 			label = "(empty)"
 		}
@@ -1362,14 +1428,20 @@ func (a *App) getGroupedTimeSeriesData(orgID uuid.UUID, widget models.Widget, fi
 		lookup[gv][dateLabel] = float64(row.Count)
 	}
 
-	// Build datasets
+	// Build datasets. The series name gets the same treatment as an axis label:
+	// a legend of UUIDs is no more readable than an axis of them.
+	names := a.resolveGroupLabels(orgID, widget.GroupByField, groupOrder)
 	for _, group := range groupOrder {
 		data := make([]float64, len(dateOrder))
 		for i, dateLabel := range dateOrder {
 			data[i] = lookup[group][dateLabel]
 		}
+		label := group
+		if name, ok := names[label]; ok {
+			label = name
+		}
 		result.Datasets = append(result.Datasets, GroupedSeriesDataset{
-			Label: group,
+			Label: label,
 			Data:  data,
 		})
 	}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, type Component } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, type Component } from 'vue'
 import { navigationShortcuts } from '@/components/layout/navigation'
 import { useI18n } from 'vue-i18n'
 import { GridLayout, GridItem } from 'grid-layout-plus'
@@ -46,7 +46,6 @@ import {
   TrendingDown,
   Minus,
   Clock,
-  LayoutDashboard,
   Plus,
   Pencil,
   Trash2,
@@ -55,7 +54,8 @@ import {
   GripVertical,
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
-import { Line, Bar, Pie } from '@/lib/charts'
+import { Line, Bar, Doughnut, chartColors, barLineOptions, pieOptions } from '@/lib/charts'
+import { getAvatarColor } from '@/lib/utils'
 import { DateRangePicker } from '@/components/shared'
 import { useDateRange } from '@/composables/useDateRange'
 import { useAppToast } from '@/composables/useAppToast'
@@ -112,50 +112,25 @@ const widgetForm = ref({
 const selectedShortcuts = ref<string[]>([])
 
 // Shortcut registry
-// SHORTCUT_GRADIENTS keeps the tile colours; everything else about a shortcut
-// now comes from navigation.ts (plan 10, S12).
+//
+// Everything about a shortcut comes from navigation.ts (plan 10, S12).
 //
 // This used to be a hand-written list of twenty destinations that had never
 // been updated for the CRM: Contacts, Tasks, Pipeline, Segments, Automations,
 // Reports, the Inbox and the audit log could not be pinned to a dashboard at
 // all, and its "Contacts" tile went to the settings page while the sidebar's
 // went to the contact list.
-const SHORTCUT_GRADIENTS: Record<string, string> = {
-  '/inbox': 'from-teal-500 to-emerald-600',
-  '/contacts': 'from-cyan-500 to-blue-600',
-  '/tasks': 'from-lime-500 to-green-600',
-  '/segments': 'from-sky-500 to-cyan-600',
-  '/pipeline': 'from-indigo-500 to-blue-600',
-  '/automations': 'from-amber-500 to-orange-600',
-  '/campaigns': 'from-orange-500 to-amber-600',
-  '/templates': 'from-blue-500 to-cyan-600',
-  '/chatbot': 'from-purple-500 to-pink-600',
-  '/flows': 'from-indigo-500 to-violet-600',
-  '/chatbot/transfers': 'from-rose-500 to-red-600',
-  '/analytics/agents': 'from-teal-500 to-cyan-600',
-  '/analytics/meta-insights': 'from-sky-500 to-blue-600',
-  '/settings': 'from-gray-500 to-zinc-600',
-  '/settings/accounts': 'from-violet-500 to-purple-600',
-  '/settings/canned-responses': 'from-amber-500 to-yellow-600',
-  '/settings/tags': 'from-pink-500 to-rose-600',
-  '/settings/teams': 'from-lime-500 to-green-600',
-  '/settings/users': 'from-fuchsia-500 to-pink-600',
-  '/settings/roles': 'from-slate-500 to-gray-600',
-  '/settings/api-keys': 'from-yellow-500 to-orange-600',
-  '/settings/webhooks': 'from-red-500 to-rose-600',
-  '/settings/custom-actions': 'from-amber-500 to-orange-600',
-  '/settings/sso': 'from-emerald-500 to-teal-600',
-  '/settings/audit-logs': 'from-zinc-500 to-slate-600',
-}
-
+//
+// It also carried a gradient per destination — twenty-five of them, none
+// meaning anything. A shortcut is a link; it takes the icon the sidebar gives
+// it and the surface colour every other row on the page uses.
 const SHORTCUT_REGISTRY = computed(() => {
-  const out: Record<string, { label: string; to: string; icon: Component; gradient: string }> = {}
+  const out: Record<string, { label: string; to: string; icon: Component }> = {}
   for (const shortcut of navigationShortcuts()) {
     out[shortcut.key] = {
       label: t(shortcut.name),
       to: shortcut.path,
       icon: shortcut.icon,
-      gradient: SHORTCUT_GRADIENTS[shortcut.path] || 'from-slate-500 to-gray-600',
     }
   }
   return out
@@ -178,17 +153,6 @@ const chartTypeOptions = computed(() => [
   { value: 'pie', label: t('dashboard.chartPie') }
 ])
 
-// Chart color palette for pie charts
-const chartColors = [
-  'rgba(59, 130, 246, 0.8)',
-  'rgba(16, 185, 129, 0.8)',
-  'rgba(245, 158, 11, 0.8)',
-  'rgba(139, 92, 246, 0.8)',
-  'rgba(239, 68, 68, 0.8)',
-  'rgba(6, 182, 212, 0.8)',
-  'rgba(236, 72, 153, 0.8)',
-  'rgba(234, 179, 8, 0.8)'
-]
 
 const getChartComponentData = (widget: DashboardWidget) => {
   const data = widgetData.value[widget.id]
@@ -202,14 +166,17 @@ const getChartComponentData = (widget: DashboardWidget) => {
   if (widget.chart_type === 'line' && groupedSeries && groupedSeries.datasets.length > 0) {
     return {
       labels: groupedSeries.labels,
-      datasets: groupedSeries.datasets.map((ds, i) => ({
-        label: ds.label,
-        data: ds.data,
-        borderColor: chartColors[i % chartColors.length],
-        backgroundColor: chartColors[i % chartColors.length].replace('0.8)', '0.1)'),
-        fill: false,
-        tension: 0.3
-      }))
+      datasets: groupedSeries.datasets.map((ds, i) => {
+        const color = chartColors([ds.label])[0] ?? chartColors(groupedSeries.datasets.map(d => d.label))[i]
+        return {
+          label: ds.label,
+          data: ds.data,
+          borderColor: color,
+          backgroundColor: color,
+          fill: false,
+          tension: 0.3
+        }
+      })
     }
   }
 
@@ -220,7 +187,7 @@ const getChartComponentData = (widget: DashboardWidget) => {
       labels: source.map((d: { label: string }) => d.label),
       datasets: [{
         data: source.map((d: { value: number }) => d.value),
-        backgroundColor: chartColors.slice(0, source.length),
+        backgroundColor: chartColors(source.map((d: { label: string }) => d.label)),
         borderWidth: 0
       }]
     }
@@ -232,8 +199,10 @@ const getChartComponentData = (widget: DashboardWidget) => {
       datasets: [{
         label: widget.name,
         data: dataPoints.map((d: { value: number }) => d.value),
-        backgroundColor: dataPoints.map((_: any, i: number) => chartColors[i % chartColors.length]),
-        borderWidth: 0
+        backgroundColor: chartColors(dataPoints.map((d: { label: string }) => d.label)),
+        borderWidth: 0,
+        borderRadius: 4,
+        maxBarThickness: 48
       }]
     }
   }
@@ -256,32 +225,32 @@ const getChartComponentData = (widget: DashboardWidget) => {
       data: chartData.map((d: { value: number }) => d.value),
       borderColor,
       backgroundColor: widget.chart_type === 'bar'
-        ? borderColor.replace('rgb', 'rgba').replace(')', ', 0.8)')
-        : borderColor.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+        ? borderColor
+        : borderColor.replace('rgb', 'rgba').replace(')', ', 0.12)'),
       fill: widget.chart_type === 'line',
-      tension: 0.3
+      tension: 0.3,
+      borderRadius: 4,
+      maxBarThickness: 48,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      borderWidth: 2
     }]
   }
 }
 
-const lineBarChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: true, position: 'top' as const }
-  },
-  scales: {
-    y: { beginAtZero: true }
-  }
+/**
+ * A chart's options depend on what it is showing.
+ *
+ * One dataset needs no legend — it would print the widget's title back at you,
+ * directly beneath the widget's title. Several datasets need one, and the
+ * grouped series is the only shape here that has them.
+ */
+function optionsFor(widget: DashboardWidget) {
+  const series = widgetData.value[widget.id]?.grouped_series?.datasets?.length ?? 0
+  return barLineOptions({ singleSeries: series <= 1, integer: widget.metric !== 'sum' && widget.metric !== 'avg' })
 }
 
-const pieChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { position: 'bottom' as const }
-  }
-}
+const doughnutOptions = pieOptions()
 
 // Time range filter
 const {
@@ -359,6 +328,42 @@ const GRID_MARGIN: [number, number] = [16, 16]
 
 const isDragMode = ref(false)
 const gridLayout = ref<Array<{ i: string; x: number; y: number; w: number; h: number }>>([])
+
+/**
+ * Below this width the dashboard is one column.
+ *
+ * The grid held all twelve columns at every size, so on a phone four stat
+ * cards sat side by side at 65px each: "Chatbot Session" clipped mid-word, the
+ * change line broken into "f… la… m…", every message in the table truncated to
+ * "We'r…", and the whole page scrolling sideways. A dashboard read on a phone
+ * between other things is exactly when it has to be legible.
+ */
+const isNarrow = ref(false)
+let narrowQuery: MediaQueryList | null = null
+function onNarrowChange(e: MediaQueryListEvent | MediaQueryList) {
+  isNarrow.value = e.matches
+}
+
+/**
+ * The layout as rendered, which is not always the layout as saved.
+ *
+ * Stacking for a phone is a presentation of the saved arrangement, not an edit
+ * of it: the order people put their widgets in is kept, and going back to a
+ * desktop finds the columns exactly as they were left.
+ */
+const displayLayout = computed(() => {
+  if (!isNarrow.value) return gridLayout.value
+  let y = 0
+  return [...gridLayout.value]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map(item => {
+      const placed = { ...item, x: 0, y, w: 1 }
+      y += item.h
+      return placed
+    })
+})
+
+const effectiveCols = computed(() => (isNarrow.value ? 1 : GRID_COLS))
 
 const isChartWidget = (widget: DashboardWidget) => widget.display_type === 'chart'
 const isTableWidget = (widget: DashboardWidget) => widget.display_type === 'table'
@@ -456,6 +461,9 @@ const persistLayout = async () => {
 }
 
 const onLayoutUpdate = (newLayout: Array<{ i: string; x: number; y: number; w: number; h: number }>) => {
+  // A stacked phone layout is a view of the saved one, so it never writes back
+  // — otherwise opening the dashboard on a phone would flatten it everywhere.
+  if (isNarrow.value) return
   gridLayout.value = newLayout
   if (!isDragMode.value) return
   if (layoutSaveTimer) clearTimeout(layoutSaveTimer)
@@ -701,7 +709,15 @@ watch(() => widgetForm.value.display_type, (newVal) => {
 })
 
 onMounted(() => {
+  narrowQuery = window.matchMedia('(max-width: 767px)')
+  onNarrowChange(narrowQuery)
+  narrowQuery.addEventListener('change', onNarrowChange)
   fetchDashboardData()
+})
+
+onUnmounted(() => {
+  narrowQuery?.removeEventListener('change', onNarrowChange)
+  narrowQuery = null
 })
 </script>
 
@@ -709,17 +725,16 @@ onMounted(() => {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
     <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
-          <LayoutDashboard class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
+      <!-- The header wraps rather than overflowing: on a phone the three
+           controls used to run off the right edge, taking the date range with
+           them, and the title sat underneath the app's own top bar. -->
+      <div class="flex min-h-16 flex-col gap-3 px-6 py-3 max-md:px-4 md:flex-row md:items-center">
+        <div class="min-w-0 md:flex-1">
           <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ $t('dashboard.title') }}</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">{{ $t('dashboard.subtitle') }}</p>
         </div>
 
         <!-- Time Range Filter -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 max-md:w-full">
           <Button v-if="canCreateWidget" variant="outline" size="sm" @click="openAddWidgetDialog" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700">
             <Plus class="h-4 w-4 mr-2" />
             {{ $t('dashboard.addWidget') }}
@@ -741,6 +756,7 @@ onMounted(() => {
           </Button>
 
           <DateRangePicker
+            class="max-md:flex-1"
             v-model:selected-range="selectedRange"
             v-model:custom-date-range="customDateRange"
             v-model:is-date-picker-open="isDatePickerOpen"
@@ -770,19 +786,19 @@ onMounted(() => {
 
         <!-- Widget Grid Layout -->
         <GridLayout
-          v-if="!isLoading && gridLayout.length > 0"
-          :layout="gridLayout"
-          :col-num="GRID_COLS"
+          v-if="!isLoading && displayLayout.length > 0"
+          :layout="displayLayout"
+          :col-num="effectiveCols"
           :row-height="GRID_ROW_HEIGHT"
           :margin="GRID_MARGIN"
-          :is-draggable="isDragMode"
-          :is-resizable="isDragMode"
+          :is-draggable="isDragMode && !isNarrow"
+          :is-resizable="isDragMode && !isNarrow"
           :vertical-compact="true"
           :use-css-transforms="true"
           @layout-updated="onLayoutUpdate"
         >
           <GridItem
-            v-for="item in gridLayout"
+            v-for="item in displayLayout"
             :key="item.i"
             :i="item.i"
             :x="item.x"
@@ -856,11 +872,11 @@ onMounted(() => {
                     :is="widgetData[item.i]?.change > 0 ? TrendingUp : widgetData[item.i]?.change < 0 ? TrendingDown : Minus"
                     :class="[
                       'h-3 w-3 mr-1',
-                      widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30'
+                      widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-500'
                     ]"
                   />
-                  <span :class="widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
-                    {{ Math.abs(widgetData[item.i]?.change || 0).toFixed(1) }}%
+                  <span :class="widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/40 light:text-gray-500'">
+                    {{ widgetData[item.i]?.change ? `${Math.abs(widgetData[item.i]!.change).toFixed(1)}%` : $t('dashboard.noChange') }}
                   </span>
                   <span class="ml-1">{{ comparisonPeriodLabel }}</span>
                 </div>
@@ -915,13 +931,13 @@ onMounted(() => {
                   <Skeleton class="h-full w-full bg-white/[0.08] light:bg-gray-200" />
                 </template>
                 <template v-else-if="(widgetData[item.i]?.chart_data?.length || 0) > 0 || (widgetData[item.i]?.data_points?.length || 0) > 0 || (widgetData[item.i]?.grouped_series?.datasets?.length || 0) > 0">
-                  <Line v-if="getWidgetById(item.i)!.chart_type === 'line'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="lineBarChartOptions" />
-                  <Bar v-else-if="getWidgetById(item.i)!.chart_type === 'bar'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="lineBarChartOptions" />
-                  <Pie v-else-if="getWidgetById(item.i)!.chart_type === 'pie'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="pieChartOptions" />
+                  <Line v-if="getWidgetById(item.i)!.chart_type === 'line'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="optionsFor(getWidgetById(item.i)!)" />
+                  <Bar v-else-if="getWidgetById(item.i)!.chart_type === 'bar'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="optionsFor(getWidgetById(item.i)!)" />
+                  <Doughnut v-else-if="getWidgetById(item.i)!.chart_type === 'pie'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="doughnutOptions" />
                 </template>
                 <template v-else>
-                  <div class="h-full flex items-center justify-center text-white/40 light:text-gray-400">
-                    {{ $t('common.noData') }}
+                  <div class="h-full flex items-center justify-center text-white/45 light:text-gray-500">
+                    {{ $t('dashboard.noDataInRange') }}
                   </div>
                 </template>
               </div>
@@ -985,8 +1001,8 @@ onMounted(() => {
                     >
                       <div
                         :class="[
-                          'h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium shrink-0',
-                          row.direction === 'incoming' ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white' : 'bg-gradient-to-br from-blue-500 to-cyan-600 text-white'
+                          'h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium shrink-0 text-white',
+                          getAvatarColor(row.label)
                         ]"
                       >
                         {{ row.label.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }}
@@ -1028,8 +1044,8 @@ onMounted(() => {
                   </div>
                 </template>
                 <template v-else>
-                  <div class="h-full flex items-center justify-center text-white/40 light:text-gray-400">
-                    {{ $t('common.noData') }}
+                  <div class="h-full flex items-center justify-center text-white/45 light:text-gray-500">
+                    {{ $t('dashboard.noDataInRange') }}
                   </div>
                 </template>
               </div>
@@ -1063,17 +1079,23 @@ onMounted(() => {
               </div>
 
               <div class="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                <div :class="['grid gap-3 pt-1', item.w >= 8 ? 'grid-cols-3' : 'grid-cols-2']">
+                <div :class="['grid gap-2 pt-1', item.w >= 8 ? 'grid-cols-3' : item.w >= 5 ? 'grid-cols-2' : 'grid-cols-1']">
                   <template v-for="key in (getWidgetById(item.i)!.config?.shortcuts || [])" :key="key">
+                    <!-- A shortcut is a link to a page. It was being drawn as a
+                         160px poster with a saturated gradient plaque in the
+                         middle, four of which filled a card taller than the
+                         message table beside it and still left a third of it
+                         empty. Icon, label, one line. -->
                     <RouterLink
                       v-if="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY]"
                       :to="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].to"
-                      class="card-interactive flex flex-col items-center justify-center p-4 rounded-lg border border-white/[0.08] bg-white/[0.02] light:bg-gray-50 light:border-gray-200"
+                      class="card-interactive flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 light:bg-gray-50 light:border-gray-200"
                     >
-                      <div :class="['h-12 w-12 rounded-lg bg-gradient-to-br flex items-center justify-center mb-2 shadow-lg', SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].gradient, 'shadow-' + (key as string) + '-500/20']">
-                        <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" class="h-6 w-6 text-white" />
-                      </div>
-                      <span class="text-sm font-medium text-white light:text-gray-900">{{ SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].label }}</span>
+                      <component
+                        :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon"
+                        class="h-4 w-4 shrink-0 text-white/55 light:text-gray-500"
+                      />
+                      <span class="truncate text-sm font-medium text-white light:text-gray-900">{{ SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].label }}</span>
                     </RouterLink>
                   </template>
                 </div>
@@ -1230,7 +1252,7 @@ onMounted(() => {
                   class="rounded-md border-white/20 bg-white/[0.04] text-emerald-500 focus:ring-emerald-500 light:border-gray-300 light:bg-white"
                 />
                 <div class="flex items-center gap-2">
-                  <div :class="['h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center', shortcut.gradient]">
+                  <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] light:bg-gray-100">
                     <component :is="shortcut.icon" class="h-4 w-4 text-white" />
                   </div>
                   <span class="text-sm text-white/70 light:text-gray-700">{{ shortcut.label }}</span>

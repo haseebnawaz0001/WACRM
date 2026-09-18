@@ -9,6 +9,18 @@ import {
 } from '../../framework'
 
 // Helper to read the visible sidebar menu items as plain text.
+/**
+ * What the sidebar offers this user: the text of each entry and, for the ones
+ * that are links, where it goes.
+ *
+ * These tests used to match on the word in the label — 'chat' for the
+ * conversations item, 'settings' for the admin section. Both words have since
+ * been rewritten: the chat and the inbox merged into one destination called
+ * Inbox, and the sixteen settings pages moved behind a section called Manage.
+ * The assertions went red for a rename while the permission gating they exist
+ * to protect was working perfectly, which is the wrong thing to be sensitive
+ * to. A destination outlives its label.
+ */
 async function getSidebarMenuItems(page: Page): Promise<string[]> {
   const items: string[] = []
   const navLinks = page.locator('aside a[role="menuitem"], aside nav a, aside nav button[class*="justify-start"]')
@@ -18,6 +30,23 @@ async function getSidebarMenuItems(page: Page): Promise<string[]> {
     if (text && text.trim()) items.push(text.trim().toLowerCase())
   }
   return items
+}
+
+/** Whether the sidebar offers a link into the given path. */
+async function hasNavTo(page: Page, path: string): Promise<boolean> {
+  return (await page.locator(`aside a[href="${path}"], aside a[href^="${path}/"]`).count()) > 0
+}
+
+/**
+ * Whether the admin section is on offer.
+ *
+ * It is a button rather than a link — it opens a drawer holding all sixteen
+ * pages — so there is no href to look for.
+ */
+async function hasManageSection(page: Page): Promise<boolean> {
+  const items = await getSidebarMenuItems(page)
+  if (items.some(item => item.includes('manage') || item.includes('settings'))) return true
+  return (await page.locator('aside').getByRole('button', { name: /^manage$/i }).count()) > 0
 }
 
 test.describe('Custom Role with Limited Permissions', () => {
@@ -45,8 +74,8 @@ test.describe('Custom Role with Limited Permissions', () => {
 
     const menuItems = await getSidebarMenuItems(page)
 
-    expect(menuItems.some((item) => item.includes('chat'))).toBeTruthy()
-    expect(menuItems.some((item) => item.includes('settings'))).toBeFalsy()
+    expect(await hasNavTo(page, '/inbox')).toBeTruthy()
+    expect(await hasManageSection(page)).toBeFalsy()
     expect(menuItems.some((item) => item.includes('analytics') || item.includes('dashboard'))).toBeFalsy()
   })
 
@@ -104,8 +133,7 @@ test.describe('Role with Settings Access', () => {
     await page.waitForSelector('aside nav')
     await page.waitForTimeout(500)
 
-    const menuItems = await getSidebarMenuItems(page)
-    expect(menuItems.some((item) => item.includes('settings'))).toBeTruthy()
+    expect(await hasManageSection(page)).toBeTruthy()
   })
 
   test('user with users:read can access users page', async ({ page }) => {
@@ -133,9 +161,8 @@ test.describe('Admin vs Limited Role Comparison', () => {
     await page.waitForSelector('aside nav')
     await page.waitForTimeout(500)
 
-    const menuItems = await getSidebarMenuItems(page)
-    expect(menuItems.some((item) => item.includes('chat'))).toBeTruthy()
-    expect(menuItems.some((item) => item.includes('settings'))).toBeTruthy()
+    expect(await hasNavTo(page, '/inbox')).toBeTruthy()
+    expect(await hasManageSection(page)).toBeTruthy()
   })
 
   test('admin can access all settings pages', async ({ page }) => {
@@ -177,8 +204,7 @@ test.describe('Dynamic Role Updates', () => {
     await loginAs(page, user)
     await page.waitForSelector('aside nav')
 
-    const menuItems = await getSidebarMenuItems(page)
-    expect(menuItems.some((item) => item.includes('chat'))).toBeTruthy()
-    expect(menuItems.some((item) => item.includes('settings'))).toBeFalsy()
+    expect(await hasNavTo(page, '/inbox')).toBeTruthy()
+    expect(await hasManageSection(page)).toBeFalsy()
   })
 })
