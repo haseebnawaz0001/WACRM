@@ -2,10 +2,11 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import StatusDot from '@/components/shared/StatusDot.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
@@ -15,7 +16,7 @@ import { toast } from 'vue-sonner'
 import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
-import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
+import { getQualityRatingLabel } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -70,7 +71,7 @@ const columns = computed<Column<Template>[]>(() => [
   { key: 'quality_rating', label: t('templates.qualityRating'), sortable: true },
   { key: 'language', label: t('templates.language'), sortable: true },
   { key: 'header_type', label: t('templates.header') },
-  { key: 'actions', label: '', align: 'right' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
 const sortKey = ref('name')
@@ -252,18 +253,38 @@ async function confirmDeleteTemplate() {
 }
 
 // Dark-first: default is dark mode, light: prefix for light mode
-function getStatusBadgeClass(status: string) {
+type Tone = 'good' | 'warn' | 'bad' | 'neutral'
+
+function statusTone(status: string): Tone {
   switch (status) {
     case 'APPROVED':
-      return 'bg-green-900 text-green-300 light:bg-green-100 light:text-green-800'
+      return 'good'
     case 'PENDING':
-      return 'bg-yellow-900 text-yellow-300 light:bg-yellow-100 light:text-yellow-800'
+    case 'PENDING_DELETION':
+    case 'IN_APPEAL':
+      return 'warn'
     case 'REJECTED':
-      return 'bg-red-900 text-red-300 light:bg-red-100 light:text-red-800'
-    case 'DRAFT':
-      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
+    case 'DISABLED':
+    case 'PAUSED':
+      return 'bad'
     default:
-      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
+      return 'neutral'
+  }
+}
+
+function qualityTone(rating: string): Tone {
+  switch ((rating || '').toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return 'good'
+    case 'YELLOW':
+    case 'MEDIUM':
+      return 'warn'
+    case 'RED':
+    case 'LOW':
+      return 'bad'
+    default:
+      return 'neutral'
   }
 }
 
@@ -335,12 +356,12 @@ function getHeaderIcon(type: string) {
             @retry="fetchTemplates"
           />
           <Card v-else>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('templates.yourTemplates') }}</CardTitle>
-                  <CardDescription>{{ $t('templates.yourTemplatesDesc') }}</CardDescription>
-                </div>
+            <!-- "Your Templates / WhatsApp message templates for your accounts"
+                 sat directly under a header reading "Message Templates / Create
+                 and manage WhatsApp message templates". The header names the
+                 page; the card shows it. -->
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <div class="flex items-center gap-4 flex-wrap">
                   <div class="flex items-center gap-2">
                     <Label class="text-sm text-muted-foreground">{{ $t('templates.account') }}:</Label>
@@ -389,14 +410,14 @@ function getHeaderIcon(type: string) {
                   </Badge>
                 </template>
                 <template #cell-status="{ item: template }">
-                  <Badge :class="getStatusBadgeClass(template.status)" class="text-xs">
-                    {{ enumLabel('templates', template.status) }}
-                  </Badge>
+                  <StatusDot :label="enumLabel('templates', template.status)" :tone="statusTone(template.status)" />
                 </template>
                 <template #cell-quality_rating="{ item: template }">
-                  <Badge v-if="template.quality_rating" :class="getQualityBadgeClass(template.quality_rating)" class="text-xs">
-                    {{ getQualityRatingLabel(template.quality_rating, t) }}
-                  </Badge>
+                  <StatusDot
+                    v-if="template.quality_rating"
+                    :label="getQualityRatingLabel(template.quality_rating, t)"
+                    :tone="qualityTone(template.quality_rating)"
+                  />
                   <span v-else class="text-muted-foreground text-xs">—</span>
                 </template>
                 <template #cell-language="{ item: template }">

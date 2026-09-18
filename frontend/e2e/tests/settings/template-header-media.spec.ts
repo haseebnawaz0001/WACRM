@@ -107,8 +107,13 @@ test.describe('Template media header — issue #355', () => {
     // Body content.
     await page.locator('textarea').first().fill('Hello no-media')
 
-    // Switch header type to IMAGE.
-    const headerCombo = page.locator('button[role="combobox"]').filter({ hasText: /Header|TEXT|None|Type/i }).first()
+    // Switch header type to IMAGE. Addressed by id, not by the words showing
+    // in it: this picked the first combobox whose text matched /Header|.../,
+    // and once an account is chosen that combobox shows the account's name —
+    // which, when this spec has to create its own, is
+    // "e2e-tpl-header-media-<hash>-acct". So it reopened the account list and
+    // waited for an Image option that was never going to be there.
+    const headerCombo = page.locator('#header-type')
     await headerCombo.click()
     await page.getByRole('option', { name: /^Image$/i }).first().click()
     await page.waitForTimeout(200)

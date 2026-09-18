@@ -763,9 +763,9 @@ onMounted(async () => {
       </CardHeader>
       <CardContent class="space-y-4">
         <div v-if="!isAuthentication" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.headerType', 'Header Type') }}</Label>
+          <Label class="text-xs" for="header-type">{{ $t('templates.headerType', 'Header Type') }}</Label>
           <Select v-model="form.header_type" :disabled="!canWrite || !isEditable">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger id="header-type"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="ht in headerTypes" :key="ht.value" :value="ht.value">
                 {{ ht.label }}
