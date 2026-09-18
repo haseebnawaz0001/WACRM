@@ -11,7 +11,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  X
+  X,
+  Search,
+  Settings
 } from 'lucide-vue-next'
 import { wsService } from '@/services/websocket'
 import { authService, organizationsService } from '@/services/api'
@@ -22,9 +24,13 @@ import CommandPalette from './CommandPalette.vue'
 import { useNavBadgesStore } from '@/stores/navBadges'
 import ShortcutHelp from './ShortcutHelp.vue'
 import SidebarNavItem from './SidebarNavItem.vue'
+import SidebarGroup from './SidebarGroup.vue'
+import ManageDrawer from './ManageDrawer.vue'
 import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
 import { ScrollToTop } from '@/components/shared'
-import { navigationSections, type NavSection } from './navigation'
+import { navigationSections, type NavSection, type NavItem } from './navigation'
+import { useCommandPalette } from '@/composables/useCommandPalette'
+import { useNavPins } from '@/composables/useNavPins'
 
 useI18n() // Enable $t() in template
 
@@ -154,8 +160,56 @@ const navSections = computed(() => {
     .filter(section => section.items.length > 0)
 })
 
-const mainSections = computed(() => navSections.value.filter(s => !s.pinBottom))
-const bottomSections = computed(() => navSections.value.filter(s => s.pinBottom))
+/**
+ * The rail's three tiers (see NavSectionKind).
+ *
+ * Splitting by kind is what stops nineteen rows competing as equals: the
+ * places work happens stay visible, the weekly groups fold away, and the
+ * sixteen settings pages leave the rail entirely for a panel with room for
+ * them.
+ */
+const workspaceSections = computed(() => navSections.value.filter(s => (s.kind ?? 'group') === 'workspace'))
+const groupSections = computed(() => navSections.value.filter(s => (s.kind ?? 'group') === 'group'))
+const manageSections = computed(() => navSections.value.filter(s => s.kind === 'manage'))
+
+const isManageOpen = ref(false)
+const manageItems = computed(() => manageSections.value.flatMap(s => s.items))
+// The Manage row marks itself while any settings page is open, so the sidebar
+// still answers "where am I?" for a page that is not in it.
+const manageActive = computed(() => route.path.startsWith('/settings'))
+
+const { show: openCommandPalette } = useCommandPalette()
+const { pins, toggle: togglePin, isPinned } = useNavPins()
+
+/** Every navigable item, flattened, so a pinned path can be resolved to one. */
+const allItems = computed(() => {
+  const out: Array<NavItem & { active: boolean }> = []
+  for (const section of navSections.value) {
+    for (const item of section.items) {
+      out.push(item as NavItem & { active: boolean })
+      for (const child of item.children ?? []) {
+        out.push({
+          ...child,
+          active: route.path === child.path || route.path.startsWith(child.path + '/')
+        } as NavItem & { active: boolean })
+      }
+    }
+  }
+  return out
+})
+
+/**
+ * Pinned rows, in the order they were pinned.
+ *
+ * A pin whose page the viewer can no longer open resolves to nothing and is
+ * skipped rather than rendered as a dead row: permissions change, and a
+ * sidebar that keeps offering a 403 is worse than one that quietly forgets.
+ */
+const pinnedItems = computed(() =>
+  pins.value
+    .map(path => allItems.value.find(item => item.path === path))
+    .filter((item): item is NavItem & { active: boolean } => !!item)
+)
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
@@ -268,19 +322,56 @@ const handleLogout = async () => {
 
       <OrganizationSwitcher :collapsed="isCollapsed" @expand="isCollapsed = false" />
 
-      <nav :aria-label="$t('nav.mainNavigation')" class="flex min-h-0 flex-1 flex-col">
-        <ScrollArea class="min-h-0 flex-1">
-          <div class="px-2 py-2">
-            <template v-for="(section, sIdx) in mainSections" :key="section.label">
-              <div
-                v-if="section.label && !isCollapsed"
-                :class="['px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/45 light:text-gray-500', sIdx === 0 ? 'pt-1' : 'pt-4']"
-              >
-                {{ $t(section.label) }}
-              </div>
-              <div v-else-if="sIdx > 0" class="my-2 mx-2 border-t border-white/[0.06] light:border-gray-200" />
+      <!-- The palette has existed app-wide behind Cmd-K and nothing on screen
+           said so. A row that looks like what it does makes the fastest way
+           through nineteen destinations discoverable. -->
+      <div class="px-2 pt-2">
+        <button
+          type="button"
+          :class="[
+            'sidebar-link group/search flex w-full items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] px-2.5 py-[7px] max-md:py-3.5 text-[13px] text-white/45 transition-colors duration-150 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-white/80 light:border-gray-200 light:bg-gray-50 light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-700',
+            isCollapsed && 'md:justify-center md:px-2'
+          ]"
+          :aria-label="$t('nav.searchLabel')"
+          @click="openCommandPalette"
+        >
+          <Search class="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span :class="isCollapsed && 'md:sr-only'">{{ $t('nav.search') }}</span>
+          <kbd
+            v-if="!isCollapsed"
+            class="ml-auto hidden shrink-0 rounded border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 font-sans text-[10px] font-medium text-white/40 md:block light:border-gray-200 light:bg-white light:text-gray-400"
+          >&#8984;K</kbd>
+        </button>
+      </div>
 
-              <div class="space-y-0.5">
+      <nav :aria-label="$t('nav.mainNavigation')" class="flex min-h-0 flex-1 flex-col">
+        <ScrollArea class="min-h-0 flex-1 sidebar-scroll">
+          <div class="space-y-1 px-2 py-2">
+            <!-- Pinned: only when somebody has made it theirs. An empty
+                 "Pinned" heading is a chore the product hands the user. -->
+            <div v-if="pinnedItems.length && !isCollapsed" class="space-y-px">
+              <div class="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/35 light:text-gray-400">
+                {{ $t('nav.pinned') }}
+              </div>
+              <SidebarNavItem
+                v-for="item in pinnedItems"
+                :key="`pin-${item.path}`"
+                :item="item"
+                :collapsed="isCollapsed"
+                :current-path="route.path"
+                :pinned="true"
+                pinnable
+                @navigate="closeMobileMenu"
+                @toggle-pin="togglePin(item.path)"
+              />
+              <div class="!mt-2 mx-2.5 border-t border-white/[0.06] light:border-gray-200" />
+            </div>
+
+            <!-- Where work happens: always visible, no heading. "MAIN" over a
+                 list of the product's main pages was a row spent saying
+                 nothing. -->
+            <div class="space-y-px">
+              <template v-for="section in workspaceSections" :key="section.label">
                 <SidebarNavItem
                   v-for="item in section.items"
                   :key="item.path"
@@ -289,34 +380,65 @@ const handleLogout = async () => {
                   :current-path="route.path"
                   @navigate="closeMobileMenu"
                 />
-              </div>
-            </template>
+              </template>
+            </div>
+
+            <!-- Weekly rather than hourly: folded away, opened on demand, and
+                 opened automatically for the page you are on. -->
+            <div v-if="groupSections.length" class="space-y-px pt-1">
+              <div v-if="!isCollapsed" class="mx-2.5 mb-1 border-t border-white/[0.06] light:border-gray-200" />
+              <SidebarGroup
+                v-for="section in groupSections"
+                :key="section.label"
+                :section="section"
+                :collapsed="isCollapsed"
+                :current-path="route.path"
+                :is-pinned="isPinned"
+                @navigate="closeMobileMenu"
+                @toggle-pin="togglePin"
+              />
+            </div>
           </div>
         </ScrollArea>
-
-        <!-- Bottom-pinned navigation (Settings). Capped so an open submenu can't push the main list out of view. -->
-        <div
-          v-if="bottomSections.length > 0"
-          class="max-h-[45%] shrink-0 overflow-y-auto border-t border-white/[0.06] px-2 py-2 light:border-gray-200"
-        >
-          <template v-for="section in bottomSections" :key="section.label">
-            <SidebarNavItem
-              v-for="item in section.items"
-              :key="item.path"
-              :item="item"
-              :collapsed="isCollapsed"
-              :current-path="route.path"
-              @navigate="closeMobileMenu"
-            />
-          </template>
-        </div>
       </nav>
 
-      <div :class="['border-t border-white/[0.08] light:border-gray-200 px-2 py-1.5', isCollapsed && 'flex justify-center']">
-        <NotificationBell :collapsed="isCollapsed" />
-      </div>
+      <!-- One bottom bar instead of three stacked bordered strips. -->
+      <div class="shrink-0 border-t border-white/[0.08] light:border-gray-200">
+        <div :class="['px-2 pt-2', isCollapsed && 'md:flex md:justify-center']">
+          <button
+            v-if="manageItems.length"
+            type="button"
+            :class="[
+              'sidebar-link group/manage flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] max-md:py-3.5 text-[13px] font-medium transition-colors duration-150',
+              manageActive
+                ? 'bg-white/[0.07] text-white light:bg-gray-100 light:text-gray-900'
+                : 'text-white/60 hover:bg-white/[0.04] hover:text-white light:font-normal light:text-gray-600 light:hover:bg-gray-100/70 light:hover:text-gray-900',
+              isCollapsed && 'md:justify-center md:px-2'
+            ]"
+            :aria-label="$t('nav.manage')"
+            :aria-expanded="isManageOpen"
+            @click="isManageOpen = true"
+          >
+            <Settings
+              :class="[
+                'h-4 w-4 shrink-0 transition-colors duration-150',
+                manageActive
+                  ? 'text-emerald-400 light:text-emerald-600'
+                  : 'text-white/45 group-hover/manage:text-white/80 light:text-gray-400 light:group-hover/manage:text-gray-600'
+              ]"
+              aria-hidden="true"
+            />
+            <span :class="isCollapsed && 'md:sr-only'">{{ $t('nav.manage') }}</span>
+          </button>
+        </div>
 
-      <UserMenu :collapsed="isCollapsed" @logout="handleLogout" />
+
+        <div :class="['px-2 pt-1', isCollapsed && 'flex justify-center']">
+          <NotificationBell :collapsed="isCollapsed" />
+        </div>
+
+        <UserMenu :collapsed="isCollapsed" @logout="handleLogout" />
+      </div>
     </aside>
 
     <!-- Main content -->
@@ -334,5 +456,6 @@ const handleLogout = async () => {
          that remembered to mount them (plan 10, S12). -->
     <CommandPalette />
     <ShortcutHelp />
+    <ManageDrawer v-model:open="isManageOpen" :items="manageItems" />
   </div>
 </template>

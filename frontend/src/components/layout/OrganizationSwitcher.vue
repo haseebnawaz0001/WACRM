@@ -127,26 +127,21 @@ const refreshOrgs = async () => {
 
 <template>
   <div v-if="shouldShowSwitcher" class="px-2 py-2 border-b border-white/[0.08] light:border-gray-200">
-    <div v-if="!collapsed" class="space-y-1">
-      <div class="flex h-6 items-center justify-between">
-        <span class="px-2.5 text-[10px] font-semibold uppercase tracking-wider text-white/45 light:text-gray-500">
-          {{ t('nav.organization') }}
-        </span>
-        <Tooltip v-if="canCreateOrg">
-          <TooltipTrigger as-child>
-            <Button
-              variant="ghost"
-              size="icon"
-              class="h-6 w-6 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-              :aria-label="t('organizations.createNew')"
-              @click="isCreateDialogOpen = true"
-            >
-              <Plus class="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{{ t('organizations.createNew') }}</TooltipContent>
-        </Tooltip>
-      </div>
+    <div v-if="!collapsed" class="flex items-center gap-1">
+      <Tooltip v-if="canCreateOrg">
+        <TooltipTrigger as-child>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="order-2 h-8 w-8 shrink-0 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+            :aria-label="t('organizations.createNew')"
+            @click="isCreateDialogOpen = true"
+          >
+            <Plus class="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{{ t('organizations.createNew') }}</TooltipContent>
+      </Tooltip>
       <Select
         v-if="orgList.length > 0"
         :model-value="currentOrgId"

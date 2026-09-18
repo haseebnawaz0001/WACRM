@@ -53,11 +53,32 @@ export interface NavItem {
 /** Counts the sidebar knows how to show. */
 export type NavBadgeKey = 'inboxUnread' | 'tasksDue' 
 
+/**
+ * How a section is presented in the sidebar.
+ *
+ * The rail used to render all five sections as one flat scroll of nineteen
+ * rows, which put the Analytics section below the fold on a 900px screen and
+ * gave a destination used twice a month the same weight as the inbox. Sections
+ * now say what they are, and the sidebar gives each the treatment it earns:
+ *
+ * - `workspace`: always visible, no header. The places work happens.
+ * - `group`: collapsible, remembers its state, opens itself for the current
+ *   route. Used weekly rather than hourly.
+ * - `manage`: not in the rail at all. Opens in a drawer with room to show all
+ *   sixteen settings pages at once, instead of eight inside a capped strip
+ *   that covered the sections above it.
+ */
+export type NavSectionKind = 'workspace' | 'group' | 'manage'
+
 export interface NavSection {
   label: string
   items: NavItem[]
   /** Permissions needed to show section — at least one must pass */
   permissions: string[]
+  /** How the sidebar presents it. Defaults to `group`. */
+  kind?: NavSectionKind
+  /** Icon for a collapsed group header, and for the drawer's entry row. */
+  icon?: Component
   /** Pin to bottom of sidebar */
   pinBottom?: boolean
 }
@@ -65,6 +86,7 @@ export interface NavSection {
 export const navigationSections: NavSection[] = [
   {
     label: 'nav.sectionMain',
+    kind: 'workspace',
     permissions: ['analytics', 'chat', 'contacts', 'deals', 'automations', 'tasks', 'segments'],
     items: [
       {
@@ -132,6 +154,8 @@ export const navigationSections: NavSection[] = [
   },
   {
     label: 'nav.sectionMessaging',
+    kind: 'group',
+    icon: Megaphone,
     permissions: ['settings.chatbot', 'chatbot.keywords', 'flows.chatbot', 'chatbot.ai', 'transfers', 'campaigns', 'templates', 'flows.whatsapp'],
     items: [
       {
@@ -170,6 +194,8 @@ export const navigationSections: NavSection[] = [
   },
   {
     label: 'nav.sectionCalling',
+    kind: 'group',
+    icon: PhoneCall,
     permissions: ['call_logs', 'ivr_flows', 'call_transfers'],
     items: [
       { name: 'nav.callLogs', path: '/calling/logs', icon: PhoneCall, permission: 'call_logs' },
@@ -179,6 +205,8 @@ export const navigationSections: NavSection[] = [
   },
   {
     label: 'nav.sectionAnalytics',
+    kind: 'group',
+    icon: BarChart3,
     permissions: ['analytics.agents', 'analytics', 'reports'],
     items: [
       {
@@ -202,7 +230,9 @@ export const navigationSections: NavSection[] = [
     ]
   },
   {
-    label: '',
+    label: 'nav.manage',
+    kind: 'manage',
+    icon: Settings,
     permissions: ['settings.general', 'settings.chatbot', 'accounts', 'contacts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso', 'audit_logs'],
     pinBottom: true,
     items: [
@@ -237,6 +267,42 @@ export const navigationSections: NavSection[] = [
 
 // Flat list for backward compatibility (used by AppLayout computed)
 export const navigationItems: NavItem[] = navigationSections.flatMap(s => s.items)
+
+/**
+ * How the Manage drawer arranges the settings pages.
+ *
+ * Sixteen pages in one alphabetical-ish column is a list you read rather than
+ * scan, and it was the list that broke the sidebar: opening it inside a strip
+ * capped at 45% height showed eight of them and hid the sections above. In
+ * columns, grouped by what somebody came to do, all sixteen are visible at
+ * once and the thing you want is found by heading rather than by scrolling.
+ *
+ * Paths, not duplicated definitions: the items themselves stay in the section
+ * above, so a permission or a route only ever changes in one place.
+ */
+export interface ManageGroup {
+  label: string
+  paths: string[]
+}
+
+export const manageGroups: ManageGroup[] = [
+  {
+    label: 'nav.manageWorkspace',
+    paths: ['/settings', '/settings/accounts', '/settings/tags', '/settings/canned-responses']
+  },
+  {
+    label: 'nav.manageRecords',
+    paths: ['/settings/contact-fields', '/settings/pipelines', '/settings/task-types']
+  },
+  {
+    label: 'nav.managePeople',
+    paths: ['/settings/teams', '/settings/users', '/settings/roles', '/settings/sso']
+  },
+  {
+    label: 'nav.manageDeveloper',
+    paths: ['/settings/api-keys', '/settings/webhooks', '/settings/custom-actions', '/settings/chatbot', '/settings/audit-logs']
+  }
+]
 
 /** One dashboard shortcut: a destination the user can pin to their dashboard. */
 export interface NavShortcut {

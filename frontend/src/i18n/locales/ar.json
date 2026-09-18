@@ -283,7 +283,19 @@
     "expandSidebar": "توسيع الشريط الجانبي",
     "collapseSidebar": "طي الشريط الجانبي",
     "toggleMenu": "تبديل القائمة",
-    "taskTypes": "Task Types"
+    "taskTypes": "Task Types",
+    "manage": "Manage",
+    "manageDesc": "Settings for this workspace",
+    "manageWorkspace": "Workspace",
+    "manageRecords": "Records",
+    "managePeople": "People & access",
+    "manageDeveloper": "Developer",
+    "manageOther": "Other",
+    "search": "Search",
+    "searchLabel": "Search pages and contacts",
+    "pinned": "Pinned",
+    "pinThis": "Pin to the top of the menu",
+    "unpinThis": "Unpin from the top of the menu"
   },
   "userMenu": {
     "myAccount": "حسابي",

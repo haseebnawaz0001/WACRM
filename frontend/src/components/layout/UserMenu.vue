@@ -184,7 +184,7 @@ const handleLogout = () => {
             <span class="text-[13px] font-medium truncate max-w-[140px] text-white light:text-gray-900">
               {{ authStore.user?.full_name }}
             </span>
-            <span class="text-[11px] text-white/40 light:text-gray-500 truncate max-w-[140px]">
+            <span class="text-[11px] text-white/55 light:text-gray-500 truncate max-w-[140px]">
               {{ authStore.user?.email }}
             </span>
           </div>

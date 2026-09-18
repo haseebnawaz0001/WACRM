@@ -26,8 +26,10 @@ import { navigationSections } from './navigation'
 import { useAuthStore } from '@/stores/auth'
 import { contactsService } from '@/services/api'
 import { useShortcuts } from '@/composables/useShortcuts'
+import { useCommandPalette } from '@/composables/useCommandPalette'
 
-const open = ref(false)
+// Shared, so the sidebar's search row opens the same palette ⌘K does.
+const { open, toggle } = useCommandPalette()
 const query = ref('')
 const router = useRouter()
 const auth = useAuthStore()
@@ -42,9 +44,7 @@ useShortcuts([
     // The one shortcut that must work mid-sentence: an agent halfway through a
     // reply still needs to look something up.
     whileTyping: true,
-    handler: () => {
-      open.value = !open.value
-    }
+    handler: toggle
   }
 ])
 

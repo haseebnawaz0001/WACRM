@@ -758,3 +758,50 @@
 .avatar-status-pulse::after {
   animation: badge-pulse 2s ease-in-out infinite;
 }
+
+/* ─── Sidebar ─── */
+
+/*
+ * The sidebar's own scrollbar.
+ *
+ * A default scrollbar is a light-grey system widget sitting inside a near-black
+ * rail: it belongs to no part of this design and is the first thing that gives
+ * away a surface as assembled rather than built. Thin, tinted from the same
+ * white the nav text uses, and only solid enough to find when you need it.
+ */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(0 0% 100% / 0.12) transparent;
+}
+
+.sidebar-scroll ::-webkit-scrollbar,
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.sidebar-scroll ::-webkit-scrollbar-track,
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll ::-webkit-scrollbar-thumb,
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 100% / 0.12);
+  border-radius: 999px;
+}
+
+.sidebar-scroll ::-webkit-scrollbar-thumb:hover,
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 100% / 0.22);
+}
+
+html.light .sidebar-scroll,
+.light .sidebar-scroll {
+  scrollbar-color: hsl(0 0% 0% / 0.15) transparent;
+}
+
+html.light .sidebar-scroll ::-webkit-scrollbar-thumb,
+.light .sidebar-scroll::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 0% / 0.15);
+}
