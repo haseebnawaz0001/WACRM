@@ -239,8 +239,11 @@ onMounted(async () => {
               <TableCell>{{ flow.whatsapp_account }}</TableCell>
               <TableCell>
                 <div class="flex gap-1.5">
+                  <!-- Off, not broken. `destructive` painted every disabled
+                       flow in error red, which is the colour this table uses
+                       for a call that went wrong. -->
                   <Badge
-                    :variant="flow.is_active ? 'default' : 'destructive'"
+                    :variant="flow.is_active ? 'default' : 'secondary'"
                     class="cursor-pointer"
                     role="button"
                     tabindex="0"
@@ -264,14 +267,14 @@ onMounted(async () => {
                   </Badge>
                   <Badge
                     v-if="flow.is_active && flow.is_outgoing_end"
-                    variant="default"
+                    variant="outline"
                   >
                     {{ t('calling.outgoingEnd') }}
                   </Badge>
                 </div>
               </TableCell>
               <TableCell>
-                {{ flow.menu?.nodes?.length || 0 }} nodes
+                {{ t('calling.nodeCount', flow.menu?.nodes?.length || 0) }}
               </TableCell>
               <TableCell class="text-right">
                 <div class="flex justify-end gap-2">
@@ -283,7 +286,7 @@ onMounted(async () => {
                   <IconButton
                     :icon="Trash2"
                     :label="t('calling.deleteFlowAriaLabel', { name: flow.name })"
-                    class="text-destructive"
+                    class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     @click="confirmDelete(flow)"
                   />
                 </div>

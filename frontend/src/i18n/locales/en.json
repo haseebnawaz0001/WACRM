@@ -2685,7 +2685,8 @@
       "call_back": "Call back",
       "resolved": "Resolved",
       "not_resolved": "Not resolved"
-    }
+    },
+    "nodeCount": "{count} node | {count} nodes"
   },
   "callTransfers": {
     "title": "Call Transfers",

@@ -169,18 +169,33 @@ function formatDuration(seconds: number): string {
 
 function formatDate(dateStr?: string): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
+  // The written form the rest of the product uses. toLocaleString() gives
+  // "9/16/2026, 4:53:03 PM" — a different date format from every other table,
+  // and seconds nobody reads in a list.
+  return new Date(dateStr).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit'
+  })
 }
 
+/**
+ * Colour marks the calls that went wrong, not the ones that went right.
+ *
+ * A call log is almost all completed calls — nine of the eleven on the first
+ * screen — and every one of them was wearing the accent. When the ordinary
+ * outcome is the coloured one, the colour stops meaning anything and the two
+ * rows that need attention are the hardest to find. Completed is now quiet;
+ * missed and failed are what the eye lands on.
+ */
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
-    case 'completed': return 'default'
-    case 'answered': return 'default'
-    case 'accepted': return 'default'
+    case 'completed': return 'outline'
+    case 'answered': return 'outline'
+    case 'accepted': return 'outline'
     case 'ringing': return 'secondary'
     case 'initiating': return 'secondary'
     case 'transferring': return 'secondary'
-    case 'missed': return 'outline'
+    case 'missed': return 'secondary'
     case 'rejected': return 'destructive'
     case 'failed': return 'destructive'
     default: return 'secondary'
@@ -196,11 +211,18 @@ function disconnectedByIcon(value: string) {
   }
 }
 
+/**
+ * Who hung up is a fact, not a verdict.
+ *
+ * "System" was rendered in the accent, which read as a good outcome next to a
+ * neutral "Client" and "Agent" — three peers, one of them coloured for no
+ * reason anybody could name.
+ */
 function disconnectedByVariant(value: string): 'default' | 'secondary' | 'outline' {
   switch (value) {
     case 'client': return 'outline'
-    case 'agent': return 'secondary'
-    case 'system': return 'default'
+    case 'agent': return 'outline'
+    case 'system': return 'outline'
     default: return 'outline'
   }
 }
