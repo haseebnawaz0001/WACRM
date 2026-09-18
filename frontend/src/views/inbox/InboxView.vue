@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Spinner } from '@/components/ui/spinner'
 import { Separator } from '@/components/ui/separator'
@@ -2616,6 +2617,24 @@ async function sendMediaMessage() {
       <!-- Contacts -->
       <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" orientation="vertical" class="flex-1">
         <div class="py-1 w-full">
+          <!--
+            Rows in the shape of the list while it loads.
+
+            The list used to render its chrome and then nothing, so switching
+            view or organisation left a blank column with no sign anything was
+            happening — the one state in this pane that said the least while
+            doing the most.
+          -->
+          <div v-if="isQueueLoading && !listRows.length" aria-hidden="true">
+            <div v-for="i in 8" :key="`row-skeleton-${i}`" class="flex items-center gap-2.5 px-3 py-2">
+              <Skeleton class="h-9 w-9 shrink-0 rounded-sm" />
+              <div class="min-w-0 flex-1 space-y-1.5">
+                <Skeleton class="h-3.5 w-32" />
+                <Skeleton class="h-3 w-44" />
+              </div>
+            </div>
+          </div>
+
           <div
             v-for="row in listRows"
             :key="row.contactId"

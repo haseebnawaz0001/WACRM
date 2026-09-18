@@ -14,6 +14,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -194,7 +195,21 @@ onMounted(async () => {
     <SearchInput v-model="search" :placeholder="t('segments.searchPlaceholder')" class="w-64" />
 
     <ErrorState v-if="fetchError" :message="t('segments.loadFailed')" @retry="fetchSegments" />
-    <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
+    <!-- The shape of the answer, not the word "Loading". A line of text tells
+         you nothing about what is coming; these rows do. -->
+    <ul v-else-if="isLoading" class="space-y-2" aria-hidden="true">
+      <li v-for="i in 5" :key="i">
+        <Card>
+          <CardContent class="flex items-center gap-3 p-4">
+            <div class="min-w-0 flex-1 space-y-2">
+              <Skeleton class="h-4 w-48" />
+              <Skeleton class="h-3 w-72" />
+            </div>
+            <Skeleton class="h-8 w-16 shrink-0" />
+          </CardContent>
+        </Card>
+      </li>
+    </ul>
 
     <Card v-else-if="!segments.length">
       <CardContent class="flex flex-col items-center gap-3 py-10 text-center">

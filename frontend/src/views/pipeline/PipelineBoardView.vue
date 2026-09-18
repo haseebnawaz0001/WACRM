@@ -15,6 +15,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -364,8 +365,20 @@ onUnmounted(() => {
 
     <ErrorState v-if="fetchError" :message="t('pipeline.loadFailed')" @retry="fetchBoard" />
 
-    <div v-else-if="isLoading" class="flex flex-1 items-center justify-center text-muted-foreground">
-      {{ t('common.loading') }}
+    <!-- Columns of cards, which is what arrives. A centred "Loading" makes the
+         board look empty until the moment it does not. -->
+    <div v-else-if="isLoading" class="flex flex-1 gap-3 overflow-hidden p-4" aria-hidden="true">
+      <div v-for="col in 4" :key="col" class="w-72 shrink-0 space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <Skeleton class="h-4 w-24" />
+          <Skeleton class="h-3 w-12" />
+        </div>
+        <div v-for="card in 3" :key="card" class="space-y-2 rounded-sm border border-white/[0.06] p-3 light:border-gray-200">
+          <Skeleton class="h-4 w-40" />
+          <Skeleton class="h-5 w-20" />
+          <Skeleton class="h-3 w-28" />
+        </div>
+      </div>
     </div>
 
     <div

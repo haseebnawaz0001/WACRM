@@ -1638,7 +1638,9 @@
     "noWidgets": "No widgets yet",
     "noWidgetsDesc": "Create your first widget to start monitoring your WhatsApp Business metrics.",
     "noDataInRange": "Nothing in this date range",
-    "shortcutsEmpty": "No shortcuts pinned yet"
+    "shortcutsEmpty": "No shortcuts pinned yet",
+    "loadFailed": "The dashboard couldn't be loaded",
+    "loadFailedDesc": "Check your connection and try again."
   },
   "flows": {
     "title": "WhatsApp Flows",

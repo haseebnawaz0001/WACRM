@@ -144,13 +144,26 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     }
   })
 
-  test('should show activity log', async ({ page }) => {
-    await page.goto('/settings/accounts')
+  test('should show activity log', async ({ page, request }) => {
+    // Seed our own account rather than taking whichever one happens to be
+    // first. 'should delete from detail page' is in this same file and the
+    // config is fullyParallel, so the two race for the same row: the delete
+    // lands, this navigation arrives at a deleted id, and the detail page
+    // renders "Not found" where Activity Log should be. Same reasoning as
+    // 'should show setup guide' below.
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('activity-log').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-activity-${Date.now()}`,
+      business_id: `biz-activity-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
     await page.waitForLoadState('networkidle')
 
-    if (await navigateToFirstItem(page)) {
-      await expectActivityLogVisible(page)
-    }
+    await expectActivityLogVisible(page)
   })
 
   test('should show setup guide', async ({ page, request }) => {

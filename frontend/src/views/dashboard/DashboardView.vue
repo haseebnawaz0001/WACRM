@@ -53,6 +53,7 @@ import {
   X,
   GripVertical,
   LayoutDashboard,
+  AlertTriangle,
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Doughnut, chartColors, barLineOptions, pieOptions } from '@/lib/charts'
@@ -75,6 +76,7 @@ const widgets = ref<DashboardWidget[]>([])
 const widgetData = ref<Record<string, WidgetData>>({})
 
 const isLoading = ref(true)
+const loadFailed = ref(false)
 const isWidgetDataLoading = ref(false)
 
 // Widget builder state
@@ -495,8 +497,12 @@ const fetchWidgets = async () => {
     const response = await widgetsService.list()
     widgets.value = (response.data as any).data?.widgets || []
   } catch (error) {
+    // A failure used to go to the console and nothing else, so a dashboard that
+    // could not load looked exactly like a dashboard with nothing on it: a
+    // header, and the rest of the screen empty.
     console.error('Failed to load widgets:', error)
     widgets.value = []
+    loadFailed.value = true
   }
 }
 
@@ -531,6 +537,7 @@ const fetchDataSources = async () => {
 
 const fetchDashboardData = async () => {
   isLoading.value = true
+  loadFailed.value = false
   try {
     await Promise.all([
       fetchWidgets(),
@@ -786,6 +793,27 @@ onUnmounted(() => {
               <Skeleton class="h-3 w-32 bg-white/[0.08] light:bg-gray-200" />
             </div>
           </div>
+        </div>
+
+        <!-- Something went wrong, said on the page rather than in the console. -->
+        <div v-else-if="loadFailed" class="flex flex-col items-center justify-center py-20 text-center">
+          <AlertTriangle class="mb-3 h-8 w-8 text-destructive" aria-hidden="true" />
+          <p class="font-medium">{{ $t('dashboard.loadFailed') }}</p>
+          <p class="mt-1 text-sm text-muted-foreground">{{ $t('dashboard.loadFailedDesc') }}</p>
+          <Button variant="outline" size="sm" class="mt-4" @click="fetchDashboardData">
+            {{ $t('common.retry') }}
+          </Button>
+        </div>
+
+        <!-- Nothing here yet, which for a new organisation is every first visit.
+             An empty state that teaches the page beats one that reports it. -->
+        <div v-else-if="!displayLayout.length" class="flex flex-col items-center justify-center py-20 text-center">
+          <LayoutDashboard class="mb-3 h-8 w-8 text-white/25 light:text-gray-300" aria-hidden="true" />
+          <p class="font-medium">{{ $t('dashboard.noWidgets') }}</p>
+          <p class="mt-1 text-sm text-muted-foreground">{{ $t('dashboard.noWidgetsDesc') }}</p>
+          <Button v-if="canCreateWidget" size="sm" class="mt-4" @click="openAddWidgetDialog">
+            <Plus class="mr-2 h-4 w-4" />{{ $t('dashboard.addWidget') }}
+          </Button>
         </div>
 
         <!-- Widget Grid Layout -->
