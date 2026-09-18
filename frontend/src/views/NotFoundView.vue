@@ -6,7 +6,11 @@ import { Home, ArrowLeft } from 'lucide-vue-next'
 <template>
   <div class="min-h-screen flex items-center justify-center bg-background p-4">
     <div class="text-center">
-      <h1 class="text-9xl font-bold text-muted-foreground/20">404</h1>
+      <!-- At /20 this was about 1.4:1 against the background: the largest
+           element on the page and the least legible thing on it, which reads as
+           a rendering fault rather than a choice. It is still secondary to the
+           sentence below it, but it is now actually visible. -->
+      <h1 class="text-8xl font-bold text-muted-foreground/60">404</h1>
       <h2 class="text-2xl font-semibold mt-4">{{ $t('notFound.title') }}</h2>
       <p class="text-muted-foreground mt-2 max-w-md">
         {{ $t('notFound.description') }}

@@ -409,7 +409,10 @@ async function confirmDelete() {
     <Dialog v-model:open="showOnboardingDialog">
       <DialogContent class="sm:max-w-2xl bg-[#0e0e11] border-[#222227] text-white light:bg-white light:border-gray-200 light:text-gray-900 p-6 shadow-2xl rounded-sm">
         <DialogHeader class="mb-4">
-          <DialogTitle class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 light:from-emerald-600 light:to-green-600 bg-clip-text text-transparent flex items-center gap-2">
+          <!-- Weight, not gradient. Clipping a gradient to text is decoration a
+               dialog heading does not need, and it is the only one in the
+               product. -->
+          <DialogTitle class="flex items-center gap-2 text-xl font-bold">
             {{ $t('accounts.connectTitle') }}
           </DialogTitle>
           <DialogDescription class="text-gray-400 light:text-gray-500 mt-1">

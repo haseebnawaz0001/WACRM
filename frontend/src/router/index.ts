@@ -431,10 +431,20 @@ const router = createRouter({
           name: 'call-transfers',
           component: () => import('@/views/calling/CallTransfersView.vue'),
           meta: { permission: 'call_transfers' }
+        },
+        {
+          // Inside the layout, so somebody signed in who mistypes a URL keeps
+          // the sidebar and can carry on. The catch-all below this one is
+          // outside it, and threw them out of the application entirely — for a
+          // typo, with "Go Back" and "Go Home" as the only way in.
+          path: ':pathMatch(.*)*',
+          name: 'not-found-in-app',
+          component: () => import('@/views/NotFoundView.vue')
         }
       ]
     },
     {
+      // The signed-out case, which has no shell to keep.
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue')

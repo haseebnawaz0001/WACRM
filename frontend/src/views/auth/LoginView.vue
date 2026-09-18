@@ -130,7 +130,11 @@ const initiateSSO = (provider: string) => {
               autocomplete="current-password"
             />
           </div>
-          <Button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-lg shadow-emerald-500/20" :disabled="isLoading">
+          <!-- The primary button, like every other primary button. This one was
+               hand-rolled as a left-to-right gradient, which made the first
+               control a new user ever sees the one control that does not match
+               the product behind it. -->
+          <Button type="submit" class="w-full" :disabled="isLoading">
             <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
             {{ $t('auth.signIn') }}
           </Button>
