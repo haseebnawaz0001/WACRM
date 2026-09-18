@@ -8,10 +8,13 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Gradient primary button with glow
-        default: "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:from-emerald-600 hover:to-green-700",
+        // One flat colour, straight off the theme token. The gradient and its
+        // coloured halo were the loudest thing on most screens: every primary
+        // action glowed, so none of them carried more weight than another, and
+        // a glow with no offset is decoration rather than depth.
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
         destructive:
-          "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40",
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         // Glass outline for dark mode
         outline:
           "border border-white/10 bg-white/[0.02] text-foreground hover:bg-white/[0.06] hover:border-white/20 light:border-gray-200 light:bg-white light:hover:bg-gray-50",
