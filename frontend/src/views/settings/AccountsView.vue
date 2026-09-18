@@ -78,7 +78,7 @@ const columns = computed<Column<WhatsAppAccount>[]>(() => [
   { key: 'api_version', label: t('accounts.apiVersion') },
   { key: 'defaults', label: t('accounts.defaults') },
   { key: 'status', label: t('accounts.status'), sortable: true, sortKey: 'status' },
-  { key: 'created', label: t('common.created'), sortable: true, sortKey: 'created_at' },
+  { key: 'created', label: t('common.createdAt'), sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 

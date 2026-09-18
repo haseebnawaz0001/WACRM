@@ -89,7 +89,7 @@ async function loadExportConfig() {
     defaultColumns.value = data.default_columns || []
     selectedColumns.value = [...defaultColumns.value]
   } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('common.configuration') })))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.configuration') })))
   } finally {
     isLoadingExportConfig.value = false
   }
@@ -104,7 +104,7 @@ async function loadImportConfig() {
     importOptionalColumns.value = data.optional_columns || []
     uniqueColumn.value = data.unique_column || ''
   } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('common.configuration') })))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.configuration') })))
   } finally {
     isLoadingImportConfig.value = false
   }

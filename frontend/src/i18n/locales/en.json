@@ -181,6 +181,7 @@
     "returnToLogin": "Return to login"
   },
   "resources": {
+    "configuration": "configuration",
     "account": "account",
     "accounts": "accounts",
     "Account": "Account",
