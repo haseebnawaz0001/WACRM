@@ -34,7 +34,7 @@ const resourceRouteMap: Record<string, (id: string) => string> = {
   canned_response: () => `/settings/canned-responses`,
   api_key: () => `/settings/api-keys`,
   ai_context: () => `/chatbot/ai`,
-  contact: (id) => `/chat?contact=${id}`,
+  contact: (id) => `/inbox/${id}`,
   tag: () => `/settings/tags`,
 }
 

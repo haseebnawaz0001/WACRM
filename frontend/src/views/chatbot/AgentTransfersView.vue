@@ -187,7 +187,7 @@ async function pickNextTransfer() {
       await fetchTransfers()
 
       // Navigate to chat
-      router.push(`/chat/${data.transfer.contact_id}`)
+      router.push(`/inbox/${data.transfer.contact_id}`)
     } else {
       toast.info(t('agentTransfers.noTransfersInQueueInfo'))
     }
@@ -265,7 +265,7 @@ async function assignTransfer() {
 }
 
 function viewChat(transfer: AgentTransfer) {
-  router.push(`/chat/${transfer.contact_id}`)
+  router.push(`/inbox/${transfer.contact_id}`)
 }
 
 function formatDate(dateStr: string) {

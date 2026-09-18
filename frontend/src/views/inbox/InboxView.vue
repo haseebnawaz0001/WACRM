@@ -1995,7 +1995,7 @@ async function resumeChatbot() {
         // Contact no longer visible to this user, navigate away
         contactsStore.setCurrentContact(null)
         contactsStore.clearMessages()
-        router.push('/chat')
+        router.push('/inbox')
       }
     }
   } catch (error: any) {
@@ -2775,7 +2775,7 @@ async function sendMediaMessage() {
               size="icon"
               class="md:hidden h-8 w-8 shrink-0 text-white/60 hover:text-white hover:bg-white/[0.08] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-100"
               :aria-label="$t('chat.backToConversations')"
-              @click="router.push('/chat')"
+              @click="router.push('/inbox')"
             >
               <ArrowLeft class="h-4 w-4" />
             </Button>

@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -413,6 +414,27 @@ func withSubject(row models.ContactActivity) map[string]any {
 	return data
 }
 
+// changedFieldName renders the edited field the way a person would name it.
+//
+// The activity stores the field's key, which is right: a key survives the
+// organization relabelling the field, so the history keeps pointing at the same
+// thing. It is the wrong thing to print, though — "lifecycle_stage changed" is
+// the database talking, and it appeared verbatim on the contact timeline.
+//
+// A label from the publisher wins where one exists; otherwise the key is turned
+// back into words, which also fixes the rows already written.
+func changedFieldName(data map[string]any) string {
+	if label, ok := data["label"].(string); ok && label != "" {
+		return label
+	}
+	key, _ := data["field"].(string)
+	if key == "" {
+		return "A field"
+	}
+	words := strings.ReplaceAll(key, "_", " ")
+	return strings.ToUpper(words[:1]) + words[1:]
+}
+
 // itemTypeForActivity groups activity types into what the UI renders.
 func itemTypeForActivity(activityType string) string {
 	switch activityType {
@@ -469,7 +491,7 @@ func summaryForActivity(row models.ContactActivity) string {
 	case "contact.tag_removed":
 		return fmt.Sprintf("Tag %v removed by %s", row.Data["tag"], who)
 	case "contact.field_changed":
-		return fmt.Sprintf("%v changed by %s", row.Data["field"], who)
+		return fmt.Sprintf("%s changed by %s", changedFieldName(row.Data), who)
 	case "conversation.created":
 		return "Conversation opened"
 	case "conversation.status_changed":

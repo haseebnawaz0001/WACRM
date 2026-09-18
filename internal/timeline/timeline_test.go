@@ -251,3 +251,4 @@ func TestBuild_ItemIDsAreStable(t *testing.T) {
 	require.Len(t, second, 1)
 	assert.Equal(t, first[0].ID, second[0].ID)
 }
+

@@ -121,7 +121,6 @@ const selectedShortcuts = ref<string[]>([])
 // all, and its "Contacts" tile went to the settings page while the sidebar's
 // went to the contact list.
 const SHORTCUT_GRADIENTS: Record<string, string> = {
-  '/chat': 'from-emerald-500 to-green-600',
   '/inbox': 'from-teal-500 to-emerald-600',
   '/contacts': 'from-cyan-500 to-blue-600',
   '/tasks': 'from-lime-500 to-green-600',

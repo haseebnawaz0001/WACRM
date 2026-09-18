@@ -66,3 +66,25 @@ func TestSummaryForActivity_PrefersTheActorsName(t *testing.T) {
 	}
 	assert.Contains(t, summaryForActivity(row), "Onboarding flow")
 }
+
+// The activity stores a field's key so the history survives the organization
+// relabelling that field. The key is not what a reader should see, though:
+// "lifecycle_stage changed by Sarah Mitchell" was appearing verbatim on the
+// contact timeline, which is the database talking.
+func TestChangedFieldName(t *testing.T) {
+	cases := []struct {
+		name string
+		data map[string]any
+		want string
+	}{
+		{"a key becomes words", map[string]any{"field": "lifecycle_stage"}, "Lifecycle stage"},
+		{"a single word is capitalised", map[string]any{"field": "company"}, "Company"},
+		{"a supplied label wins", map[string]any{"field": "plan_tier", "label": "Plan"}, "Plan"},
+		{"nothing to name", map[string]any{}, "A field"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, changedFieldName(tc.data))
+		})
+	}
+}
