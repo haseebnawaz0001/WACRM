@@ -3135,7 +3135,8 @@
     "type": "Type",
     "typePlaceholder": "Follow up",
     "typeHint": "The type sets a sensible default deadline.",
-    "dueAt": "Due"
+    "dueAt": "Due",
+    "restHeading": "Still to do ({count})"
   },
   "inbox": {
     "title": "Inbox",

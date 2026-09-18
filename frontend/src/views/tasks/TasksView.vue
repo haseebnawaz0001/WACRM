@@ -153,10 +153,21 @@ function due(task: Task): string {
   return new Intl.DateTimeFormat(locale.value, { month: 'short', day: 'numeric' }).format(date)
 }
 
-const grouped = computed(() => {
+/**
+ * The list in sections, overdue first.
+ *
+ * Both sections carry a heading. Only the overdue one used to, so the page read
+ * as "Overdue (2)" followed by four rows, and there was nothing to say where
+ * the overdue ones stopped — the only clue was that two of the date badges were
+ * red and two were not.
+ */
+const sections = computed(() => {
   const overdue = tasks.value.filter(task => task.overdue)
   const rest = tasks.value.filter(task => !task.overdue)
-  return { overdue, rest }
+  return [
+    { key: 'overdue', tasks: overdue, heading: t('tasks.overdueHeading', { count: overdue.length }), urgent: true },
+    { key: 'rest', tasks: rest, heading: t('tasks.restHeading', { count: rest.length }), urgent: false }
+  ].filter(section => section.tasks.length > 0)
 })
 
 onMounted(async () => {
@@ -205,29 +216,41 @@ onMounted(async () => {
     </Card>
 
     <template v-else>
-      <!-- Overdue first and separately: a deadline that has already passed is
-           a different kind of item from one that has not. -->
-      <section v-if="grouped.overdue.length" class="space-y-2">
-        <h2 class="text-sm font-medium text-destructive">
-          {{ t('tasks.overdueHeading', { count: grouped.overdue.length }) }}
+      <!--
+        One markup for every row.
+
+        Overdue and not-overdue were two copies of the same twenty lines, and
+        they had already drifted: the overdue checkbox had lost its
+        `model-value`, so it never reflected a completed task. What differs
+        between the two is the heading and whether the date reads as a warning.
+      -->
+      <section v-for="section in sections" :key="section.key" class="space-y-2">
+        <h2 :class="['text-sm font-medium', section.urgent ? 'text-destructive' : 'text-muted-foreground']">
+          {{ section.heading }}
         </h2>
         <ul class="space-y-2">
-          <li v-for="task in grouped.overdue" :key="task.id">
+          <li v-for="task in section.tasks" :key="task.id">
             <Card>
               <CardContent class="flex items-center gap-3 p-3">
                 <Checkbox
+                  :model-value="task.status === 'completed'"
                   :disabled="!canWrite || task.status !== 'open'"
                   :aria-label="t('tasks.completeLabel', { title: task.title })"
                   @update:model-value="() => complete(task)"
                 />
-                <button class="min-w-0 flex-1 text-left" @click="router.push(`/settings/contacts/${task.contact_id}`)">
-                  <p class="truncate text-sm font-medium">{{ task.title }}</p>
+                <button class="min-w-0 flex-1 text-left" @click="router.push(`/contacts/${task.contact_id}`)">
+                  <p class="truncate text-sm font-medium" :class="task.status === 'completed' ? 'line-through opacity-60' : ''">
+                    {{ task.title }}
+                  </p>
                   <p class="truncate text-xs text-muted-foreground">
                     {{ task.contact_name || task.contact_id }}
                     <span v-if="task.type_label"> · {{ task.type_label }}</span>
                   </p>
                 </button>
-                <Badge variant="destructive" class="shrink-0 px-1.5 py-0 text-[11px]">
+                <Badge
+                  :variant="section.urgent ? 'destructive' : 'outline'"
+                  class="shrink-0 px-1.5 py-0 text-[11px]"
+                >
                   {{ due(task) }}
                 </Badge>
                 <Button
@@ -238,45 +261,12 @@ onMounted(async () => {
                 >
                   <X class="h-4 w-4" />
                 </Button>
+                <Check v-else-if="task.status === 'completed'" class="h-4 w-4 shrink-0 text-muted-foreground" />
               </CardContent>
             </Card>
           </li>
         </ul>
       </section>
-
-      <ul class="space-y-2">
-        <li v-for="task in grouped.rest" :key="task.id">
-          <Card>
-            <CardContent class="flex items-center gap-3 p-3">
-              <Checkbox
-                :model-value="task.status === 'completed'"
-                :disabled="!canWrite || task.status !== 'open'"
-                :aria-label="t('tasks.completeLabel', { title: task.title })"
-                @update:model-value="() => complete(task)"
-              />
-              <button class="min-w-0 flex-1 text-left" @click="router.push(`/settings/contacts/${task.contact_id}`)">
-                <p class="truncate text-sm font-medium" :class="task.status === 'completed' ? 'line-through opacity-60' : ''">
-                  {{ task.title }}
-                </p>
-                <p class="truncate text-xs text-muted-foreground">
-                  {{ task.contact_name || task.contact_id }}
-                  <span v-if="task.type_label"> · {{ task.type_label }}</span>
-                </p>
-              </button>
-              <Badge variant="outline" class="shrink-0 px-1.5 py-0 text-[11px]">{{ due(task) }}</Badge>
-              <Button
-                v-if="canWrite && task.status === 'open'"
-                variant="ghost" size="icon"
-                :aria-label="t('tasks.cancelLabel', { title: task.title })"
-                @click="cancel(task)"
-              >
-                <X class="h-4 w-4" />
-              </Button>
-              <Check v-else-if="task.status === 'completed'" class="h-4 w-4 shrink-0 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </li>
-      </ul>
     </template>
 
     <!-- New task -->

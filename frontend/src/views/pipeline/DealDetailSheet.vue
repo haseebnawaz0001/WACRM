@@ -161,7 +161,7 @@ onMounted(() => {
         <Button
           variant="link"
           class="h-auto gap-1 p-0 text-sm"
-          @click="router.push(`/settings/contacts/${draft.contact_id}`)"
+          @click="router.push(`/contacts/${draft.contact_id}`)"
         >
           {{ draft.contact_name || draft.contact_phone }}
           <ExternalLink class="h-3 w-3" />

@@ -246,7 +246,7 @@ function clearFilters() {
 }
 
 function openContact(row: ContactSearchRow) {
-  router.push(`/settings/contacts/${row.id}`)
+  router.push(`/contacts/${row.id}`)
 }
 
 /** Renders one custom field value for the table cell. */
