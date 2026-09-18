@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -25,7 +25,6 @@ import {
   Megaphone,
   Play,
   Pause,
-  Users,
   CheckCircle,
   Clock,
   AlertCircle,
@@ -218,20 +217,48 @@ function getStatusIcon(status: string) {
   }
 }
 
-function getStatusClass(status: string): string {
+/**
+ * The badge variant for a status.
+ *
+ * This used to hand-paint `border-green-600 text-green-600` onto an outline
+ * badge — reinventing variants the component already has, in colours that
+ * cleared neither mode's contrast floor: green-600 sits near 4:1 on the dark
+ * background and on white, under the 4.5:1 that 12px text needs. The variants
+ * carry a tuned pair for each mode.
+ */
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'secondary' | 'outline'
+
+function getStatusVariant(status: string): StatusVariant {
   switch (status) {
     case 'completed':
-      return 'border-green-600 text-green-600'
+      return 'success'
     case 'running':
     case 'processing':
     case 'queued':
-      return 'border-blue-600 text-blue-600'
+      return 'info'
+    case 'paused':
+      return 'warning'
     case 'failed':
     case 'cancelled':
-      return 'border-destructive text-destructive'
+      return 'destructive'
+    case 'scheduled':
+      return 'secondary'
     default:
-      return ''
+      return 'outline'
   }
+}
+
+/**
+ * The word for a status, not the value the column stores.
+ *
+ * The badge printed `campaign.status` straight from the API, so an English
+ * reader got "processing" in lower case and everybody else got English.
+ * The filter beside it has had the translated labels all along.
+ */
+function statusLabel(status: string): string {
+  const key = `campaigns.${status}`
+  const label = t(key)
+  return label === key ? status : label
 }
 
 function getProgressPercentage(campaign: Campaign): number {
@@ -263,12 +290,15 @@ function getProgressPercentage(campaign: Campaign): number {
       <div class="p-6">
         <div>
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('campaigns.yourCampaigns') }}</CardTitle>
-                  <CardDescription>{{ $t('campaigns.yourCampaignsDesc') }}</CardDescription>
-                </div>
+            <!--
+              The card used to open with "Your Campaigns / Bulk messaging
+              campaigns for your customers", directly under a page header
+              reading "Campaigns / Manage bulk messaging campaigns". One thing,
+              named twice, pushing the filters and the first row down the page.
+              The header names it; the card gets on with showing it.
+            -->
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <div class="flex items-center gap-2 flex-wrap">
                   <Select v-model="filterStatus">
                     <SelectTrigger class="w-[140px]">
@@ -323,22 +353,44 @@ function getProgressPercentage(campaign: Campaign): number {
                   <span class="text-sm text-muted-foreground">{{ campaign.template_name || '—' }}</span>
                 </template>
                 <template #cell-status="{ item: campaign }">
-                  <Badge variant="outline" :class="[getStatusClass(campaign.status), 'text-xs']">
+                  <Badge :variant="getStatusVariant(campaign.status)" class="text-xs">
                     <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
-                    {{ campaign.status }}
+                    {{ statusLabel(campaign.status) }}
                   </Badge>
                 </template>
+                <!--
+                  Four bare numbers used to sit here, told apart only by being
+                  green or blue, with the word that named each one hidden in a
+                  `title` nobody hovers and no touch device shows. A draft read
+                  "8 0 0": two of those numbers could not be anything but zero
+                  yet. Every number now carries its noun, zeros that cannot mean
+                  anything are left out, and only failure is coloured.
+                -->
                 <template #cell-stats="{ item: campaign }">
                   <div class="space-y-1">
-                    <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="w-32">
+                    <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="w-32 space-y-1">
                       <Progress :model-value="getProgressPercentage(campaign)" class="h-1.5" />
-                      <span class="text-xs text-muted-foreground">{{ getProgressPercentage(campaign) }}%</span>
+                      <span class="text-xs text-muted-foreground">
+                        {{ campaign.sent_count }} / {{ campaign.total_recipients }} {{ $t('campaigns.sent').toLowerCase() }}
+                      </span>
                     </div>
-                    <div class="flex items-center gap-3 text-xs">
-                      <span title="Recipients"><Users class="h-3 w-3 inline mr-0.5" />{{ campaign.total_recipients }}</span>
-                      <span class="text-green-600" title="Delivered">{{ campaign.delivered_count }}</span>
-                      <span class="text-blue-600" title="Read">{{ campaign.read_count }}</span>
-                      <span v-if="campaign.failed_count > 0" class="text-destructive" title="Failed">{{ campaign.failed_count }}</span>
+                    <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 text-xs">
+                      <span class="whitespace-nowrap">
+                        <span class="font-medium tabular-nums">{{ campaign.total_recipients }}</span>
+                        <span class="ml-1 text-muted-foreground">{{ $t('campaigns.recipients').toLowerCase() }}</span>
+                      </span>
+                      <span v-if="campaign.delivered_count > 0" class="whitespace-nowrap">
+                        <span class="font-medium tabular-nums">{{ campaign.delivered_count }}</span>
+                        <span class="ml-1 text-muted-foreground">{{ $t('campaigns.delivered').toLowerCase() }}</span>
+                      </span>
+                      <span v-if="campaign.read_count > 0" class="whitespace-nowrap">
+                        <span class="font-medium tabular-nums">{{ campaign.read_count }}</span>
+                        <span class="ml-1 text-muted-foreground">{{ $t('campaigns.read').toLowerCase() }}</span>
+                      </span>
+                      <span v-if="campaign.failed_count > 0" class="whitespace-nowrap text-destructive">
+                        <span class="font-medium tabular-nums">{{ campaign.failed_count }}</span>
+                        <span class="ml-1">{{ $t('campaigns.failed').toLowerCase() }}</span>
+                      </span>
                     </div>
                   </div>
                 </template>
@@ -351,7 +403,7 @@ function getProgressPercentage(campaign: Campaign): number {
                     <IconButton
                       :icon="Trash2"
                       :label="$t('campaigns.deleteCampaign')"
-                      class="h-8 w-8 text-destructive"
+                      class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       :disabled="campaign.status === 'running' || campaign.status === 'processing'"
                       @click="openDeleteDialog(campaign)"
                     />
