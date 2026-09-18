@@ -93,7 +93,7 @@ const localListPickerOpen = computed({
         <Button
           variant="ghost"
           size="sm"
-          class="h-7 px-3 rounded-md transition-all"
+          class="h-7 px-3 rounded-sm transition-all"
           :class="{
             'bg-white dark:bg-gray-700 shadow-sm': mode === 'edit',
             'hover:bg-gray-50 dark:hover:bg-gray-700': mode !== 'edit'
@@ -106,7 +106,7 @@ const localListPickerOpen = computed({
         <Button
           variant="ghost"
           size="sm"
-          class="h-7 px-3 rounded-md transition-all"
+          class="h-7 px-3 rounded-sm transition-all"
           :class="{
             'bg-white dark:bg-gray-700 shadow-sm': mode === 'preview',
             'hover:bg-gray-50 dark:hover:bg-gray-700': mode !== 'preview'
@@ -144,7 +144,7 @@ const localListPickerOpen = computed({
               <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 {{ controlNodeInfo.description }}
               </p>
-              <p v-if="selectedStep.message" class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/30 rounded-md px-3 py-2 text-left">
+              <p v-if="selectedStep.message" class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/30 rounded-sm px-3 py-2 text-left">
                 {{ selectedStep.message }}
               </p>
               <p v-else class="text-xs text-gray-400 italic">
@@ -288,7 +288,7 @@ const localListPickerOpen = computed({
                   <div class="flex-1 bg-black/50" @click="localListPickerOpen = false"></div>
                   <div class="bg-white dark:bg-[#1f2c34] rounded-t-lg overflow-hidden">
                     <div class="bg-[#075e54] dark:bg-[#00a884] text-white px-4 py-3 flex items-center justify-between">
-                      <button class="p-1 hover:bg-white/10 rounded-md" @click="localListPickerOpen = false">
+                      <button class="p-1 hover:bg-white/10 rounded-sm" @click="localListPickerOpen = false">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M6 18L18 6M6 6l12 12"/>
                         </svg>

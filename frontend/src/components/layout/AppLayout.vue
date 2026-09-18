@@ -278,7 +278,7 @@ const handleLogout = async () => {
         <div :class="['flex h-16 items-center', isCollapsed ? 'justify-center' : 'justify-between pl-3 pr-2']">
           <RouterLink
             to="/"
-            class="sidebar-link flex items-center gap-2 rounded-lg p-0.5"
+            class="sidebar-link flex items-center gap-2 rounded-sm p-0.5"
             :aria-label="isCollapsed ? 'WA CRM' : undefined"
           >
             <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -329,7 +329,7 @@ const handleLogout = async () => {
         <button
           type="button"
           :class="[
-            'sidebar-link group/search flex w-full items-center gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] px-2.5 py-[7px] max-md:py-3.5 text-[13px] text-white/45 transition-colors duration-150 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-white/80 light:border-gray-200 light:bg-gray-50 light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-700',
+            'sidebar-link group/search flex w-full items-center gap-2.5 rounded-sm border border-white/[0.07] bg-white/[0.02] px-2.5 py-[7px] max-md:py-3.5 text-[13px] text-white/45 transition-colors duration-150 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-white/80 light:border-gray-200 light:bg-gray-50 light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-700',
             isCollapsed && 'md:justify-center md:px-2'
           ]"
           :aria-label="$t('nav.searchLabel')"
@@ -409,7 +409,7 @@ const handleLogout = async () => {
             v-if="manageItems.length"
             type="button"
             :class="[
-              'sidebar-link group/manage flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] max-md:py-3.5 text-[13px] font-medium transition-colors duration-150',
+              'sidebar-link group/manage flex w-full items-center gap-2.5 rounded-sm px-2.5 py-[7px] max-md:py-3.5 text-[13px] font-medium transition-colors duration-150',
               manageActive
                 ? 'bg-white/[0.07] text-white light:bg-gray-100 light:text-gray-900'
                 : 'text-white/60 hover:bg-white/[0.04] hover:text-white light:font-normal light:text-gray-600 light:hover:bg-gray-100/70 light:hover:text-gray-900',

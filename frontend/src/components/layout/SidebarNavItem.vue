@@ -57,7 +57,7 @@ const activeChildPath = computed(() => {
       <RouterLink
         :to="item.path"
         :class="[
-          'sidebar-link group/nav relative flex items-center gap-2.5 rounded-lg text-[13px] transition-colors duration-150',
+          'sidebar-link group/nav relative flex items-center gap-2.5 rounded-sm text-[13px] transition-colors duration-150',
           nested ? 'px-2.5 py-1.5 max-md:py-3' : 'px-2.5 py-[7px] max-md:py-3.5',
           // The current page is a filled row with an accent icon rather than a
           // rule down its edge: at this density a 3px bar reads as a seam
@@ -136,7 +136,7 @@ const activeChildPath = computed(() => {
       :key="child.path"
       :to="child.path"
       :class="[
-        'sidebar-link nav-active-indicator nav-child flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 max-md:py-3 text-[13px] transition-colors duration-150',
+        'sidebar-link nav-active-indicator nav-child flex items-center gap-2.5 rounded-sm px-2.5 py-1.5 max-md:py-3 text-[13px] transition-colors duration-150',
         activeChildPath === child.path
           ? 'bg-white/[0.07] font-medium text-white light:bg-gray-100 light:text-gray-900'
           : 'text-white/55 hover:text-white hover:bg-white/[0.04] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100/70'

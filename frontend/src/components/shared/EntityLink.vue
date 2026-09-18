@@ -48,7 +48,7 @@ const textSize = computed(() => (props.size === 'sm' ? 'text-xs' : 'text-sm'))
     <span
       v-if="avatar"
       :class="[
-        'flex shrink-0 items-center justify-center rounded-full text-[10px] font-medium text-white',
+        'flex shrink-0 items-center justify-center rounded-sm text-[10px] font-medium text-white',
         size === 'sm' ? 'h-5 w-5' : 'h-6 w-6',
         getAvatarColor(label)
       ]"

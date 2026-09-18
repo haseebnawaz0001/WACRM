@@ -109,7 +109,7 @@ function isCurrent(path: string) {
         </div>
         <button
           type="button"
-          class="sidebar-link rounded-lg p-1.5 text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-900"
+          class="sidebar-link rounded-sm p-1.5 text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white light:text-gray-500 light:hover:bg-gray-100 light:hover:text-gray-900"
           :aria-label="t('common.close')"
           @click="close"
         >
@@ -129,7 +129,7 @@ function isCurrent(path: string) {
                 :key="page.path"
                 :to="page.path"
                 :class="[
-                  'sidebar-link group/row flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-[13px] transition-colors duration-150',
+                  'sidebar-link group/row flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-[13px] transition-colors duration-150',
                   isCurrent(page.path)
                     ? 'bg-white/[0.07] font-medium text-white light:bg-gray-100 light:text-gray-900'
                     : 'text-white/65 hover:bg-white/[0.04] hover:text-white light:text-gray-600 light:hover:bg-gray-100/70 light:hover:text-gray-900'
@@ -160,7 +160,7 @@ function isCurrent(path: string) {
                 v-for="page in ungrouped"
                 :key="page.path"
                 :to="page.path"
-                class="sidebar-link flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-[13px] text-white/65 transition-colors hover:bg-white/[0.04] hover:text-white light:text-gray-600 light:hover:bg-gray-100/70"
+                class="sidebar-link flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-[13px] text-white/65 transition-colors hover:bg-white/[0.04] hover:text-white light:text-gray-600 light:hover:bg-gray-100/70"
               >
                 <component :is="page.icon" class="h-4 w-4 shrink-0 text-white/40 light:text-gray-400" aria-hidden="true" />
                 <span class="truncate">{{ t(page.name) }}</span>

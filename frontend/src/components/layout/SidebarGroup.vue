@@ -81,7 +81,7 @@ const itemCount = computed(() => props.section.items.length)
   <div v-else>
     <button
       type="button"
-      class="sidebar-link group/head flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] max-md:py-3.5 text-[13px] font-medium text-white/60 transition-colors duration-150 hover:bg-white/[0.04] hover:text-white light:font-normal light:text-gray-600 light:hover:bg-gray-100/70 light:hover:text-gray-900"
+      class="sidebar-link group/head flex w-full items-center gap-2.5 rounded-sm px-2.5 py-[7px] max-md:py-3.5 text-[13px] font-medium text-white/60 transition-colors duration-150 hover:bg-white/[0.04] hover:text-white light:font-normal light:text-gray-600 light:hover:bg-gray-100/70 light:hover:text-gray-900"
       :aria-expanded="isOpen"
       @click="toggle"
     >

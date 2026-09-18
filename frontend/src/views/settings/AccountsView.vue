@@ -407,7 +407,7 @@ async function confirmDelete() {
 
     <!-- Onboarding Method Selection Dialog -->
     <Dialog v-model:open="showOnboardingDialog">
-      <DialogContent class="sm:max-w-2xl bg-[#0e0e11] border-[#222227] text-white light:bg-white light:border-gray-200 light:text-gray-900 p-6 shadow-2xl rounded-lg">
+      <DialogContent class="sm:max-w-2xl bg-[#0e0e11] border-[#222227] text-white light:bg-white light:border-gray-200 light:text-gray-900 p-6 shadow-2xl rounded-sm">
         <DialogHeader class="mb-4">
           <DialogTitle class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 light:from-emerald-600 light:to-green-600 bg-clip-text text-transparent flex items-center gap-2">
             {{ $t('accounts.connectTitle') }}
@@ -421,7 +421,7 @@ async function confirmDelete() {
           <!-- Coexistence Option Card -->
           <div
             @click="launchWhatsAppSignup(true)"
-            class="relative group cursor-pointer flex flex-col p-5 rounded-lg border border-emerald-500/20 bg-[#141419] hover:bg-[#181822] hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] light:bg-gray-50/50 light:border-emerald-200 light:hover:bg-gray-100/70 light:hover:border-emerald-400 light:hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] transition-all duration-300 overflow-hidden"
+            class="relative group cursor-pointer flex flex-col p-5 rounded-sm border border-emerald-500/20 bg-[#141419] hover:bg-[#181822] hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] light:bg-gray-50/50 light:border-emerald-200 light:hover:bg-gray-100/70 light:hover:border-emerald-400 light:hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] transition-all duration-300 overflow-hidden"
           >
             <!-- Badge -->
             <div class="absolute top-3 right-3">
@@ -430,7 +430,7 @@ async function confirmDelete() {
               </span>
             </div>
 
-            <div class="h-10 w-10 rounded-lg bg-emerald-500/10 light:bg-emerald-100/60 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+            <div class="h-10 w-10 rounded-sm bg-emerald-500/10 light:bg-emerald-100/60 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
               <Smartphone class="h-5 w-5 text-emerald-400 light:text-emerald-600" />
             </div>
 
@@ -450,7 +450,7 @@ async function confirmDelete() {
           <!-- Classic Option Card -->
           <div
             @click="launchWhatsAppSignup(false)"
-            class="relative group cursor-pointer flex flex-col p-5 rounded-lg border border-[#222227] bg-[#141419] hover:bg-[#181822] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] light:bg-gray-50/50 light:border-gray-200 light:hover:bg-gray-100/70 light:hover:border-blue-400 light:hover:shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all duration-300 overflow-hidden"
+            class="relative group cursor-pointer flex flex-col p-5 rounded-sm border border-[#222227] bg-[#141419] hover:bg-[#181822] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] light:bg-gray-50/50 light:border-gray-200 light:hover:bg-gray-100/70 light:hover:border-blue-400 light:hover:shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all duration-300 overflow-hidden"
           >
             <!-- Badge -->
             <div class="absolute top-3 right-3">
@@ -459,7 +459,7 @@ async function confirmDelete() {
               </span>
             </div>
 
-            <div class="h-10 w-10 rounded-lg bg-blue-500/10 light:bg-blue-100/60 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+            <div class="h-10 w-10 rounded-sm bg-blue-500/10 light:bg-blue-100/60 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
               <Network class="h-5 w-5 text-blue-400 light:text-blue-600" />
             </div>
 

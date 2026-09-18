@@ -10,7 +10,7 @@ const props = defineProps<{
 <template>
   <AvatarFallbackPrimitive
     :class="cn(
-      'flex h-full w-full items-center justify-center rounded-full bg-muted',
+      'flex h-full w-full items-center justify-center rounded-sm bg-muted',
       props.class
     )"
   >
