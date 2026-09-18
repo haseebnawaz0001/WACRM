@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,7 +47,6 @@ const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const columns = computed<Column<Tag>[]>(() => [
   { key: 'name', label: t('tags.tag'), sortable: true },
-  { key: 'color', label: t('tags.color'), sortable: true },
   { key: 'created_at', label: t('tags.created'), sortable: true },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
@@ -116,11 +115,6 @@ async function confirmDelete() {
     isDeleting.value = false
   }
 }
-
-function getColorLabel(color: string): string {
-  const tagColor = TAG_COLORS.find(c => c.value === color)
-  return tagColor?.label || 'Gray'
-}
 </script>
 
 <template>
@@ -145,12 +139,11 @@ function getColorLabel(color: string): string {
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('tags.organizationTags') }}</CardTitle>
-                  <CardDescription>{{ $t('tags.organizationTagsDesc') }}</CardDescription>
-                </div>
+            <!-- The page header already says "Tags / Manage organization tags
+                 for contacts"; this said "Organization Tags / Create and manage
+                 tags to organize your contacts". -->
+            <CardHeader class="pb-4">
+              <div class="flex items-center justify-end flex-wrap gap-4">
                 <SearchInput v-model="searchQuery" :placeholder="$t('tags.searchTags') + '...'" class="w-64" />
               </div>
             </CardHeader>
@@ -173,9 +166,6 @@ function getColorLabel(color: string): string {
               >
                 <template #cell-name="{ item: tag }">
                   <TagBadge :color="tag.color">{{ tag.name }}</TagBadge>
-                </template>
-                <template #cell-color="{ item: tag }">
-                  <span class="text-muted-foreground">{{ getColorLabel(tag.color) }}</span>
                 </template>
                 <template #cell-created_at="{ item: tag }">
                   <span class="text-muted-foreground">{{ formatDate(tag.created_at) }}</span>

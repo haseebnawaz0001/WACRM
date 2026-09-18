@@ -706,6 +706,7 @@
     "marketingFrequencyCapDesc": "Skip contacts who received a marketing campaign in the last N hours. 0 turns the cap off."
   },
   "users": {
+    "allRoles": "All roles",
     "title": "User Management",
     "subtitle": "Manage team members and their roles",
     "addUser": "Add User",
@@ -2771,6 +2772,7 @@
     "required": "Required",
     "requiredHint": "Enforced when someone edits a contact by hand.",
     "showInList": "Show as a column in the contacts list",
+    "inListColumn": "In contacts list",
     "showInChatPanel": "Show in the chat side panel",
     "archived": "Archived",
     "archivedHint": "Archived fields keep their values but can no longer be edited or filtered on.",

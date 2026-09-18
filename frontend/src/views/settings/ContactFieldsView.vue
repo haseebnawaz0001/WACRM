@@ -53,7 +53,10 @@ const columns = computed<Column<ContactField>[]>(() => [
   { key: 'key', label: t('contactFields.fieldKey') },
   { key: 'type', label: t('contactFields.fieldType') },
   { key: 'group', label: t('contactFields.group') },
-  { key: 'visibility', label: t('contactFields.showInList') },
+  // The form's own label for this is a sentence — "Show as a column in the
+  // contacts list" — which is right above a switch and wrong above a column of
+  // Yes and No three characters wide.
+  { key: 'visibility', label: t('contactFields.inListColumn') },
   { key: 'actions', label: t('common.actions'), align: 'right' }
 ])
 
