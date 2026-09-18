@@ -100,7 +100,7 @@ import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { CreateContactDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
-import { Info, Activity, Bot, Users } from 'lucide-vue-next'
+import { Info, Activity, Bot, Users, MessageSquare } from 'lucide-vue-next'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
@@ -2439,8 +2439,8 @@ async function sendMediaMessage() {
             <Search class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/50 light:text-gray-500" aria-hidden="true" />
             <Input
               v-model="contactsStore.searchQuery"
-              :placeholder="$t('chat.searchContacts') + '…'"
-              :aria-label="$t('chat.searchContacts')"
+              :placeholder="(isQueueView ? $t('inbox.searchConversations') : $t('chat.searchContacts')) + '…'"
+              :aria-label="isQueueView ? $t('inbox.searchConversations') : $t('chat.searchContacts')"
               class="pl-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/50 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-500"
             />
           </div>
@@ -2665,9 +2665,12 @@ async function sendMediaMessage() {
 
               <!-- What the queue knows and a contact list cannot: who holds it,
                    how long the customer has waited, when a snooze ends. -->
+              <!-- Each fact stays whole. These wrapped word by word inside a
+                   300px column, so "Chatbot" and "waiting 1d" interleaved into
+                   two lines of nonsense. -->
               <div
                 v-if="isQueueView"
-                class="mt-0.5 flex items-center gap-2 text-[11px] text-white/45 light:text-gray-500"
+                class="mt-0.5 flex items-center gap-2 overflow-hidden text-[11px] text-white/45 light:text-gray-500 [&>span]:whitespace-nowrap"
               >
                 <span v-if="row.handling === 'bot'" class="flex items-center gap-1">
                   <Bot class="h-3 w-3" aria-hidden="true" />{{ $t('inbox.botHandled') }}
@@ -2757,11 +2760,14 @@ async function sendMediaMessage() {
         class="flex-1 flex items-center justify-center text-white/40 light:text-gray-500"
       >
         <div class="text-center">
-          <div class="h-16 w-16 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
-            <Send class="h-8 w-8 text-white" />
-          </div>
+          <!-- A 64px emerald plaque used to sit here announcing that nothing
+               was selected. An empty state is the quietest thing on a screen,
+               not the loudest. -->
+          <MessageSquare class="mx-auto mb-3 h-8 w-8 text-white/20 light:text-gray-300" aria-hidden="true" />
           <h3 class="font-medium text-lg mb-1 text-white light:text-gray-900">{{ $t('chat.selectConversation') }}</h3>
-          <p class="text-sm text-white/50 light:text-gray-500">{{ $t('chat.chooseContact') }}</p>
+          <p class="text-sm text-white/50 light:text-gray-500">
+            {{ isQueueView ? $t('chat.chooseConversation') : $t('chat.chooseContact') }}
+          </p>
         </div>
       </div>
 
@@ -3284,21 +3290,32 @@ async function sendMediaMessage() {
                     {{ reaction.emoji }}
                   </span>
                 </div>
-                <!-- Failed message error (not for template messages) -->
+                <!--
+                  A message that did not arrive.
+
+                  This used to print the provider's own words straight onto the
+                  bubble — "failed to send text message: API error 190: Invalid
+                  OAuth access token data" — in destructive red on a green
+                  bubble, where it was both unreadable and unactionable: an
+                  agent cannot do anything about an OAuth token. The chip says
+                  what happened in the product's language and carries the
+                  reason with it — most of them do say something an agent can
+                  act on ("not delivered to maintain healthy ecosystem
+                  engagement" is a real answer), so the reason stays on screen
+                  rather than moving into a tooltip.
+
+                  One block, not two: the template and non-template cases were
+                  identical markup and drifted apart waiting to happen.
+                -->
                 <span
-                  v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type !== 'template'"
-                  class="flex items-center gap-1 mt-1 text-xs text-destructive"
+                  v-if="message.status === 'failed' && message.direction === 'outgoing'"
+                  class="mt-1 inline-flex w-fit max-w-full items-start gap-1 rounded-md bg-red-950/70 px-1.5 py-1 text-xs text-red-200 ring-1 ring-red-500/30 light:bg-red-50 light:text-red-700 light:ring-red-200"
                 >
-                  <AlertCircle class="h-3 w-3" />
-                  <span>{{ message.error_message || 'Failed to send' }}</span>
-                </span>
-                <!-- Failed template message indicator (no retry) -->
-                <span
-                  v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type === 'template'"
-                  class="flex items-center gap-1 mt-1 text-xs text-destructive"
-                >
-                  <AlertCircle class="h-3 w-3" />
-                  <span>{{ message.error_message || 'Failed to send' }}</span>
+                  <AlertCircle class="mt-px h-3 w-3 shrink-0" />
+                  <span class="min-w-0">
+                    <span class="font-medium">{{ $t('chat.notDelivered') }}</span>
+                    <span v-if="message.error_message"> — {{ message.error_message }}</span>
+                  </span>
                 </span>
               </div>
               <!-- Action buttons for incoming messages -->

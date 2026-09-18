@@ -513,7 +513,9 @@
     "messageActionNoteBody": "About their message: “{text}”",
     "messageActionFailed": "That did not work",
     "messageActionDealDone": "Deal created",
-    "messageActionCopied": "Copied into {field}"
+    "messageActionCopied": "Copied into {field}",
+    "chooseConversation": "Pick one from the list to read it",
+    "notDelivered": "Not delivered"
   },
   "contacts": {
     "title": "Contacts",
@@ -3149,8 +3151,8 @@
     "statusPending": "Pending",
     "statusSnoozed": "Snoozed",
     "statusResolved": "Resolved",
-    "botHandled": "The chatbot is handling this",
-    "handoffPending": "Out of hours",
+    "botHandled": "Chatbot",
+    "handoffPending": "Needs an agent",
     "handoffPendingHint": "This customer asked for a person while the office was closed",
     "waitingMinutes": "waiting {count}m",
     "waitingHours": "waiting {count}h",
@@ -3177,7 +3179,8 @@
     },
     "viewContacts": "Contacts",
     "pickNextHint": "Take the next waiting conversation and open it",
-    "waitingNow": "just now"
+    "waitingNow": "just now",
+    "searchConversations": "Search conversations"
   },
   "segments": {
     "title": "Segments",

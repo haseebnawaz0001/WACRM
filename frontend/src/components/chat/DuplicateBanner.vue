@@ -44,7 +44,11 @@ const other = computed(() => {
 
 async function load() {
   candidate.value = null
-  if (!props.contactId || !auth.hasPermission('contacts', 'read')) return
+  // contacts:write, not read. The endpoint behind this requires write — it
+  // exists to offer a merge — so a read-only agent asking for it got a 403 on
+  // every conversation they opened. The banner swallowed it, so nobody saw
+  // anything except a failed request per thread.
+  if (!props.contactId || !auth.hasPermission('contacts', 'write')) return
 
   try {
     const { data } = await duplicatesService.list(50)
