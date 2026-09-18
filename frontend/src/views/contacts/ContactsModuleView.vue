@@ -15,9 +15,26 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  PageHeader, SearchInput, DataTable, ErrorState, FilterBuilder,
-  CreateContactDialog, ImportExportDialog, type Column
+  PageHeader, SearchInput, ErrorState, FilterBuilder,
+  CreateContactDialog, ImportExportDialog
 } from '@/components/shared'
+import DataTableAdvanced from '@/components/shared/data-table/DataTableAdvanced.vue'
+
+/**
+ * A column of the contacts table.
+ *
+ * TanStack v9's own ColumnDef is generic over the table's feature set as well
+ * as the row, which a page should not have to spell out just to describe its
+ * columns. This is the shape the table actually reads.
+ */
+interface ContactColumn {
+  id: string
+  accessorFn: (row: ContactSearchRow) => unknown
+  size?: number
+  minSize?: number
+  enableHiding?: boolean
+  meta: { label: string; sortKey?: string }
+}
 import {
   contactsService, contactFieldsService, segmentsService, campaignsService, campaignAudienceService,
   type ContactSearchRow, type ContactField, type FilterNode, type FilterFieldInfo,
@@ -204,16 +221,42 @@ function countRules(node: FilterNode): number {
   return node.rules.reduce((sum, r) => sum + countRules(r), 0)
 }
 
-// Columns are the fixed ones plus whichever fields the org shows in the list.
-const columns = computed<Column<ContactSearchRow>[]>(() => {
-  const base: Column<ContactSearchRow>[] = [
-    { key: 'contact', label: t('contacts.contact'), sortable: true, sortKey: 'profile_name' },
-    { key: 'tags', label: t('contacts.tags') }
+/**
+ * The fixed columns plus whichever custom fields the organization shows.
+ *
+ * `meta.label` carries the heading and `meta.sortKey` says which column the
+ * server can sort on — the table itself never sorts, because a page of twenty
+ * rows re-ordered in the browser is not a sorted list.
+ *
+ * Widths are starting points, not rules: every column can be dragged, and what
+ * somebody drags it to is remembered.
+ */
+const columns = computed<ContactColumn[]>(() => {
+  const base: ContactColumn[] = [
+    {
+      id: 'contact',
+      accessorFn: row => row.profile_name || row.phone_number,
+      size: 200,
+      minSize: 160,
+      enableHiding: false,
+      meta: { label: t('contacts.contact'), sortKey: 'profile_name' }
+    },
+    { id: 'tags', accessorFn: row => row.tags, size: 150, meta: { label: t('contacts.tags') } }
   ]
   for (const field of listFields.value) {
-    base.push({ key: `field:${field.key}`, label: field.label })
+    base.push({
+      id: `field:${field.key}`,
+      accessorFn: row => fieldValue(row, field),
+      size: 140,
+      meta: { label: field.label }
+    })
   }
-  base.push({ key: 'last_message', label: t('contacts.lastMessageAt'), sortable: true, sortKey: 'last_message_at' })
+  base.push({
+    id: 'last_message',
+    accessorFn: row => row.last_message_at,
+    size: 130,
+    meta: { label: t('contacts.lastMessageAt'), sortKey: 'last_message_at' }
+  })
   return base
 })
 
@@ -428,65 +471,64 @@ onMounted(async () => {
           </div>
         </div>
 
-        <Card>
-          <CardContent class="pt-6">
-            <div class="mb-4 flex items-center">
-              <SearchInput
-                v-model="searchQuery"
-                :placeholder="$t('contacts.searchContacts') + '...'"
-                class="w-72"
-              />
+        <!-- No Card wrapper: the table draws its own bordered surface, and
+         nesting the two gave the list a border inside a border. -->
+        <DataTableAdvanced
+          :rows="contacts"
+          :columns="columns"
+          :is-loading="isLoading"
+          storage-key="contacts-table"
+          pinned-column-id="contact"
+          :empty-icon="ContactIcon"
+          :empty-title="$t('contacts.noContactsYet')"
+          :empty-description="$t('contacts.noContactsYetDesc')"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="contacts"
+          @page-change="handlePageChange"
+          @row-click="openContact"
+        >
+          <template #toolbar>
+            <SearchInput
+              v-model="searchQuery"
+              :placeholder="$t('contacts.searchContacts') + '...'"
+              class="w-full sm:w-72"
+            />
+          </template>
+
+          <template #cell-contact="{ row }">
+            <div class="min-w-0">
+              <div class="truncate font-medium">{{ row.profile_name || row.phone_number }}</div>
+              <div class="truncate text-xs text-muted-foreground">{{ row.phone_number }}</div>
             </div>
+          </template>
 
-            <DataTable
-              :items="contacts"
-              :columns="columns"
-              :is-loading="isLoading"
-              :empty-icon="ContactIcon"
-              :empty-title="$t('contacts.noContactsYet')"
-              :empty-description="$t('contacts.noContactsYetDesc')"
-              v-model:sort-key="sortKey"
-              v-model:sort-direction="sortDirection"
-              server-pagination
-              server-sort
-              :current-page="currentPage"
-              :total-items="totalItems"
-              :page-size="pageSize"
-              item-name="contacts"
-              @page-change="handlePageChange"
-            >
-              <template #cell-contact="{ item }">
-                <button class="text-left hover:underline" @click="openContact(item)">
-                  <div class="font-medium">{{ item.profile_name || item.phone_number }}</div>
-                  <div class="text-xs text-muted-foreground">{{ item.phone_number }}</div>
-                </button>
-              </template>
+          <template #cell-tags="{ row }">
+            <div class="flex flex-wrap gap-1">
+              <Badge v-for="tag in row.tags" :key="tag" variant="secondary" class="text-xs">
+                {{ tag }}
+              </Badge>
+              <span v-if="!row.tags?.length" class="text-xs text-muted-foreground">—</span>
+            </div>
+          </template>
 
-              <template #cell-tags="{ item }">
-                <div class="flex flex-wrap gap-1">
-                  <Badge v-for="tag in item.tags" :key="tag" variant="secondary" class="text-xs">
-                    {{ tag }}
-                  </Badge>
-                  <span v-if="!item.tags?.length" class="text-xs text-muted-foreground">—</span>
-                </div>
-              </template>
+          <template
+            v-for="field in listFields"
+            :key="field.key"
+            #[`cell-field:${field.key}`]="{ row }"
+          >
+            <span class="block truncate text-sm">{{ fieldValue(row, field) }}</span>
+          </template>
 
-              <template
-                v-for="field in listFields"
-                :key="field.key"
-                #[`cell-field:${field.key}`]="{ item }"
-              >
-                <span class="text-sm">{{ fieldValue(item, field) }}</span>
-              </template>
-
-              <template #cell-last_message="{ item }">
-                <span class="text-sm text-muted-foreground">
-                  {{ item.last_message_at ? formatDate(item.last_message_at) : '—' }}
-                </span>
-              </template>
-            </DataTable>
-          </CardContent>
-        </Card>
+          <template #cell-last_message="{ row }">
+            <span class="text-sm text-muted-foreground">
+              {{ row.last_message_at ? formatDate(row.last_message_at) : '—' }}
+            </span>
+          </template>
+        </DataTableAdvanced>
       </div>
     </ScrollArea>
   </div>

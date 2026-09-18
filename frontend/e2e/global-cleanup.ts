@@ -145,6 +145,16 @@ const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
     label: 'team_members for E2E users',
     sql: `DELETE FROM team_members WHERE user_id IN (SELECT id FROM users WHERE ${E2E_USER_EMAIL_PREDICATE})`,
   },
+  // Canned responses are named by the scope but authored by whoever seeded
+  // them, and chat.spec seeds as admin@admin.com — a stable account, not an
+  // E2E one. Both statements below match on the author, so every run left its
+  // canned responses behind: three hundred and twenty had built up, and the
+  // picker in the composer could no longer surface the one a test had just
+  // created. Named rows go by name, like every other entity here.
+  {
+    label: 'E2E canned responses (by name)',
+    sql: `DELETE FROM canned_responses WHERE ${E2E_NAME_PREDICATE} OR name LIKE 'journey-%'`,
+  },
   // canned_responses created by an E2E user keep the user row pinned via
   // FK; nuke them first.
   {
