@@ -209,18 +209,18 @@ onMounted(() => { loadResponse() })
     >
       <template #actions>
         <div class="flex items-center gap-2">
-          <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving || !canSave">
-            <Save class="h-4 w-4 mr-1" />
-            {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
-          </Button>
           <Button
             v-if="!isNew && canDelete"
-            variant="destructive"
+            variant="destructive-outline"
             size="sm"
             @click="deleteDialogOpen = true"
           >
             <Trash2 class="h-4 w-4 mr-1" />
             {{ $t('common.delete') }}
+          </Button>
+          <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving || !canSave">
+            <Save class="h-4 w-4 mr-1" />
+            {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
           </Button>
         </div>
       </template>

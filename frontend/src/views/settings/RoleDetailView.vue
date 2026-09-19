@@ -66,7 +66,7 @@ const form = ref({
 const breadcrumbs = computed(() => [
   { label: t('nav.settings'), href: '/settings' },
   { label: t('nav.roles'), href: '/settings/roles' },
-  { label: isNew.value ? t('roles.createRole') : (role.value?.name || '') },
+  { label: isNew.value ? t('roles.newRole') : (role.value?.name || '') },
 ])
 
 async function loadRole() {
@@ -160,7 +160,7 @@ onMounted(async () => {
 <template>
   <div class="h-full">
     <DetailPageLayout
-      :title="isNew ? t('roles.createRole') : (role?.name || '')"
+      :title="isNew ? t('roles.newRole') : (role?.name || '')"
       :icon="Shield"
       back-link="/settings/roles"
       :breadcrumbs="breadcrumbs"
@@ -170,17 +170,17 @@ onMounted(async () => {
     >
       <template #actions>
         <div class="flex items-center gap-2">
-          <Button v-if="canEditForm && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-1" />
-            {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-          </Button>
           <Button
             v-if="canDelete && !isNew && !isSystem"
-            variant="destructive"
+            variant="destructive-outline"
             size="sm"
             @click="deleteDialogOpen = true"
           >
             <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
+          </Button>
+          <Button v-if="canEditForm && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
+            <Save class="h-4 w-4 mr-1" />
+            {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
           </Button>
         </div>
       </template>

@@ -8,16 +8,15 @@ import { useCallingStore } from '@/stores/calling'
 import { useTeamsStore } from '@/stores/teams'
 import { ivrFlowsService, type IVRNode, type IVREdge, type IVRFlowData, type IVRNodeType } from '@/services/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { ArrowLeft, Save, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Clock, PhoneOff, UserCheck } from 'lucide-vue-next'
+import { Save, Workflow, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Clock, PhoneOff, UserCheck } from 'lucide-vue-next'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'vue-sonner'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import ErrorState from '@/components/shared/ErrorState.vue'
+import { PageHeader, PageTitleInput } from '@/components/shared'
 import IVRNodeProperties from '@/components/calling/IVRNodeProperties.vue'
 import GreetingNode from '@/components/calling/nodes/GreetingNode.vue'
 import MenuNode from '@/components/calling/nodes/MenuNode.vue'
@@ -400,31 +399,35 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col">
-    <!-- Toolbar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b bg-background shrink-0">
-      <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('calling.backToFlows')" @click="router.push({ name: 'ivr-flows' })">
-        <ArrowLeft class="h-4 w-4" />
-      </Button>
-      <Input v-model="flowName" placeholder="Flow Name" class="h-8 text-sm max-w-[250px]" />
-      <div class="flex items-center gap-2 ml-4">
-        <Switch v-model:checked="isActive" />
-        <Label class="text-xs whitespace-nowrap">Active</Label>
-      </div>
-      <div class="flex items-center gap-2 ml-2">
-        <Switch v-model:checked="isCallStart" :disabled="!isActive" />
-        <Label class="text-xs whitespace-nowrap">Incoming Call Start</Label>
-      </div>
-      <div class="flex items-center gap-2 ml-2">
-        <Switch v-model:checked="isOutgoingEnd" :disabled="!isActive" />
-        <Label class="text-xs whitespace-nowrap">Outgoing Post-Call</Label>
-      </div>
-      <div class="flex-1" />
-      <Button :disabled="saving" size="sm" @click="saveFlow">
-        <Save class="h-4 w-4 mr-1" />
-        {{ saving ? t('calling.flowSaving') : t('calling.flowSave') }}
-      </Button>
-    </div>
+  <div class="h-full flex flex-col">
+    <!-- The page bar every page has: the flow's name is its title. -->
+    <PageHeader
+      :icon="Workflow"
+      back-link="/calling/ivr-flows"
+      :breadcrumbs="[{ label: t('calling.ivrFlows'), href: '/calling/ivr-flows' }]"
+    >
+      <template #title>
+        <PageTitleInput v-model="flowName" placeholder="Flow Name" :aria-label="t('calling.flowName', 'Flow name')" />
+      </template>
+      <template #actions>
+        <label class="flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
+          <Switch v-model:checked="isActive" />
+          Active
+        </label>
+        <label class="flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
+          <Switch v-model:checked="isCallStart" :disabled="!isActive" />
+          Incoming Call Start
+        </label>
+        <label class="flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
+          <Switch v-model:checked="isOutgoingEnd" :disabled="!isActive" />
+          Outgoing Post-Call
+        </label>
+        <Button :disabled="saving" size="sm" @click="saveFlow">
+          <Save class="h-4 w-4 mr-1" />
+          {{ saving ? t('calling.flowSaving') : t('calling.flowSave') }}
+        </Button>
+      </template>
+    </PageHeader>
 
     <!-- Node Palette -->
     <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">

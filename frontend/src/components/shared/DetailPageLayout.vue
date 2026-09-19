@@ -27,7 +27,10 @@ defineProps<{
       :back-link="backLink"
       :breadcrumbs="breadcrumbs"
     >
-      <template #actions>
+      <template v-if="$slots.status" #status>
+        <slot name="status" />
+      </template>
+      <template v-if="$slots.actions" #actions>
         <slot name="actions" />
       </template>
     </PageHeader>

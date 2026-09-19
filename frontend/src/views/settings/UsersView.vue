@@ -82,7 +82,6 @@ const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const currentUserId = computed(() => authStore.user?.id)
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
-const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('nav.users') }])
 const getDefaultRoleId = () => rolesStore.roles.find(r => r.name === 'agent' && r.is_system)?.id || ''
 
 function openCreateDialog() { formData.value.role_id = getDefaultRoleId(); baseOpenCreateDialog() }
@@ -200,11 +199,11 @@ async function copyInviteLink() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('users.title')" :icon="Users" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('users.title')" :icon="Users" :description="$t('users.subtitle')">
       <template #actions>
         <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('users.copyInviteLink') }}</Button>
         <Button v-if="organizationsStore.isMultiOrg && authStore.hasPermission('organizations', 'assign')" variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
+        <Button size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
       </template>
     </PageHeader>
 

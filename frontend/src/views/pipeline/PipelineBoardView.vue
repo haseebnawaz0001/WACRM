@@ -310,21 +310,22 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full flex-col">
-    <PageHeader :title="objectPlural" :icon="KanbanSquare">
+    <PageHeader :title="objectPlural" :description="t('pipeline.subtitle')" :icon="KanbanSquare">
       <template #actions>
-        <Button v-if="canWrite" size="sm" @click="showCreate = true">
-          <Plus class="mr-1.5 h-4 w-4" />
-          {{ t('pipeline.newObject', { object: objectSingular }) }}
-        </Button>
         <Button
           v-if="canConfigure"
-          size="sm"
+          size="icon-sm"
           variant="outline"
           as="router-link"
           to="/settings/pipelines"
           :aria-label="t('pipeline.configure')"
+          :title="t('pipeline.configure')"
         >
           <Settings2 class="h-4 w-4" />
+        </Button>
+        <Button v-if="canWrite" size="sm" @click="showCreate = true">
+          <Plus class="mr-1.5 h-4 w-4" />
+          {{ t('pipeline.newObject', { object: objectSingular }) }}
         </Button>
       </template>
     </PageHeader>

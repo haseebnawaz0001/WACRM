@@ -357,6 +357,7 @@ onMounted(async () => {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
       :title="$t('contacts.title')"
+      :description="$t('contacts.subtitle')"
       :icon="ContactIcon"
     >
       <template #actions>

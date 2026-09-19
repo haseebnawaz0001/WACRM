@@ -22,7 +22,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ErrorState, DeleteConfirmDialog, UnsavedChangesDialog } from '@/components/shared'
+import { ErrorState, DeleteConfirmDialog, UnsavedChangesDialog, PageHeader, PageTitleInput } from '@/components/shared'
 import {
   automationsService,
   type Automation, type AutomationCatalog, type AutomationRun, type FilterNode, type AutomationRunPolicy
@@ -31,7 +31,7 @@ import { useAuthStore } from '@/stores/auth'
 import { unwrapResponse } from '@/lib/api-utils'
 import { toast } from 'vue-sonner'
 import {
-  ArrowLeft, FlaskConical, MoreHorizontal, Undo2, Redo2, Power, Copy, Trash2, Loader2, X, Route, ChevronRight
+  FlaskConical, MoreHorizontal, Undo2, Redo2, Power, Copy, Trash2, Loader2, X, Route, ChevronRight, Zap
 } from 'lucide-vue-next'
 import AutomationCanvas from '@/components/automations/canvas/AutomationCanvas.vue'
 import { flowContextKey, type TraceEntry } from '@/components/automations/canvas/context'
@@ -678,120 +678,123 @@ const serverProblemFor = (id: string) => (dirty.value ? undefined : rule.value?.
     </div>
 
     <template v-else-if="rule">
-      <!-- The bar: which rule, whether it is live, and the one thing to do next. -->
-      <header class="border-b border-white/[0.08] bg-[#0a0a0b]/95 light:border-gray-200 light:bg-white/95">
-        <div class="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-5">
-          <Button variant="ghost" size="icon" class="-ml-1.5 h-9 w-9 shrink-0" :aria-label="t('common.back')" @click="router.push('/automations')">
-            <ArrowLeft class="h-4 w-4" />
+      <!-- The page bar every page has: the rule's name is its title, where it
+           stands sits beside it, and the one thing to do next is last. -->
+      <PageHeader
+        :icon="Zap"
+        back-link="/automations"
+        :breadcrumbs="[{ label: t('automations.title'), href: '/automations' }]"
+      >
+        <template #title>
+          <PageTitleInput
+            v-model="draft.name"
+            :disabled="!canWrite"
+            :aria-label="t('automations.builder.name')"
+            :placeholder="t('automations.untitled')"
+          />
+        </template>
+        <template #status>
+          <component
+            :is="statusAction ? 'button' : 'span'"
+            v-if="status.label"
+            :type="statusAction ? 'button' : undefined"
+            :class="[
+              'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border py-1 pl-2.5 text-xs font-medium transition-colors duration-150',
+              statusAction ? 'pr-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40' : 'pr-2.5',
+              STATUS_PILL[status.tone]
+            ]"
+            :title="statusAction && status.tone === 'warn' ? t('automations.builder.fixNext') : undefined"
+            @click="statusAction?.()"
+          >
+            <span :class="['h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[status.tone]]" aria-hidden="true" />
+            {{ status.label }}
+            <ChevronRight v-if="statusAction" class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+          </component>
+          <span v-if="saveLabel" class="hidden shrink-0 text-xs text-muted-foreground md:inline" aria-live="polite">{{ saveLabel }}</span>
+        </template>
+        <template #actions>
+          <Button
+            variant="outline"
+            size="sm"
+            :class="panel === 'test' && tab === 'build' ? 'border-emerald-500/60 text-emerald-300 light:text-emerald-700' : ''"
+            @click="openTest"
+          >
+            <FlaskConical class="mr-1.5 h-4 w-4" />
+            <span class="max-sm:hidden">{{ t('automations.builder.tryIt') }}</span>
+            <span class="sm:hidden">{{ t('automations.builder.test') }}</span>
           </Button>
-          <div class="flex min-w-0 flex-1 basis-56 items-center gap-3">
-            <input
-              v-model="draft.name"
-              :disabled="!canWrite"
-              :aria-label="t('automations.builder.name')"
-              :placeholder="t('automations.untitled')"
-              class="min-w-0 max-w-[28rem] flex-1 truncate rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-lg font-semibold text-white outline-none transition-colors hover:border-white/10 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20 light:text-gray-900 light:hover:border-gray-200"
-            >
-            <component
-              :is="statusAction ? 'button' : 'span'"
-              v-if="status.label"
-              :type="statusAction ? 'button' : undefined"
-              :class="[
-                'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border py-1 pl-2.5 text-xs font-medium transition-colors duration-150',
-                statusAction ? 'pr-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40' : 'pr-2.5',
-                STATUS_PILL[status.tone]
-              ]"
-              :title="statusAction && status.tone === 'warn' ? t('automations.builder.fixNext') : undefined"
-              @click="statusAction?.()"
-            >
-              <span :class="['h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[status.tone]]" aria-hidden="true" />
-              {{ status.label }}
-              <ChevronRight v-if="statusAction" class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
-            </component>
-            <span v-if="saveLabel" class="hidden shrink-0 text-xs text-muted-foreground md:inline" aria-live="polite">{{ saveLabel }}</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              :class="panel === 'test' && tab === 'build' ? 'border-emerald-500/60 text-emerald-300 light:text-emerald-700' : ''"
-              @click="openTest"
-            >
-              <FlaskConical class="mr-1.5 h-4 w-4" />
-              <span class="max-sm:hidden">{{ t('automations.builder.tryIt') }}</span>
-              <span class="sm:hidden">{{ t('automations.builder.test') }}</span>
-            </Button>
-            <template v-if="canWrite">
-              <template v-if="isLive">
-                <Button v-if="dirty" size="sm" :disabled="saveState === 'saving'" @click="saveChanges">
-                  <Loader2 v-if="saveState === 'saving'" class="mr-1.5 h-4 w-4 animate-spin" />
-                  {{ t('automations.builder.saveChanges') }}
-                </Button>
-              </template>
-              <Button v-else size="sm" :disabled="turningOn" @click="turnOn">
-                <Loader2 v-if="turningOn" class="mr-1.5 h-4 w-4 animate-spin" />
-                <Power v-else class="mr-1.5 h-4 w-4" />
-                {{ t('automations.builder.turnOn') }}
+          <template v-if="canWrite">
+            <template v-if="isLive">
+              <Button v-if="dirty" size="sm" :disabled="saveState === 'saving'" @click="saveChanges">
+                <Loader2 v-if="saveState === 'saving'" class="mr-1.5 h-4 w-4 animate-spin" />
+                {{ t('automations.builder.saveChanges') }}
               </Button>
             </template>
-            <DropdownMenu v-if="canWrite">
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-9 w-9" :aria-label="t('common.actions')">
-                  <MoreHorizontal class="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" class="w-48">
-                <DropdownMenuItem v-if="isLive" @click="turnOff">
-                  <Power class="mr-2 h-4 w-4" />{{ t('automations.builder.turnOff') }}
-                </DropdownMenuItem>
-                <DropdownMenuItem @click="duplicateRule">
-                  <Copy class="mr-2 h-4 w-4" />{{ t('automations.duplicate') }}
-                </DropdownMenuItem>
-                <template v-if="canDelete">
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem class="text-destructive focus:text-destructive" @click="showDelete = true">
-                    <Trash2 class="mr-2 h-4 w-4" />{{ t('common.delete') }}
-                  </DropdownMenuItem>
-                </template>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 px-3 sm:px-4">
-          <nav class="flex" role="tablist" :aria-label="t('automations.builder.views')">
-            <button
-              v-for="v in (['build', 'history'] as const)"
-              :key="v"
-              type="button"
-              role="tab"
-              :aria-selected="tab === v"
-              :class="[
-                '-mb-px border-b-2 px-3 pb-2 pt-1 text-sm transition-colors',
-                tab === v
-                  ? 'border-emerald-500 font-medium text-white light:text-gray-900'
-                  : 'border-transparent text-white/55 hover:text-white light:text-gray-500 light:hover:text-gray-900'
-              ]"
-              @click="tab = v"
-            >{{ t(`automations.builder.tab.${v}`) }}</button>
-          </nav>
-          <div v-if="tab === 'build' && canWrite" class="ml-auto flex items-center gap-0.5 pb-1">
-            <Button
-              variant="ghost" size="icon" class="h-8 w-8" :disabled="!past.length"
-              :aria-label="t('automations.builder.undo')" :title="`${t('automations.builder.undo')} (⌘Z)`"
-              @click="undo"
-            >
-              <Undo2 class="h-4 w-4" />
+            <Button v-else size="sm" :disabled="turningOn" @click="turnOn">
+              <Loader2 v-if="turningOn" class="mr-1.5 h-4 w-4 animate-spin" />
+              <Power v-else class="mr-1.5 h-4 w-4" />
+              {{ t('automations.builder.turnOn') }}
             </Button>
-            <Button
-              variant="ghost" size="icon" class="h-8 w-8" :disabled="!future.length"
-              :aria-label="t('automations.builder.redo')" :title="`${t('automations.builder.redo')} (⇧⌘Z)`"
-              @click="redo"
-            >
-              <Redo2 class="h-4 w-4" />
-            </Button>
+          </template>
+          <DropdownMenu v-if="canWrite">
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon-sm" :aria-label="t('common.actions')" :title="t('common.actions')">
+                <MoreHorizontal class="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-48">
+              <DropdownMenuItem v-if="isLive" @click="turnOff">
+                <Power class="mr-2 h-4 w-4" />{{ t('automations.builder.turnOff') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @click="duplicateRule">
+                <Copy class="mr-2 h-4 w-4" />{{ t('automations.duplicate') }}
+              </DropdownMenuItem>
+              <template v-if="canDelete">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem class="text-destructive focus:text-destructive" @click="showDelete = true">
+                  <Trash2 class="mr-2 h-4 w-4" />{{ t('common.delete') }}
+                </DropdownMenuItem>
+              </template>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </template>
+        <template #tabs>
+          <div class="flex items-center gap-1">
+            <nav class="flex" role="tablist" :aria-label="t('automations.builder.views')">
+              <button
+                v-for="v in (['build', 'history'] as const)"
+                :key="v"
+                type="button"
+                role="tab"
+                :aria-selected="tab === v"
+                :class="[
+                  '-mb-px border-b-2 px-3 pb-2 pt-1 text-sm transition-colors',
+                  tab === v
+                    ? 'border-emerald-500 font-medium text-white light:text-gray-900'
+                    : 'border-transparent text-white/55 hover:text-white light:text-gray-500 light:hover:text-gray-900'
+                ]"
+                @click="tab = v"
+              >{{ t(`automations.builder.tab.${v}`) }}</button>
+            </nav>
+            <div v-if="tab === 'build' && canWrite" class="ml-auto flex items-center gap-0.5 pb-1">
+              <Button
+                variant="ghost" size="icon" class="h-8 w-8" :disabled="!past.length"
+                :aria-label="t('automations.builder.undo')" :title="`${t('automations.builder.undo')} (⌘Z)`"
+                @click="undo"
+              >
+                <Undo2 class="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost" size="icon" class="h-8 w-8" :disabled="!future.length"
+                :aria-label="t('automations.builder.redo')" :title="`${t('automations.builder.redo')} (⇧⌘Z)`"
+                @click="redo"
+              >
+                <Redo2 class="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
-      </header>
+        </template>
+      </PageHeader>
 
       <!-- Build: the path on the left, the selected card's questions on the right. -->
       <div v-show="tab === 'build'" class="flex min-h-0 flex-1">

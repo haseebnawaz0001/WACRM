@@ -337,7 +337,7 @@ function getHeaderIcon(type: string) {
           {{ $t('templates.syncFromMeta') }}
         </Button>
         <RouterLink to="/templates/new">
-          <Button variant="outline" size="sm">
+          <Button size="sm">
             <Plus class="h-4 w-4 mr-2" />
             {{ $t('templates.createTemplate') }}
           </Button>

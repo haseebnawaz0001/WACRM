@@ -48,11 +48,6 @@ const fetchError = ref(false)
 // without being able to redefine what a task is.
 const canManage = computed(() => authStore.hasPermission('tasks', 'delete'))
 
-const breadcrumbs = computed(() => [
-  { label: t('nav.settings'), href: '/settings' },
-  { label: t('taskTypes.title') }
-])
-
 const columns = computed<Column<TaskType>[]>(() => [
   { key: 'label', label: t('taskTypes.typeLabel') },
   { key: 'key', label: t('taskTypes.typeKey') },
@@ -249,11 +244,10 @@ onMounted(() => fetchTypes())
     <PageHeader
       :title="$t('taskTypes.title')"
       :icon="ListTodo"
-      back-link="/settings"
-      :breadcrumbs="breadcrumbs"
+      :description="$t('taskTypes.subtitle')"
     >
       <template #actions>
-        <Button v-if="canManage" variant="outline" size="sm" @click="openCreate">
+        <Button v-if="canManage" size="sm" @click="openCreate">
           <Plus class="h-4 w-4 mr-2" />{{ $t('taskTypes.addType') }}
         </Button>
       </template>

@@ -143,12 +143,11 @@ async function toggleContext(context: AIContext) {
     <PageHeader
       :title="$t('aiContexts.title')"
       :icon="Sparkles"
-      back-link="/chatbot"
-      :breadcrumbs="[{ label: $t('aiContexts.backToChatbot'), href: '/chatbot' }, { label: $t('nav.aiContexts') }]"
+      :description="$t('aiContexts.subtitle')"
     >
       <template #actions>
         <RouterLink to="/chatbot/ai/new">
-          <Button variant="outline" size="sm">
+          <Button size="sm">
             <Plus class="h-4 w-4 mr-2" />
             {{ $t('aiContexts.addContext') }}
           </Button>

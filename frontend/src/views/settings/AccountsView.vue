@@ -66,8 +66,6 @@ const showOnboardingDialog = ref(false)
 
 const canWrite = computed(() => authStore.hasPermission('accounts', 'write'))
 const canDelete = computed(() => authStore.hasPermission('accounts', 'delete'))
-const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('settings.accounts') }])
-
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
@@ -255,30 +253,30 @@ async function confirmDelete() {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
       :title="$t('accounts.title')"
+      :description="$t('accounts.subtitle')"
       :icon="Phone"
-      back-link="/settings"
-      :breadcrumbs="breadcrumbs"
     >
-      <template #actions>
-        <div v-if="canWrite" class="flex items-center gap-2">
-          <Button
-            v-if="whatsappConfig?.app_id && whatsappConfig?.config_id"
-            size="sm"
-            @click="showOnboardingDialog = true"
-            :disabled="isConnectingFB"
-            class="bg-facebook hover:bg-facebook-hover text-white border-none shadow-none"
-          >
-            <Loader2 v-if="isConnectingFB" class="h-4 w-4 mr-2 animate-spin" />
-            <Facebook v-else class="h-4 w-4 mr-2" />
-            {{ $t('accounts.connectFacebook') }}
+      <template v-if="canWrite" #actions>
+        <!-- Meta's own sign-up, when it is set up, is the way most numbers
+             are connected, so it is the one filled button; adding one by
+             hand is the fallback. -->
+        <RouterLink to="/settings/accounts/new">
+          <Button :variant="whatsappConfig?.app_id && whatsappConfig?.config_id ? 'outline' : 'default'" size="sm">
+            <Plus class="h-4 w-4 mr-2" />
+            {{ $t('accounts.addAccount') }}
           </Button>
-          <RouterLink to="/settings/accounts/new">
-            <Button variant="outline" size="sm">
-              <Plus class="h-4 w-4 mr-2" />
-              {{ $t('accounts.addAccount') }}
-            </Button>
-          </RouterLink>
-        </div>
+        </RouterLink>
+        <Button
+          v-if="whatsappConfig?.app_id && whatsappConfig?.config_id"
+          size="sm"
+          @click="showOnboardingDialog = true"
+          :disabled="isConnectingFB"
+          class="bg-facebook hover:bg-facebook-hover text-white border-none shadow-none"
+        >
+          <Loader2 v-if="isConnectingFB" class="h-4 w-4 mr-2 animate-spin" />
+          <Facebook v-else class="h-4 w-4 mr-2" />
+          {{ $t('accounts.connectFacebook') }}
+        </Button>
       </template>
     </PageHeader>
 

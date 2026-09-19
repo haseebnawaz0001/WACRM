@@ -986,17 +986,26 @@ onUnmounted(() => {
     :is-not-found="isNotFound"
     :not-found-title="$t('campaigns.notFound', 'Campaign not found')"
   >
+    <!-- Where the campaign stands, beside its name. -->
+    <template v-if="!isNew && campaign" #status>
+      <Badge
+        variant="outline"
+        :class="[getStatusClass(campaign.status), 'text-xs']"
+      >
+        <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
+        {{ campaign.status }}
+      </Badge>
+    </template>
     <template #actions>
       <div class="flex items-center gap-2">
-        <!-- Status badge for existing campaigns -->
-        <Badge
-          v-if="!isNew && campaign"
-          variant="outline"
-          :class="[getStatusClass(campaign.status), 'text-xs']"
+        <Button
+          v-if="isDraft && !isNew"
+          variant="destructive-outline"
+          size="sm"
+          @click="deleteDialogOpen = true"
         >
-          <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
-          {{ campaign.status }}
-        </Badge>
+          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
+        </Button>
 
         <!-- Start/Resume -->
         <Button
@@ -1050,14 +1059,6 @@ onUnmounted(() => {
         >
           <Save class="h-4 w-4 mr-1" />
           {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
-        <Button
-          v-if="isDraft && !isNew"
-          variant="destructive"
-          size="sm"
-          @click="deleteDialogOpen = true"
-        >
-          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
         </Button>
       </div>
     </template>

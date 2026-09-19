@@ -277,7 +277,7 @@ function getProgressPercentage(campaign: Campaign): number {
     >
       <template #actions>
         <RouterLink to="/campaigns/new">
-          <Button variant="outline" size="sm">
+          <Button size="sm">
             <Plus class="h-4 w-4 mr-2" />
             {{ $t('campaigns.createCampaign') }}
           </Button>

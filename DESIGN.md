@@ -224,7 +224,9 @@ Corners come only from the radius variables: 2px for fields, buttons and segment
 ### Buttons
 Flat, compact, one colour straight off the token.
 - **Shape:** gently squared (2px).
-- **Primary:** emerald with a near-black label, 2.25rem default and 2rem small; hover drops to 90% opacity. It says the next thing to do ("Turn on", "Save changes").
+- **Primary:** emerald with a near-black label, 2.25rem default and 2rem small; hover drops to 90% opacity. It says the next thing to do ("Turn On", "Save Changes").
+- **Destructive outline:** a red hairline (red-500 at 30%) with red text, red at 10% on hover. Used for Delete in a page bar, where only the primary is filled.
+- **Labels:** buttons and actions are Title Case ("Add Contact", "New Follow-up", "Try It on a Contact"), with short words like "on", "a" and "from" kept lowercase mid-label.
 - **Outline:** a hairline (white at 10%) over white at 2%; hover to 6% fill and 20% border. The Test button turns emerald-outlined while its panel is open.
 - **Ghost:** muted text, white-at-6% hover; used for back, undo/redo and overflow.
 - **Hover / Focus:** a 2px emerald focus ring with offset; press scales to 0.97.
@@ -247,6 +249,19 @@ Flat, compact, one colour straight off the token.
 - **Focus:** border to emerald at 60% plus a 2px emerald ring at 30%.
 - **Segmented choice:** a 2px-cornered track with a 4px inset; the chosen option is white at 10% and medium weight (light: white with a small shadow).
 - **Disabled:** not-allowed cursor, text at 70%.
+
+### Page Bar
+Every page inside the app wears the same bar (`PageHeader`); pages do not draw their own.
+- **Size:** 56px tall on a desktop, the height of the sidebar's logo row and the inbox's pane headers, so every top edge is one line. On a phone it wraps, and the actions take their own line under the title.
+- **Surface:** the page colour at 95% with a backdrop blur and a white-at-8% bottom hairline (light: white at 95%, gray-200).
+- **Left, in order:** a back arrow (2rem, ghost) only on a page you drill into: a record, an editor or a "new" page. Then the page's 1.25rem glyph at white 50%, the same glyph as its navigation item. Then the title (1.125rem semibold) with any status beside it, and one line under it.
+- **The line under the title:** on a record page (whose title is the record's name) it is the trail up to it, like "Settings › Users", without repeating the page itself. On every other page it is one sentence saying what the page is for. It is truncated to one line on a desktop, with the full text on hover.
+- **Back:** a page the navigation reaches has no back arrow. The arrow goes back where the person came from and falls back to the parent page. An editor with unsaved work takes it over to ask first.
+- **Status:** a badge or pill beside the title (Active, a campaign's state, Cached, a rule's draft status), never among the buttons.
+- **Actions, quiet to loud:** view controls (a date range, an account or agent picker), then outlined secondary actions, then at most one filled primary action, always last. A destructive action goes first, as a destructive outline. A ⋯ overflow menu, if there is one, closes the row. Every control in the bar is 2rem tall.
+- **Editors:** the thing being edited names the page. Its name is typed in the title's place (`PageTitleInput`: the title's size, with a border only on hover or focus). Its settings go in the editor's own panel, not the bar.
+- **A page's own views** (the automation builder's Build and History) sit in a tab row inside the bar.
+- **The inbox** is the one exception. It is a workspace whose panes each carry a 56px header of their own on the same line.
 
 ### Navigation
 - **Tabs:** 0.875rem text with a 2px underline; active is foreground, medium weight, emerald underline; idle is white at 55%.
@@ -275,7 +290,10 @@ Problems use the builder's own words: the step's title, then "Needs: team", link
 - **Do** keep every animation behind prefers-reduced-motion.
 - **Do** take every corner from the 2px / 4px / 6px / full scale.
 
+- **Do** give every page the shared page bar, a glyph and one line under its title; a page's main action is the filled button, last in the row.
+
 ### Don't:
+- **Don't** hand-roll a page header, put a back arrow on a page the navigation reaches, or put a labelled "Name" field in a toolbar.
 - **Don't** use amber for anything that is not "still needs finishing", and don't give the idle trigger card an emerald border.
 - **Don't** let people drag or wire nodes; the canvas lays itself out and steps are added with +.
 - **Don't** show `{{variable}}` syntax or raw engine error strings to the person building the rule.

@@ -187,17 +187,17 @@ onMounted(async () => {
     >
       <template #actions>
         <div class="flex items-center gap-2">
-          <Button v-if="canWrite && hasChanges" size="sm" @click="save" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
-          </Button>
           <Button
             v-if="canDelete && !isSelf"
-            variant="destructive"
+            variant="destructive-outline"
             size="sm"
             @click="deleteDialogOpen = true"
           >
             <Trash2 class="h-4 w-4 mr-1" />
             {{ isMember ? $t('users.removeMember') : $t('common.delete') }}
+          </Button>
+          <Button v-if="canWrite && hasChanges" size="sm" @click="save" :disabled="isSaving">
+            <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
           </Button>
         </div>
       </template>

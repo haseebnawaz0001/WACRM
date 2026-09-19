@@ -34,11 +34,6 @@ const fetchError = ref(false)
 const canWrite = computed(() => authStore.hasPermission('contact_fields', 'write'))
 const canDelete = computed(() => authStore.hasPermission('contact_fields', 'delete'))
 
-const breadcrumbs = computed(() => [
-  { label: t('nav.settings'), href: '/settings' },
-  { label: t('contactFields.title') }
-])
-
 const fieldTypes: Array<{ value: ContactFieldType; labelKey: string }> = [
   { value: 'text', labelKey: 'contactFields.typeText' },
   { value: 'number', labelKey: 'contactFields.typeNumber' },
@@ -264,11 +259,10 @@ onMounted(() => fetchFields())
     <PageHeader
       :title="$t('contactFields.title')"
       :icon="ListChecks"
-      back-link="/settings"
-      :breadcrumbs="breadcrumbs"
+      :description="$t('contactFields.subtitle')"
     >
       <template #actions>
-        <Button v-if="canWrite" variant="outline" size="sm" @click="openCreate">
+        <Button v-if="canWrite" size="sm" @click="openCreate">
           <Plus class="h-4 w-4 mr-2" />{{ $t('contactFields.addField') }}
         </Button>
       </template>

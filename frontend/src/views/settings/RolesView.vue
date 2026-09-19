@@ -103,10 +103,10 @@ function editTooltip(role: Role): string {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('roles.title')" :description="$t('roles.subtitle')" :icon="Shield" back-link="/settings">
+    <PageHeader :title="$t('roles.title')" :description="$t('roles.subtitle')" :icon="Shield">
       <template #actions>
         <RouterLink v-if="canWrite" to="/settings/roles/new">
-          <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
+          <Button size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
         </RouterLink>
       </template>
     </PageHeader>

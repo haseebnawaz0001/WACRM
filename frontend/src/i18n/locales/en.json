@@ -127,7 +127,8 @@
     "activity": "Activity",
     "nothingHere": "Nothing here yet",
     "viewAll": "View all",
-    "somethingWentWrong": "Something went wrong"
+    "somethingWentWrong": "Something went wrong",
+    "breadcrumb": "Breadcrumb"
   },
   "auth": {
     "login": "Login",
@@ -807,7 +808,8 @@
     "superAdminCanEdit": "As a super admin, you can modify permissions for this system role.",
     "updateRoleDesc": "Update the role name, description, and permissions.",
     "createRoleDesc": "Create a new role with custom permissions.",
-    "roleNameRequired": "Role name is required"
+    "roleNameRequired": "Role name is required",
+    "newRole": "New Role"
   },
   "teams": {
     "title": "Teams",
@@ -1221,7 +1223,7 @@
     "confirmDisableDescription": "This webhook will stop receiving events. You can re-enable it at any time.",
     "fetchErrorTitle": "Failed to load webhooks",
     "fetchErrorDescription": "Something went wrong while loading your webhooks. Please try again.",
-    "testWebhook": "Test webhook"
+    "testWebhook": "Test Webhook"
   },
   "cannedResponses": {
     "title": "Canned Responses",
@@ -1363,7 +1365,7 @@
   },
   "contactProfile": {
     "loadFailed": "This contact could not be loaded.",
-    "openChat": "Open chat",
+    "openChat": "Open Chat",
     "timeline": "History",
     "noHistory": "Nothing has happened with this contact yet.",
     "everything": "Everything",
@@ -1542,7 +1544,8 @@
     "account": "Account",
     "appId": "App ID",
     "defaults": "Defaults",
-    "status": "Status"
+    "status": "Status",
+    "subtitle": "WhatsApp Business numbers connected to your organization"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1643,7 +1646,8 @@
     "noDataInRange": "Nothing in this date range",
     "shortcutsEmpty": "No shortcuts pinned yet",
     "loadFailed": "The dashboard couldn't be loaded",
-    "loadFailedDesc": "Check your connection and try again."
+    "loadFailedDesc": "Check your connection and try again.",
+    "subtitle": "How your WhatsApp business is doing"
   },
   "flows": {
     "title": "WhatsApp Flows",
@@ -2157,7 +2161,8 @@
     "profileLifecycle": "Lifecycle stage",
     "profileTasks": "Open follow-ups",
     "profileDeals": "Open deals",
-    "profileConversation": "Conversation status"
+    "profileConversation": "Conversation status",
+    "subtitle": "What the AI knows when it answers your customers"
   },
   "keywords": {
     "title": "Keyword Rules",
@@ -2219,7 +2224,8 @@
     "details": "Details",
     "keywordsHint": "Keywords that trigger automated responses",
     "newKeyword": "New Keyword",
-    "notFound": "Keyword rule not found"
+    "notFound": "Keyword rule not found",
+    "subtitle": "Words that make the chatbot reply on its own"
   },
   "chatbotFlows": {
     "title": "Conversation Flows",
@@ -2245,7 +2251,8 @@
     "deleteFlow": "Delete Flow",
     "fetchError": "Failed to load flows. Please try again.",
     "editFlowLabel": "Edit flow",
-    "deleteFlowLabel": "Delete flow"
+    "deleteFlowLabel": "Delete flow",
+    "subtitle": "Conversations the chatbot runs when a keyword starts them"
   },
   "chatbot": {
     "title": "Chatbot",
@@ -2727,7 +2734,8 @@
     "transferFailed": "Failed to transfer call",
     "back": "Back",
     "noTeams": "No teams available",
-    "errorLoadingTransfers": "Failed to load call transfers. Please try again."
+    "errorLoadingTransfers": "Failed to load call transfers. Please try again.",
+    "subtitle": "Calls waiting for someone to pick them up, and the ones already handled"
   },
   "outgoingCalls": {
     "initiating": "Initiating",
@@ -2877,12 +2885,13 @@
     "spentInStage": "Spent {duration} in the previous stage",
     "daysHours": "{days}d {hours}h",
     "hoursMinutes": "{hours}h {minutes}m",
-    "minutes": "{minutes}m"
+    "minutes": "{minutes}m",
+    "subtitle": "Every open deal, stage by stage"
   },
   "pipelines": {
     "title": "Pipelines",
     "description": "The columns of your board are your process. Name them the way your team already talks about the work.",
-    "newPipeline": "New pipeline",
+    "newPipeline": "New Pipeline",
     "newPipelineHint": "A new pipeline starts with a default set of stages you can rename.",
     "created": "Pipeline created",
     "archived": "Pipeline archived",
@@ -2916,7 +2925,7 @@
   "automations": {
     "title": "Automations",
     "description": "Things that happen on their own when something changes for a customer.",
-    "new": "New automation",
+    "new": "New Automation",
     "untitled": "Untitled automation",
     "loadFailed": "Automations could not be loaded.",
     "copyOf": "Copy of {name}",
@@ -3449,11 +3458,11 @@
     },
     "builder": {
       "name": "Automation name",
-      "tryIt": "Try it on a contact",
+      "tryIt": "Try It on a Contact",
       "test": "Test",
-      "turnOn": "Turn on",
+      "turnOn": "Turn On",
       "turnOff": "Turn off",
-      "saveChanges": "Save changes",
+      "saveChanges": "Save Changes",
       "discard": "Discard",
       "unsaved": "Unsaved changes",
       "saving": "Saving…",
@@ -3627,7 +3636,7 @@
   "tasks": {
     "title": "Follow-ups",
     "description": "What was promised, who owes it and when — out of people’s heads and into one list.",
-    "new": "New follow-up",
+    "new": "New Follow-up",
     "created": "Follow-up created",
     "empty": "Nothing outstanding.",
     "loadFailed": "Follow-ups could not be loaded.",
@@ -3701,7 +3710,7 @@
   "segments": {
     "title": "Segments",
     "description": "A saved question about your contacts, so an audience stays right as they change.",
-    "new": "New segment",
+    "new": "New Segment",
     "edit": "Edit segment",
     "empty": "No segments yet.",
     "loadFailed": "Segments could not be loaded.",
@@ -3730,7 +3739,7 @@
   "duplicates": {
     "title": "Possible duplicates",
     "description": "Two records for one person split their history. These pairs look like the same customer.",
-    "scan": "Scan now",
+    "scan": "Scan Now",
     "scanned": "Found {count} possible duplicates",
     "empty": "No duplicates waiting for a decision.",
     "loadFailed": "Duplicates could not be loaded.",
@@ -3807,7 +3816,7 @@
     "defaultDue": "Default deadline",
     "defaultDueHint": "How far ahead a new task of this kind is due. A call back is same-day work; a quote is not.",
     "colour": "Colour",
-    "addType": "Add type",
+    "addType": "Add Type",
     "editType": "Edit task type",
     "dialogDesc": "Name the work and say when it is normally due.",
     "labelPlaceholder": "Book a fitting",
@@ -3830,7 +3839,8 @@
     "dueThreeDays": "In three days",
     "dueWeek": "In a week",
     "dueMonth": "In a month",
-    "dueMinutes": "In {count} minutes"
+    "dueMinutes": "In {count} minutes",
+    "subtitle": "The kinds of follow-up your team commits to"
   },
   "dataTable": {
     "view": "View",

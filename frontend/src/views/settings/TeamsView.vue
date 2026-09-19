@@ -45,8 +45,6 @@ const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const canWriteTeams = computed(() => authStore.hasPermission('teams', 'write'))
 const canDeleteTeams = computed(() => authStore.hasPermission('teams', 'delete'))
-const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('nav.teams') }])
-
 const debouncedSearch = useDebounceFn(() => {
   currentPage.value = 1
   fetchTeams()
@@ -117,9 +115,9 @@ async function confirmDelete() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('teams.title')" :icon="Users" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('teams.title')" :icon="Users" :description="$t('teams.subtitle')">
       <template #actions>
-        <RouterLink v-if="canWriteTeams" to="/settings/teams/new"><Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button></RouterLink>
+        <RouterLink v-if="canWriteTeams" to="/settings/teams/new"><Button size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button></RouterLink>
       </template>
     </PageHeader>
 

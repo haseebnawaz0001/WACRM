@@ -97,11 +97,12 @@ onMounted(fetchCandidates)
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
+  <div class="flex h-full flex-col">
     <PageHeader
       :title="t('duplicates.title')"
       :description="t('duplicates.description')"
       :icon="Copy"
+      back-link="/contacts"
     >
       <template #actions>
         <Button v-if="canReview" size="sm" variant="outline" :disabled="isScanning" @click="scan">
@@ -110,97 +111,98 @@ onMounted(fetchCandidates)
         </Button>
       </template>
     </PageHeader>
+    <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
+      <ErrorState v-if="fetchError" :message="t('duplicates.loadFailed')" @retry="fetchCandidates" />
+      <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
 
-    <ErrorState v-if="fetchError" :message="t('duplicates.loadFailed')" @retry="fetchCandidates" />
-    <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
+      <Card v-else-if="!candidates.length">
+        <CardContent class="flex flex-col items-center gap-3 py-10 text-center">
+          <Copy class="h-8 w-8 text-muted-foreground" />
+          <p class="text-sm text-muted-foreground">{{ t('duplicates.empty') }}</p>
+        </CardContent>
+      </Card>
 
-    <Card v-else-if="!candidates.length">
-      <CardContent class="flex flex-col items-center gap-3 py-10 text-center">
-        <Copy class="h-8 w-8 text-muted-foreground" />
-        <p class="text-sm text-muted-foreground">{{ t('duplicates.empty') }}</p>
-      </CardContent>
-    </Card>
-
-    <ul v-else class="space-y-3">
-      <li v-for="candidate in candidates" :key="candidate.id">
-        <Card>
-          <CardContent class="space-y-3 p-4">
-            <div class="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" class="px-1.5 py-0 text-[11px]">
-                {{ t('duplicates.score', { score: candidate.score }) }}
-              </Badge>
-              <!-- Why, not just how confident: somebody deciding should not be
-                   asked to trust a number. -->
-              <Badge
-                v-for="reason in candidate.reasons"
-                :key="reason"
-                variant="outline"
-                class="px-1.5 py-0 text-[11px]"
-              >
-                {{ t(`duplicates.reasons.${reason}`, reason) }}
-              </Badge>
-              <span class="ml-auto text-xs text-muted-foreground">
-                {{ formatDate(candidate.detected_at) }}
-              </span>
-            </div>
-
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div
-                v-for="side in [candidate.contact_a, candidate.contact_b]"
-                :key="side.id"
-                class="space-y-1 rounded-md border p-3"
-              >
-                <p class="font-medium">{{ side.profile_name || side.phone_number }}</p>
-                <p class="text-sm text-muted-foreground">{{ side.phone_number }}</p>
-                <p class="text-xs text-muted-foreground">
-                  {{ t('duplicates.messages', { count: side.message_count }) }}
-                  · {{ t('duplicates.created', { when: formatDate(side.created_at) }) }}
-                </p>
-                <div v-if="side.tags.length" class="flex flex-wrap gap-1 pt-1">
-                  <Badge v-for="tag in side.tags" :key="tag" variant="outline" class="px-1.5 py-0 text-[11px]">
-                    {{ tag }}
-                  </Badge>
-                </div>
-
-                <Button
-                  v-if="canMerge"
-                  class="mt-2 w-full"
-                  size="sm"
+      <ul v-else class="space-y-3">
+        <li v-for="candidate in candidates" :key="candidate.id">
+          <Card>
+            <CardContent class="space-y-3 p-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" class="px-1.5 py-0 text-[11px]">
+                  {{ t('duplicates.score', { score: candidate.score }) }}
+                </Badge>
+                <!-- Why, not just how confident: somebody deciding should not be
+                     asked to trust a number. -->
+                <Badge
+                  v-for="reason in candidate.reasons"
+                  :key="reason"
                   variant="outline"
-                  @click="ask(candidate, side, side.id === candidate.contact_a.id ? candidate.contact_b : candidate.contact_a)"
+                  class="px-1.5 py-0 text-[11px]"
                 >
-                  {{ t('duplicates.keepThis') }}
-                </Button>
+                  {{ t(`duplicates.reasons.${reason}`, reason) }}
+                </Badge>
+                <span class="ml-auto text-xs text-muted-foreground">
+                  {{ formatDate(candidate.detected_at) }}
+                </span>
               </div>
-            </div>
 
-            <Button v-if="canReview" variant="ghost" size="sm" @click="dismiss(candidate)">
-              <X class="mr-1.5 h-4 w-4" />
-              {{ t('duplicates.notTheSame') }}
-            </Button>
-          </CardContent>
-        </Card>
-      </li>
-    </ul>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div
+                  v-for="side in [candidate.contact_a, candidate.contact_b]"
+                  :key="side.id"
+                  class="space-y-1 rounded-md border p-3"
+                >
+                  <p class="font-medium">{{ side.profile_name || side.phone_number }}</p>
+                  <p class="text-sm text-muted-foreground">{{ side.phone_number }}</p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('duplicates.messages', { count: side.message_count }) }}
+                    · {{ t('duplicates.created', { when: formatDate(side.created_at) }) }}
+                  </p>
+                  <div v-if="side.tags.length" class="flex flex-wrap gap-1 pt-1">
+                    <Badge v-for="tag in side.tags" :key="tag" variant="outline" class="px-1.5 py-0 text-[11px]">
+                      {{ tag }}
+                    </Badge>
+                  </div>
 
-    <!-- Merging is not reversible, so it is confirmed in words rather than by
-         a second click in the same place. -->
-    <AlertDialog :open="!!pending" @update:open="open => !open && (pending = null)">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ t('duplicates.confirmTitle') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ t('duplicates.confirmBody', {
-              keep: pending?.keep.profile_name || pending?.keep.phone_number,
-              drop: pending?.drop.profile_name || pending?.drop.phone_number
-            }) }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="confirmMerge">{{ t('duplicates.merge') }}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+                  <Button
+                    v-if="canMerge"
+                    class="mt-2 w-full"
+                    size="sm"
+                    variant="outline"
+                    @click="ask(candidate, side, side.id === candidate.contact_a.id ? candidate.contact_b : candidate.contact_a)"
+                  >
+                    {{ t('duplicates.keepThis') }}
+                  </Button>
+                </div>
+              </div>
+
+              <Button v-if="canReview" variant="ghost" size="sm" @click="dismiss(candidate)">
+                <X class="mr-1.5 h-4 w-4" />
+                {{ t('duplicates.notTheSame') }}
+              </Button>
+            </CardContent>
+          </Card>
+        </li>
+      </ul>
+
+      <!-- Merging is not reversible, so it is confirmed in words rather than by
+           a second click in the same place. -->
+      <AlertDialog :open="!!pending" @update:open="open => !open && (pending = null)">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{{ t('duplicates.confirmTitle') }}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {{ t('duplicates.confirmBody', {
+                keep: pending?.keep.profile_name || pending?.keep.phone_number,
+                drop: pending?.drop.profile_name || pending?.drop.phone_number
+              }) }}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+            <AlertDialogAction @click="confirmMerge">{{ t('duplicates.merge') }}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   </div>
 </template>

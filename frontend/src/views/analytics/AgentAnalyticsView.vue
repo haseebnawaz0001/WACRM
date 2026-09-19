@@ -279,10 +279,10 @@ void _displayStats.value // Suppress unused warning
     >
       <template #actions>
         <!-- Agent Filter (Admin/Manager only) -->
-        <div v-if="isAdminOrManager" class="flex items-center gap-2 mr-4">
+        <div v-if="isAdminOrManager" class="flex items-center gap-2">
           <Popover v-model:open="agentComboboxOpen">
             <PopoverTrigger as-child>
-              <Button variant="outline" role="combobox" :aria-expanded="agentComboboxOpen" class="w-[200px] justify-between">
+              <Button variant="outline" size="sm" role="combobox" :aria-expanded="agentComboboxOpen" class="w-[200px] justify-between">
                 <span class="truncate">{{ selectedAgentName }}</span>
                 <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>

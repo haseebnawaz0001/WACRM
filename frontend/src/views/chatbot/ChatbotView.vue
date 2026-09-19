@@ -153,13 +153,14 @@ const destinations = computed(() => [
       :description="$t('chatbot.subtitle')"
       :icon="Bot"
     >
+      <template #status>
+        <Badge
+          :class="settings.enabled ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500'"
+        >
+          {{ settings.enabled ? $t('chatbot.active') : $t('chatbot.inactive') }}
+        </Badge>
+      </template>
       <template #actions>
-        <div class="flex items-center gap-3">
-          <Badge
-            :class="settings.enabled ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500'"
-          >
-            {{ settings.enabled ? $t('chatbot.active') : $t('chatbot.inactive') }}
-          </Badge>
           <Button
             variant="outline"
             size="sm"
@@ -170,7 +171,6 @@ const destinations = computed(() => [
             <Power class="h-4 w-4 mr-2" />
             {{ settings.enabled ? $t('chatbot.disable') : $t('chatbot.enable') }}
           </Button>
-        </div>
       </template>
     </PageHeader>
 

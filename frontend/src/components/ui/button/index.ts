@@ -15,6 +15,11 @@ export const buttonVariants = cva(
         default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        // A destructive action beside a primary one. A page bar has room for
+        // one filled button; a red block next to it made Delete as loud as
+        // Save, so in a bar it is outlined and says its danger in its colour.
+        "destructive-outline":
+          "border border-red-500/30 bg-transparent text-red-300 hover:border-red-500/50 hover:bg-red-500/10 light:border-red-200 light:text-red-700 light:hover:bg-red-50",
         // Glass outline for dark mode
         outline:
           "border border-white/10 bg-white/[0.02] text-foreground hover:bg-white/[0.06] hover:border-white/20 light:border-gray-200 light:bg-white light:hover:bg-gray-50",

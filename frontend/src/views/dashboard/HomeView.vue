@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/shared'
-import { Inbox, ListChecks, AlertCircle } from 'lucide-vue-next'
+import { Inbox, ListChecks, AlertCircle, Home } from 'lucide-vue-next'
 import { inboxService, tasksService, type InboxRow, type Task } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useFormatters } from '@/composables/useFormatters'
@@ -79,7 +79,7 @@ const greeting = computed(() => {
     <!-- Full width, like every other page: this header was nested inside the
          page padding, so its rule stopped short of both edges and the page
          started with a line that did not line up with anything. -->
-    <PageHeader :title="greeting" :description="t('home.subtitle')" />
+    <PageHeader :title="greeting" :description="t('home.subtitle')" :icon="Home" />
 
     <div class="flex-1 overflow-y-auto p-6 max-md:p-4">
       <!-- Capped, because the two lists are a name at one end of the row and a

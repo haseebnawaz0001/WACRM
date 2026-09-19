@@ -33,7 +33,7 @@ import { useAuthStore } from '@/stores/auth'
 import { wsService } from '@/services/websocket'
 import { getInitials, getAvatarColor, formatDateTime } from '@/lib/utils'
 import {
-  User, MessageSquare, ListChecks, KanbanSquare, Tag, ArrowLeft,
+  User, MessageSquare, ListChecks, KanbanSquare, Tag,
   RefreshCw, FileText, Phone, ArrowRightLeft, Megaphone, Bot, UserCheck,
   CircleDot, AlertTriangle
 } from 'lucide-vue-next'
@@ -380,211 +380,215 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
-    <ErrorState v-if="fetchError" :message="t('contactProfile.loadFailed')" @retry="load" />
-    <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
+  <div class="flex h-full flex-col">
+    <!-- Back returns to wherever the person came from — the conversation,
+         the contacts list — and to the list when they arrived directly. -->
+    <PageHeader
+      :title="contact ? name : ''"
+      :icon="User"
+      back-link="/contacts"
+      :breadcrumbs="[{ label: t('contacts.title'), href: '/contacts' }]"
+    >
+      <template v-if="contact" #actions>
+        <Button size="sm" @click="router.push(`/inbox/${contactId}`)">
+          <MessageSquare class="mr-1.5 h-4 w-4" />
+          {{ t('contactProfile.openChat') }}
+        </Button>
+      </template>
+    </PageHeader>
+    <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
+      <ErrorState v-if="fetchError" :message="t('contactProfile.loadFailed')" @retry="load" />
+      <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
 
-    <template v-else-if="contact">
-      <PageHeader :title="name" :icon="User">
-        <template #actions>
-          <Button variant="ghost" size="sm" @click="router.back()">
-            <ArrowLeft class="mr-1.5 h-4 w-4" />
-            {{ t('common.back') }}
-          </Button>
-          <Button size="sm" @click="router.push(`/inbox/${contactId}`)">
-            <MessageSquare class="mr-1.5 h-4 w-4" />
-            {{ t('contactProfile.openChat') }}
-          </Button>
-        </template>
-      </PageHeader>
+      <template v-else-if="contact">
+        <div class="grid gap-4 lg:grid-cols-3">
+          <!-- The record, through the shared sidebar (plan 10, S12). The chat
+               panel renders the same sections in the same order, so an agent
+               does not have to relearn where tags live when they move between
+               the two screens. -->
+          <ContactSidebar :sections="sidebarSections" storage-key="contact-profile">
+            <template #header>
+            <Card>
+              <CardContent class="space-y-3 p-4">
+                <div class="flex items-center gap-3">
+                  <Avatar class="h-12 w-12">
+                    <AvatarFallback :class="getAvatarColor(name)" class="text-white">
+                      {{ getInitials(name) }}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div class="min-w-0">
+                    <p class="truncate font-medium">{{ name }}</p>
+                    <p class="truncate text-sm text-muted-foreground">{{ contact.phone_number }}</p>
+                  </div>
+                </div>
 
-      <div class="grid gap-4 lg:grid-cols-3">
-        <!-- The record, through the shared sidebar (plan 10, S12). The chat
-             panel renders the same sections in the same order, so an agent
-             does not have to relearn where tags live when they move between
-             the two screens. -->
-        <ContactSidebar :sections="sidebarSections" storage-key="contact-profile">
-          <template #header>
-          <Card>
-            <CardContent class="space-y-3 p-4">
-              <div class="flex items-center gap-3">
-                <Avatar class="h-12 w-12">
-                  <AvatarFallback :class="getAvatarColor(name)" class="text-white">
-                    {{ getInitials(name) }}
-                  </AvatarFallback>
-                </Avatar>
-                <div class="min-w-0">
-                  <p class="truncate font-medium">{{ name }}</p>
-                  <p class="truncate text-sm text-muted-foreground">{{ contact.phone_number }}</p>
+                <div v-if="contact.tags?.length" class="flex flex-wrap gap-1">
+                  <Badge v-for="tag in contact.tags" :key="tag" variant="outline" class="px-1.5 py-0 text-[11px]">
+                    {{ tag }}
+                  </Badge>
+                </div>
+
+                <Separator />
+
+                <dl v-if="fields.length" class="space-y-1.5 text-sm">
+                  <div v-for="field in fields" :key="field.key" class="flex justify-between gap-2">
+                    <dt class="text-muted-foreground">{{ field.label }}</dt>
+                    <dd class="truncate text-right">{{ field.value }}</dd>
+                  </div>
+                </dl>
+                <p v-else class="text-sm text-muted-foreground">{{ t('contactProfile.noFields') }}</p>
+              </CardContent>
+            </Card>
+            </template>
+
+            <template #deals>
+              <div class="space-y-2">
+                <button
+                  v-for="deal in deals"
+                  :key="deal.id"
+                  class="flex w-full items-center justify-between gap-2 rounded-md border p-2 text-left text-sm hover:bg-accent"
+                  @click="router.push('/pipeline')"
+                >
+                  <span class="min-w-0">
+                    <span class="block truncate">{{ deal.title }}</span>
+                    <Badge variant="outline" class="mt-0.5 px-1.5 py-0 text-[11px]">
+                      {{ deal.stage_name }}
+                    </Badge>
+                  </span>
+                  <span class="shrink-0 tabular-nums">{{ money(deal) }}</span>
+                </button>
+              </div>
+            </template>
+
+            <template #tasks>
+              <div class="space-y-1.5">
+                <div v-for="task in tasks" :key="task.id" class="flex items-center justify-between gap-2 text-sm">
+                  <span class="min-w-0 truncate">{{ task.title }}</span>
+                  <Badge
+                    :variant="task.overdue ? 'destructive' : 'outline'"
+                    class="shrink-0 px-1.5 py-0 text-[11px]"
+                  >
+                    {{ formatDateTime(task.due_at) }}
+                  </Badge>
                 </div>
               </div>
+            </template>
 
-              <div v-if="contact.tags?.length" class="flex flex-wrap gap-1">
-                <Badge v-for="tag in contact.tags" :key="tag" variant="outline" class="px-1.5 py-0 text-[11px]">
-                  {{ tag }}
-                </Badge>
+            <!-- A record that suddenly holds somebody else's history has to be
+                 able to explain itself. -->
+            <template #merges>
+              <div class="space-y-1 text-sm text-muted-foreground">
+                <p v-for="merge in merges" :key="merge.id">
+                  {{ t('contactProfile.mergedOn', { when: formatDateTime(merge.created_at) }) }}
+                </p>
+              </div>
+            </template>
+          </ContactSidebar>
+
+          <!-- The story -->
+          <Card class="lg:col-span-2">
+            <CardHeader class="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+              <CardTitle class="text-base">{{ t('contactProfile.timeline') }}</CardTitle>
+              <div class="flex flex-wrap items-center gap-2">
+              <DateRangePicker
+                v-model:selected-range="selectedRange"
+                v-model:custom-date-range="customDateRange"
+                v-model:is-date-picker-open="isDatePickerOpen"
+                :format-date-range-display="formatDateRangeDisplay"
+                allow-all-time
+                @update:selected-range="reloadTimeline"
+                @apply-custom="() => { applyCustomRange(); reloadTimeline() }"
+              />
+              <Select :model-value="typeFilter" @update:model-value="v => applyFilter(String(v ?? ''))">
+                <SelectTrigger class="h-8 w-44" :aria-label="$t('contactProfile.everything')">
+                  <SelectValue :placeholder="t('contactProfile.everything')" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{{ t('contactProfile.everything') }}</SelectItem>
+                  <SelectItem value="message_burst">{{ t('contactProfile.filterMessages') }}</SelectItem>
+                  <SelectItem value="note">{{ t('contactProfile.filterNotes') }}</SelectItem>
+                  <SelectItem value="task">{{ t('contactProfile.filterTasks') }}</SelectItem>
+                  <SelectItem value="deal">{{ t('contactProfile.filterDeals') }}</SelectItem>
+                  <SelectItem value="tag">{{ t('contactProfile.filterTags') }}</SelectItem>
+                </SelectContent>
+              </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p v-if="!items.length" class="text-sm text-muted-foreground">
+                {{ t('contactProfile.noHistory') }}
+              </p>
+
+              <div v-else class="space-y-5">
+                <section v-for="group in groupedItems" :key="group.key">
+                  <!-- The day, said once. -->
+                  <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {{ group.label }}
+                  </h3>
+
+                  <!--
+                    A rail with a node per entry. The line is drawn behind the
+                    nodes rather than as a border on the list, so it stops at the
+                    last entry of a day instead of running past it.
+                  -->
+                  <ol class="relative space-y-px">
+                    <li
+                      v-for="(item, index) in group.items"
+                      :key="item.id"
+                      class="group/entry relative flex gap-3 rounded-sm px-2 py-2 -mx-2 transition-colors"
+                      :class="linkFor(item) ? 'cursor-pointer hover:bg-muted/50' : ''"
+                      @click="openItem(item)"
+                    >
+                      <span
+                        v-if="index < group.items.length - 1"
+                        class="absolute left-[15px] top-[30px] h-[calc(100%-22px)] w-px bg-white/[0.09] light:bg-gray-200"
+                        aria-hidden="true"
+                      />
+                      <span
+                        class="relative z-[1] mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border bg-background"
+                        :class="isAlert(item) && 'border-destructive/40 text-destructive'"
+                      >
+                        <component :is="iconFor(item)" class="h-3.5 w-3.5" :class="!isAlert(item) && 'text-muted-foreground'" />
+                      </span>
+
+                      <div class="flex min-w-0 flex-1 items-baseline gap-3">
+                        <!-- A real link where there is somewhere to go, so the
+                             entry can be opened in a new tab, reached by keyboard
+                             and read by a screen reader as the action it is. -->
+                        <component
+                          :is="linkFor(item) ? 'a' : 'p'"
+                          :href="linkFor(item) ?? undefined"
+                          class="min-w-0 flex-1 text-sm"
+                          :class="[
+                            linkFor(item) ? 'group-hover/entry:underline' : '',
+                            isAlert(item) ? 'font-medium text-destructive' : 'text-foreground'
+                          ]"
+                          @click.prevent="openItem(item)"
+                        >{{ item.summary }}<span
+                          v-if="actorLine(item)"
+                          class="text-muted-foreground"
+                        > · {{ actorLine(item) }}</span></component>
+
+                        <time
+                          class="shrink-0 text-xs tabular-nums text-muted-foreground"
+                          :datetime="item.occurred_at"
+                          :title="formatDateTime(item.occurred_at)"
+                        >{{ timeOf(item.occurred_at) }}</time>
+                      </div>
+                    </li>
+                  </ol>
+                </section>
               </div>
 
-              <Separator />
-
-              <dl v-if="fields.length" class="space-y-1.5 text-sm">
-                <div v-for="field in fields" :key="field.key" class="flex justify-between gap-2">
-                  <dt class="text-muted-foreground">{{ field.label }}</dt>
-                  <dd class="truncate text-right">{{ field.value }}</dd>
-                </div>
-              </dl>
-              <p v-else class="text-sm text-muted-foreground">{{ t('contactProfile.noFields') }}</p>
+              <div v-if="nextBefore" class="mt-4 flex justify-center border-t pt-4">
+                <Button variant="outline" size="sm" @click="loadMore">
+                  {{ t('contactProfile.loadMore') }}
+                </Button>
+              </div>
             </CardContent>
           </Card>
-          </template>
-
-          <template #deals>
-            <div class="space-y-2">
-              <button
-                v-for="deal in deals"
-                :key="deal.id"
-                class="flex w-full items-center justify-between gap-2 rounded-md border p-2 text-left text-sm hover:bg-accent"
-                @click="router.push('/pipeline')"
-              >
-                <span class="min-w-0">
-                  <span class="block truncate">{{ deal.title }}</span>
-                  <Badge variant="outline" class="mt-0.5 px-1.5 py-0 text-[11px]">
-                    {{ deal.stage_name }}
-                  </Badge>
-                </span>
-                <span class="shrink-0 tabular-nums">{{ money(deal) }}</span>
-              </button>
-            </div>
-          </template>
-
-          <template #tasks>
-            <div class="space-y-1.5">
-              <div v-for="task in tasks" :key="task.id" class="flex items-center justify-between gap-2 text-sm">
-                <span class="min-w-0 truncate">{{ task.title }}</span>
-                <Badge
-                  :variant="task.overdue ? 'destructive' : 'outline'"
-                  class="shrink-0 px-1.5 py-0 text-[11px]"
-                >
-                  {{ formatDateTime(task.due_at) }}
-                </Badge>
-              </div>
-            </div>
-          </template>
-
-          <!-- A record that suddenly holds somebody else's history has to be
-               able to explain itself. -->
-          <template #merges>
-            <div class="space-y-1 text-sm text-muted-foreground">
-              <p v-for="merge in merges" :key="merge.id">
-                {{ t('contactProfile.mergedOn', { when: formatDateTime(merge.created_at) }) }}
-              </p>
-            </div>
-          </template>
-        </ContactSidebar>
-
-        <!-- The story -->
-        <Card class="lg:col-span-2">
-          <CardHeader class="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-            <CardTitle class="text-base">{{ t('contactProfile.timeline') }}</CardTitle>
-            <div class="flex flex-wrap items-center gap-2">
-            <DateRangePicker
-              v-model:selected-range="selectedRange"
-              v-model:custom-date-range="customDateRange"
-              v-model:is-date-picker-open="isDatePickerOpen"
-              :format-date-range-display="formatDateRangeDisplay"
-              allow-all-time
-              @update:selected-range="reloadTimeline"
-              @apply-custom="() => { applyCustomRange(); reloadTimeline() }"
-            />
-            <Select :model-value="typeFilter" @update:model-value="v => applyFilter(String(v ?? ''))">
-              <SelectTrigger class="h-8 w-44" :aria-label="$t('contactProfile.everything')">
-                <SelectValue :placeholder="t('contactProfile.everything')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">{{ t('contactProfile.everything') }}</SelectItem>
-                <SelectItem value="message_burst">{{ t('contactProfile.filterMessages') }}</SelectItem>
-                <SelectItem value="note">{{ t('contactProfile.filterNotes') }}</SelectItem>
-                <SelectItem value="task">{{ t('contactProfile.filterTasks') }}</SelectItem>
-                <SelectItem value="deal">{{ t('contactProfile.filterDeals') }}</SelectItem>
-                <SelectItem value="tag">{{ t('contactProfile.filterTags') }}</SelectItem>
-              </SelectContent>
-            </Select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p v-if="!items.length" class="text-sm text-muted-foreground">
-              {{ t('contactProfile.noHistory') }}
-            </p>
-
-            <div v-else class="space-y-5">
-              <section v-for="group in groupedItems" :key="group.key">
-                <!-- The day, said once. -->
-                <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {{ group.label }}
-                </h3>
-
-                <!--
-                  A rail with a node per entry. The line is drawn behind the
-                  nodes rather than as a border on the list, so it stops at the
-                  last entry of a day instead of running past it.
-                -->
-                <ol class="relative space-y-px">
-                  <li
-                    v-for="(item, index) in group.items"
-                    :key="item.id"
-                    class="group/entry relative flex gap-3 rounded-sm px-2 py-2 -mx-2 transition-colors"
-                    :class="linkFor(item) ? 'cursor-pointer hover:bg-muted/50' : ''"
-                    @click="openItem(item)"
-                  >
-                    <span
-                      v-if="index < group.items.length - 1"
-                      class="absolute left-[15px] top-[30px] h-[calc(100%-22px)] w-px bg-white/[0.09] light:bg-gray-200"
-                      aria-hidden="true"
-                    />
-                    <span
-                      class="relative z-[1] mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border bg-background"
-                      :class="isAlert(item) && 'border-destructive/40 text-destructive'"
-                    >
-                      <component :is="iconFor(item)" class="h-3.5 w-3.5" :class="!isAlert(item) && 'text-muted-foreground'" />
-                    </span>
-
-                    <div class="flex min-w-0 flex-1 items-baseline gap-3">
-                      <!-- A real link where there is somewhere to go, so the
-                           entry can be opened in a new tab, reached by keyboard
-                           and read by a screen reader as the action it is. -->
-                      <component
-                        :is="linkFor(item) ? 'a' : 'p'"
-                        :href="linkFor(item) ?? undefined"
-                        class="min-w-0 flex-1 text-sm"
-                        :class="[
-                          linkFor(item) ? 'group-hover/entry:underline' : '',
-                          isAlert(item) ? 'font-medium text-destructive' : 'text-foreground'
-                        ]"
-                        @click.prevent="openItem(item)"
-                      >{{ item.summary }}<span
-                        v-if="actorLine(item)"
-                        class="text-muted-foreground"
-                      > · {{ actorLine(item) }}</span></component>
-
-                      <time
-                        class="shrink-0 text-xs tabular-nums text-muted-foreground"
-                        :datetime="item.occurred_at"
-                        :title="formatDateTime(item.occurred_at)"
-                      >{{ timeOf(item.occurred_at) }}</time>
-                    </div>
-                  </li>
-                </ol>
-              </section>
-            </div>
-
-            <div v-if="nextBefore" class="mt-4 flex justify-center border-t pt-4">
-              <Button variant="outline" size="sm" @click="loadMore">
-                {{ t('contactProfile.loadMore') }}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </template>
+        </div>
+      </template>
+    </div>
   </div>
 </template>

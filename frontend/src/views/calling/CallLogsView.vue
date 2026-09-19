@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones, ArrowRightLeft } from 'lucide-vue-next'
+import { Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones, ArrowRightLeft } from 'lucide-vue-next'
 import DataTable from '@/components/shared/DataTable.vue'
 import type { Column } from '@/components/shared/types'
 import SearchInput from '@/components/shared/SearchInput.vue'
-import { ErrorState } from '@/components/shared'
+import { ErrorState, PageHeader } from '@/components/shared'
 import IVRPathTree from '@/components/calling/IVRPathTree.vue'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -278,307 +278,306 @@ watch(phoneSearch, () => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold">{{ t('calling.callLogs') }}</h1>
-        <p class="text-muted-foreground">{{ t('calling.callLogsDesc') }}</p>
-      </div>
-      <Button variant="outline" size="sm" @click="fetchLogs">
-        <RefreshCw class="h-4 w-4 mr-2" />
-        {{ t('common.refresh') }}
-      </Button>
-    </div>
+  <div class="flex h-full flex-col">
+    <PageHeader :title="t('calling.callLogs')" :description="t('calling.callLogsDesc')" :icon="PhoneCall">
+      <template #actions>
+        <Button variant="outline" size="sm" @click="fetchLogs">
+          <RefreshCw class="h-4 w-4 mr-2" />
+          {{ t('common.refresh') }}
+        </Button>
+      </template>
+    </PageHeader>
+    <div class="min-h-0 flex-1 space-y-6 overflow-y-auto p-4 md:p-6">
+      <!-- Error State -->
+      <ErrorState
+        v-if="error && !store.callLogsLoading"
+        :title="$t('common.loadErrorTitle')"
+        :description="error"
+        :retry-label="$t('common.retry')"
+        @retry="fetchLogs"
+      />
 
-    <!-- Error State -->
-    <ErrorState
-      v-if="error && !store.callLogsLoading"
-      :title="$t('common.loadErrorTitle')"
-      :description="error"
-      :retry-label="$t('common.retry')"
-      @retry="fetchLogs"
-    />
+      <!-- Filters -->
+      <Card v-if="!error">
+        <CardContent class="pt-6">
+          <div class="flex gap-4 flex-wrap items-center">
+            <SearchInput v-model="phoneSearch" :placeholder="t('calling.searchByPhone')" class="w-48" />
+            <Select v-model="statusFilter">
+              <SelectTrigger class="w-48" :aria-label="$t('calling.filterByStatus')">
+                <SelectValue :placeholder="t('calling.filterByStatus')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
-    <!-- Filters -->
-    <Card v-if="!error">
-      <CardContent class="pt-6">
-        <div class="flex gap-4 flex-wrap items-center">
-          <SearchInput v-model="phoneSearch" :placeholder="t('calling.searchByPhone')" class="w-48" />
-          <Select v-model="statusFilter">
-            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByStatus')">
-              <SelectValue :placeholder="t('calling.filterByStatus')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            <Select v-model="directionFilter">
+              <SelectTrigger class="w-48" :aria-label="$t('calling.filterByDirection')">
+                <SelectValue :placeholder="t('calling.filterByDirection')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{{ t('calling.allDirections') }}</SelectItem>
+                <SelectItem value="incoming">{{ t('calling.incoming') }}</SelectItem>
+                <SelectItem value="outgoing">{{ t('calling.outgoing') }}</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select v-model="directionFilter">
-            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByDirection')">
-              <SelectValue :placeholder="t('calling.filterByDirection')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{{ t('calling.allDirections') }}</SelectItem>
-              <SelectItem value="incoming">{{ t('calling.incoming') }}</SelectItem>
-              <SelectItem value="outgoing">{{ t('calling.outgoing') }}</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select v-model="ivrFlowFilter">
+              <SelectTrigger class="w-48" :aria-label="$t('calling.filterByIVRFlow')">
+                <SelectValue :placeholder="t('calling.filterByIVRFlow')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{{ t('calling.allIVRFlows') }}</SelectItem>
+                <SelectItem v-for="flow in ivrFlows" :key="flow.id" :value="flow.id">
+                  {{ flow.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select v-model="ivrFlowFilter">
-            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByIVRFlow')">
-              <SelectValue :placeholder="t('calling.filterByIVRFlow')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{{ t('calling.allIVRFlows') }}</SelectItem>
-              <SelectItem v-for="flow in ivrFlows" :key="flow.id" :value="flow.id">
-                {{ flow.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select v-model="accountFilter">
-            <SelectTrigger class="w-48" :aria-label="$t('calling.filterByAccount')">
-              <SelectValue :placeholder="t('calling.filterByAccount')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{{ t('calling.allAccounts') }}</SelectItem>
-              <SelectItem v-for="acc in accounts" :key="acc.name" :value="acc.name">
-                {{ acc.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
-
-    <!-- Table -->
-    <Card v-if="!error">
-      <CardContent class="pt-6">
-        <DataTable
-          :items="store.callLogs"
-          :columns="columns"
-          :is-loading="store.callLogsLoading"
-          :empty-icon="Phone"
-          :empty-title="t('calling.noCallLogs')"
-          server-pagination
-          :current-page="currentPage"
-          :total-items="store.callLogsTotal"
-          :page-size="pageSize"
-          item-name="call logs"
-          max-height="calc(100vh - 320px)"
-          @page-change="handlePageChange"
-        >
-          <template #cell-caller="{ item: log }">
-            <div class="cursor-pointer" @click="viewDetail(log)">
-              <p class="font-medium">{{ log.contact?.profile_name || log.caller_phone }}</p>
-              <p v-if="log.contact?.profile_name" class="text-sm text-muted-foreground">{{ log.caller_phone }}</p>
-            </div>
-          </template>
-          <template #cell-direction="{ item: log }">
-            <span class="inline-flex items-center gap-1.5 text-muted-foreground">
-              <PhoneIncoming v-if="log.direction === 'incoming'" class="h-3.5 w-3.5" />
-              <PhoneOutgoing v-else class="h-3.5 w-3.5" />
-              {{ t(`calling.${log.direction}`) }}
-            </span>
-          </template>
-          <template #cell-status="{ item: log }">
-            <Badge :variant="statusVariant(log.status)">
-              <component :is="statusIcon(log.status)" class="h-3 w-3 mr-1" />
-              {{ t(`calling.${log.status}`) }}
-            </Badge>
-          </template>
-          <template #cell-duration="{ item: log }">
-            <span class="inline-flex items-center gap-1.5">
-              {{ formatDuration(log.duration) }}
-              <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
-            </span>
-          </template>
-          <template #cell-agent="{ item: log }">
-            <span v-if="log.agent" class="text-sm">{{ log.agent.full_name }}</span>
-            <span v-else class="text-muted-foreground">-</span>
-          </template>
-          <template #cell-disconnected_by="{ item: log }">
-            <Badge v-if="log.disconnected_by" :variant="disconnectedByVariant(log.disconnected_by)">
-              <component :is="disconnectedByIcon(log.disconnected_by)" class="h-3 w-3 mr-1" />
-              {{ t(`calling.disconnectedBy${log.disconnected_by.charAt(0).toUpperCase() + log.disconnected_by.slice(1)}`) }}
-            </Badge>
-            <span v-else class="text-muted-foreground">-</span>
-          </template>
-          <template #cell-ivr_flow="{ item: log }">
-            {{ log.ivr_flow?.name || '-' }}
-          </template>
-          <template #cell-whatsapp_account="{ item: log }">
-            {{ log.whatsapp_account }}
-          </template>
-          <template #cell-started_at="{ item: log }">
-            {{ formatDate(log.started_at || log.created_at) }}
-          </template>
-        </DataTable>
-      </CardContent>
-    </Card>
-
-    <!-- Detail Dialog -->
-    <Dialog v-model:open="showDetail">
-      <DialogContent class="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{{ t('calling.callDetail') }}</DialogTitle>
-          <DialogDescription>
-            {{ selectedLog?.contact?.profile_name || selectedLog?.caller_phone }}
-          </DialogDescription>
-        </DialogHeader>
-        <div v-if="selectedLog" class="space-y-4">
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.caller') }}</p>
-              <p class="font-medium">{{ selectedLog.caller_phone }}</p>
-            </div>
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.direction') }}</p>
-              <p class="font-medium inline-flex items-center gap-1.5">
-                <PhoneIncoming v-if="selectedLog.direction === 'incoming'" class="h-3.5 w-3.5" />
-                <PhoneOutgoing v-else class="h-3.5 w-3.5" />
-                {{ t(`calling.${selectedLog.direction}`) }}
-              </p>
-            </div>
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.status') }}</p>
-              <Badge :variant="statusVariant(selectedLog.status)">
-                {{ t(`calling.${selectedLog.status}`) }}
-              </Badge>
-            </div>
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.duration') }}</p>
-              <p class="font-medium">{{ formatDuration(selectedLog.duration) }}</p>
-            </div>
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.account') }}</p>
-              <p class="font-medium">{{ selectedLog.whatsapp_account }}</p>
-            </div>
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.startedAt') }}</p>
-              <p class="font-medium">{{ formatDate(selectedLog.started_at) }}</p>
-            </div>
-            <div>
-              <p class="text-muted-foreground">{{ t('calling.endedAt') }}</p>
-              <p class="font-medium">{{ formatDate(selectedLog.ended_at) }}</p>
-            </div>
-            <div v-if="selectedLog.disconnected_by">
-              <p class="text-muted-foreground">{{ t('calling.disconnectedBy') }}</p>
-              <Badge :variant="disconnectedByVariant(selectedLog.disconnected_by)">
-                <component :is="disconnectedByIcon(selectedLog.disconnected_by)" class="h-3 w-3 mr-1" />
-                {{ t(`calling.disconnectedBy${selectedLog.disconnected_by.charAt(0).toUpperCase() + selectedLog.disconnected_by.slice(1)}`) }}
-              </Badge>
-            </div>
-            <div v-if="selectedLog.agent">
-              <p class="text-muted-foreground">{{ t('calling.pickedBy') }}</p>
-              <p class="font-medium inline-flex items-center gap-1.5">
-                <Headphones class="h-3.5 w-3.5" />
-                {{ selectedLog.agent.full_name }}
-              </p>
-            </div>
+            <Select v-model="accountFilter">
+              <SelectTrigger class="w-48" :aria-label="$t('calling.filterByAccount')">
+                <SelectValue :placeholder="t('calling.filterByAccount')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{{ t('calling.allAccounts') }}</SelectItem>
+                <SelectItem v-for="acc in accounts" :key="acc.name" :value="acc.name">
+                  {{ acc.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        </CardContent>
+      </Card>
 
-          <div v-if="selectedTransfers.length > 0" class="space-y-2">
-            <p class="text-sm text-muted-foreground flex items-center gap-1.5">
-              <ArrowRightLeft class="h-3.5 w-3.5" />
-              {{ t('calling.transferHistory') }}
-            </p>
-            <div class="space-y-2">
-              <div
-                v-for="transfer in selectedTransfers"
-                :key="transfer.id"
-                class="border rounded-lg p-3 text-sm space-y-1"
-              >
-                <div class="flex items-center justify-between">
-                  <Badge :variant="transfer.status === 'connected' || transfer.status === 'completed' ? 'default' : 'secondary'">
-                    {{ transfer.status }}
-                  </Badge>
-                  <span class="text-xs text-muted-foreground">{{ formatDate(transfer.transferred_at) }}</span>
-                </div>
-                <div v-if="transfer.team" class="text-muted-foreground">
-                  {{ t('calling.team') }}: <span class="text-foreground font-medium">{{ transfer.team.name }}</span>
-                </div>
-                <div v-if="transfer.initiating_agent" class="text-muted-foreground">
-                  {{ t('calling.transferredBy') }}: <span class="text-foreground font-medium">{{ transfer.initiating_agent.full_name }}</span>
-                </div>
-                <div v-if="transfer.agent" class="text-muted-foreground">
-                  {{ t('calling.pickedBy') }}: <span class="text-foreground font-medium">{{ transfer.agent.full_name }}</span>
+      <!-- Table -->
+      <Card v-if="!error">
+        <CardContent class="pt-6">
+          <DataTable
+            :items="store.callLogs"
+            :columns="columns"
+            :is-loading="store.callLogsLoading"
+            :empty-icon="Phone"
+            :empty-title="t('calling.noCallLogs')"
+            server-pagination
+            :current-page="currentPage"
+            :total-items="store.callLogsTotal"
+            :page-size="pageSize"
+            item-name="call logs"
+            max-height="calc(100vh - 320px)"
+            @page-change="handlePageChange"
+          >
+            <template #cell-caller="{ item: log }">
+              <div class="cursor-pointer" @click="viewDetail(log)">
+                <p class="font-medium">{{ log.contact?.profile_name || log.caller_phone }}</p>
+                <p v-if="log.contact?.profile_name" class="text-sm text-muted-foreground">{{ log.caller_phone }}</p>
+              </div>
+            </template>
+            <template #cell-direction="{ item: log }">
+              <span class="inline-flex items-center gap-1.5 text-muted-foreground">
+                <PhoneIncoming v-if="log.direction === 'incoming'" class="h-3.5 w-3.5" />
+                <PhoneOutgoing v-else class="h-3.5 w-3.5" />
+                {{ t(`calling.${log.direction}`) }}
+              </span>
+            </template>
+            <template #cell-status="{ item: log }">
+              <Badge :variant="statusVariant(log.status)">
+                <component :is="statusIcon(log.status)" class="h-3 w-3 mr-1" />
+                {{ t(`calling.${log.status}`) }}
+              </Badge>
+            </template>
+            <template #cell-duration="{ item: log }">
+              <span class="inline-flex items-center gap-1.5">
+                {{ formatDuration(log.duration) }}
+                <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
+              </span>
+            </template>
+            <template #cell-agent="{ item: log }">
+              <span v-if="log.agent" class="text-sm">{{ log.agent.full_name }}</span>
+              <span v-else class="text-muted-foreground">-</span>
+            </template>
+            <template #cell-disconnected_by="{ item: log }">
+              <Badge v-if="log.disconnected_by" :variant="disconnectedByVariant(log.disconnected_by)">
+                <component :is="disconnectedByIcon(log.disconnected_by)" class="h-3 w-3 mr-1" />
+                {{ t(`calling.disconnectedBy${log.disconnected_by.charAt(0).toUpperCase() + log.disconnected_by.slice(1)}`) }}
+              </Badge>
+              <span v-else class="text-muted-foreground">-</span>
+            </template>
+            <template #cell-ivr_flow="{ item: log }">
+              {{ log.ivr_flow?.name || '-' }}
+            </template>
+            <template #cell-whatsapp_account="{ item: log }">
+              {{ log.whatsapp_account }}
+            </template>
+            <template #cell-started_at="{ item: log }">
+              {{ formatDate(log.started_at || log.created_at) }}
+            </template>
+          </DataTable>
+        </CardContent>
+      </Card>
+
+      <!-- Detail Dialog -->
+      <Dialog v-model:open="showDetail">
+        <DialogContent class="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{{ t('calling.callDetail') }}</DialogTitle>
+            <DialogDescription>
+              {{ selectedLog?.contact?.profile_name || selectedLog?.caller_phone }}
+            </DialogDescription>
+          </DialogHeader>
+          <div v-if="selectedLog" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.caller') }}</p>
+                <p class="font-medium">{{ selectedLog.caller_phone }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.direction') }}</p>
+                <p class="font-medium inline-flex items-center gap-1.5">
+                  <PhoneIncoming v-if="selectedLog.direction === 'incoming'" class="h-3.5 w-3.5" />
+                  <PhoneOutgoing v-else class="h-3.5 w-3.5" />
+                  {{ t(`calling.${selectedLog.direction}`) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.status') }}</p>
+                <Badge :variant="statusVariant(selectedLog.status)">
+                  {{ t(`calling.${selectedLog.status}`) }}
+                </Badge>
+              </div>
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.duration') }}</p>
+                <p class="font-medium">{{ formatDuration(selectedLog.duration) }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.account') }}</p>
+                <p class="font-medium">{{ selectedLog.whatsapp_account }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.startedAt') }}</p>
+                <p class="font-medium">{{ formatDate(selectedLog.started_at) }}</p>
+              </div>
+              <div>
+                <p class="text-muted-foreground">{{ t('calling.endedAt') }}</p>
+                <p class="font-medium">{{ formatDate(selectedLog.ended_at) }}</p>
+              </div>
+              <div v-if="selectedLog.disconnected_by">
+                <p class="text-muted-foreground">{{ t('calling.disconnectedBy') }}</p>
+                <Badge :variant="disconnectedByVariant(selectedLog.disconnected_by)">
+                  <component :is="disconnectedByIcon(selectedLog.disconnected_by)" class="h-3 w-3 mr-1" />
+                  {{ t(`calling.disconnectedBy${selectedLog.disconnected_by.charAt(0).toUpperCase() + selectedLog.disconnected_by.slice(1)}`) }}
+                </Badge>
+              </div>
+              <div v-if="selectedLog.agent">
+                <p class="text-muted-foreground">{{ t('calling.pickedBy') }}</p>
+                <p class="font-medium inline-flex items-center gap-1.5">
+                  <Headphones class="h-3.5 w-3.5" />
+                  {{ selectedLog.agent.full_name }}
+                </p>
+              </div>
+            </div>
+
+            <div v-if="selectedTransfers.length > 0" class="space-y-2">
+              <p class="text-sm text-muted-foreground flex items-center gap-1.5">
+                <ArrowRightLeft class="h-3.5 w-3.5" />
+                {{ t('calling.transferHistory') }}
+              </p>
+              <div class="space-y-2">
+                <div
+                  v-for="transfer in selectedTransfers"
+                  :key="transfer.id"
+                  class="border rounded-lg p-3 text-sm space-y-1"
+                >
+                  <div class="flex items-center justify-between">
+                    <Badge :variant="transfer.status === 'connected' || transfer.status === 'completed' ? 'default' : 'secondary'">
+                      {{ transfer.status }}
+                    </Badge>
+                    <span class="text-xs text-muted-foreground">{{ formatDate(transfer.transferred_at) }}</span>
+                  </div>
+                  <div v-if="transfer.team" class="text-muted-foreground">
+                    {{ t('calling.team') }}: <span class="text-foreground font-medium">{{ transfer.team.name }}</span>
+                  </div>
+                  <div v-if="transfer.initiating_agent" class="text-muted-foreground">
+                    {{ t('calling.transferredBy') }}: <span class="text-foreground font-medium">{{ transfer.initiating_agent.full_name }}</span>
+                  </div>
+                  <div v-if="transfer.agent" class="text-muted-foreground">
+                    {{ t('calling.pickedBy') }}: <span class="text-foreground font-medium">{{ transfer.agent.full_name }}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div v-if="selectedLog.ivr_flow">
-            <p class="text-sm text-muted-foreground mb-1">{{ t('calling.ivrFlow') }}</p>
-            <p class="font-medium">{{ selectedLog.ivr_flow.name }}</p>
-          </div>
-
-          <div v-if="selectedLog.ivr_path?.steps?.length">
-            <p class="text-sm text-muted-foreground mb-3">{{ t('calling.ivrPath') }}</p>
-            <IVRPathTree :steps="selectedLog.ivr_path.steps" />
-          </div>
-
-          <div v-if="selectedLog.recording_s3_key" class="space-y-2">
-            <p class="text-sm text-muted-foreground">{{ t('calling.recording') }}</p>
-            <div v-if="recordingLoading" class="flex items-center gap-2 text-sm text-muted-foreground">
-              <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-              {{ t('common.loading') }}
+            <div v-if="selectedLog.ivr_flow">
+              <p class="text-sm text-muted-foreground mb-1">{{ t('calling.ivrFlow') }}</p>
+              <p class="font-medium">{{ selectedLog.ivr_flow.name }}</p>
             </div>
-            <audio
-              v-else-if="recordingURL"
-              :src="recordingURL"
-              controls
-              preload="none"
-              class="w-full"
-            />
-            <p v-if="selectedLog.recording_duration" class="text-xs text-muted-foreground">
-              {{ formatDuration(selectedLog.recording_duration) }}
-            </p>
-          </div>
 
-          <div v-if="selectedLog.error_message">
-            <p class="text-sm text-muted-foreground mb-1">{{ t('calling.error') }}</p>
-            <p class="text-sm text-destructive">{{ selectedLog.error_message }}</p>
-          </div>
+            <div v-if="selectedLog.ivr_path?.steps?.length">
+              <p class="text-sm text-muted-foreground mb-3">{{ t('calling.ivrPath') }}</p>
+              <IVRPathTree :steps="selectedLog.ivr_path.steps" />
+            </div>
 
-          <div class="space-y-3 border-t pt-4">
-            <p class="text-sm font-medium">{{ t('calling.outcome') }}</p>
-            <div class="flex flex-wrap gap-1.5">
-              <Button
-                v-for="option in DISPOSITIONS"
-                :key="option"
-                :variant="outcome.disposition === option ? 'secondary' : 'outline'"
-                size="sm"
-                class="h-7 text-xs"
-                @click="outcome.disposition = option"
-              >
-                {{ t(`calling.disposition.${option}`) }}
-              </Button>
+            <div v-if="selectedLog.recording_s3_key" class="space-y-2">
+              <p class="text-sm text-muted-foreground">{{ t('calling.recording') }}</p>
+              <div v-if="recordingLoading" class="flex items-center gap-2 text-sm text-muted-foreground">
+                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                {{ t('common.loading') }}
+              </div>
+              <audio
+                v-else-if="recordingURL"
+                :src="recordingURL"
+                controls
+                preload="none"
+                class="w-full"
+              />
+              <p v-if="selectedLog.recording_duration" class="text-xs text-muted-foreground">
+                {{ formatDuration(selectedLog.recording_duration) }}
+              </p>
             </div>
-            <Textarea
-              v-model="outcome.notes"
-              :rows="3"
-              :placeholder="t('calling.outcomeNotesPlaceholder')"
-            />
-            <label class="flex items-center gap-2 text-sm">
-              <input v-model="outcome.follow_up" type="checkbox" class="h-3.5 w-3.5" />
-              {{ t('calling.createFollowUp') }}
-            </label>
-            <Input
-              v-if="outcome.follow_up"
-              v-model="outcome.follow_up_note"
-              :placeholder="t('calling.followUpPlaceholder')"
-            />
-            <div class="flex justify-end">
-              <Button size="sm" :disabled="savingOutcome || !outcome.disposition" @click="saveOutcome">
-                {{ t('common.save') }}
-              </Button>
+
+            <div v-if="selectedLog.error_message">
+              <p class="text-sm text-muted-foreground mb-1">{{ t('calling.error') }}</p>
+              <p class="text-sm text-destructive">{{ selectedLog.error_message }}</p>
+            </div>
+
+            <div class="space-y-3 border-t pt-4">
+              <p class="text-sm font-medium">{{ t('calling.outcome') }}</p>
+              <div class="flex flex-wrap gap-1.5">
+                <Button
+                  v-for="option in DISPOSITIONS"
+                  :key="option"
+                  :variant="outcome.disposition === option ? 'secondary' : 'outline'"
+                  size="sm"
+                  class="h-7 text-xs"
+                  @click="outcome.disposition = option"
+                >
+                  {{ t(`calling.disposition.${option}`) }}
+                </Button>
+              </div>
+              <Textarea
+                v-model="outcome.notes"
+                :rows="3"
+                :placeholder="t('calling.outcomeNotesPlaceholder')"
+              />
+              <label class="flex items-center gap-2 text-sm">
+                <input v-model="outcome.follow_up" type="checkbox" class="h-3.5 w-3.5" />
+                {{ t('calling.createFollowUp') }}
+              </label>
+              <Input
+                v-if="outcome.follow_up"
+                v-model="outcome.follow_up_note"
+                :placeholder="t('calling.followUpPlaceholder')"
+              />
+              <div class="flex justify-end">
+                <Button size="sm" :disabled="savingOutcome || !outcome.disposition" @click="saveOutcome">
+                  {{ t('common.save') }}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </div>
   </div>
 </template>

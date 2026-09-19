@@ -136,11 +136,10 @@ async function confirmDeleteFlow() {
     <PageHeader
       :title="$t('chatbotFlows.title')"
       :icon="Workflow"
-      back-link="/chatbot"
-      :breadcrumbs="[{ label: $t('chatbotFlows.backToChatbot'), href: '/chatbot' }, { label: $t('nav.flows') }]"
+      :description="$t('chatbotFlows.subtitle')"
     >
       <template #actions>
-        <Button variant="outline" size="sm" @click="createFlow">
+        <Button size="sm" @click="createFlow">
           <Plus class="h-4 w-4 mr-2" />
           {{ $t('chatbotFlows.createFlow') }}
         </Button>

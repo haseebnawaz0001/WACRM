@@ -20,8 +20,8 @@ import { Separator } from '@/components/ui/separator'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  ArrowLeft,
   Save,
+  Workflow,
   MessageSquare,
   MousePointerClick,
   Globe,
@@ -45,6 +45,7 @@ import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import ErrorState from '@/components/shared/ErrorState.vue'
+import { PageHeader, PageTitleInput } from '@/components/shared'
 import ChatNodeProperties from '@/components/chatbot/ChatNodeProperties.vue'
 import PanelConfigEditor from '@/components/chatbot/PanelConfigEditor.vue'
 import type { PanelConfig, AvailableVariable } from '@/components/chatbot/PanelConfigEditor.vue'
@@ -699,43 +700,33 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen bg-muted/30">
-    <!-- Header -->
-    <header class="border-b bg-background px-4 py-3 flex-shrink-0">
-      <div class="flex items-center gap-4">
-        <Button variant="ghost" size="icon" @click="handleCancel">
-          <ArrowLeft class="h-5 w-5" />
+  <div class="flex flex-col h-full bg-muted/30">
+    <!-- The page bar every page has: the flow's name is its title, and the
+         back arrow asks before unsaved work is thrown away. -->
+    <PageHeader
+      :icon="Workflow"
+      back-link="/chatbot/flows"
+      :breadcrumbs="[{ label: $t('chatbot.title'), href: '/chatbot' }, { label: $t('chatbotFlows.title'), href: '/chatbot/flows' }]"
+      @back="handleCancel"
+    >
+      <template #title>
+        <PageTitleInput v-model="name" :placeholder="$t('flowBuilder.namePlaceholder')" :aria-label="$t('flowBuilder.name')" />
+      </template>
+      <template #actions>
+        <label class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Switch :checked="enabled" @update:checked="enabled = $event" />
+          {{ enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}
+        </label>
+        <Button variant="outline" size="sm" @click="showPreview = true" :disabled="nodes.length === 0">
+          <Play class="h-4 w-4 mr-1" />
+          {{ $t('flowBuilder.preview', 'Preview') }}
         </Button>
-
-        <div class="flex-1 flex items-center gap-6">
-          <div class="flex items-center gap-2">
-            <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.name') }}</Label>
-            <Input v-model="name" :placeholder="$t('flowBuilder.namePlaceholder')" class="w-48 font-medium" />
-          </div>
-          <div class="flex items-center gap-2">
-            <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.description') }}</Label>
-            <Input v-model="description" :placeholder="$t('flowBuilder.optional')" class="w-64" />
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2">
-            <Switch :checked="enabled" @update:checked="enabled = $event" />
-            <span class="text-sm">{{ enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}</span>
-          </div>
-
-          <Button variant="outline" size="sm" @click="showPreview = true" :disabled="nodes.length === 0">
-            <Play class="h-4 w-4 mr-1" />
-            {{ $t('flowBuilder.preview', 'Preview') }}
-          </Button>
-          <Button variant="outline" @click="handleCancel">{{ $t('flowBuilder.cancel') }}</Button>
-          <Button @click="saveFlow" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-2" />
-            {{ isSaving ? $t('flowBuilder.saving') + '...' : $t('flowBuilder.saveFlow') }}
-          </Button>
-        </div>
-      </div>
-    </header>
+        <Button size="sm" @click="saveFlow" :disabled="isSaving">
+          <Save class="h-4 w-4 mr-1" />
+          {{ isSaving ? $t('flowBuilder.saving') + '...' : $t('flowBuilder.saveFlow') }}
+        </Button>
+      </template>
+    </PageHeader>
 
     <!-- Node palette -->
     <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">
@@ -808,6 +799,14 @@ onMounted(async () => {
             <CardHeader class="p-0 pb-2">
               <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.flowSettings') }}</CardTitle>
             </CardHeader>
+
+            <!-- What this flow is for; it used to sit in the toolbar. -->
+            <div class="space-y-1.5">
+              <Label class="text-xs">{{ $t('flowBuilder.description') }}</Label>
+              <Input v-model="description" :placeholder="$t('flowBuilder.optional')" class="h-8 text-xs" />
+            </div>
+
+            <Separator />
 
             <!-- Trigger keywords -->
             <div class="space-y-1.5">

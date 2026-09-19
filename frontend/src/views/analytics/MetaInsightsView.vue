@@ -637,12 +637,15 @@ const chartOptions = barLineOptions()
       :description="$t('metaInsights.subtitle')"
       :icon="BarChart3"
     >
+      <template v-if="isCached" #status>
+        <Badge variant="secondary">{{ $t('metaInsights.cached') }}</Badge>
+      </template>
       <template #actions>
         <!-- Account Filter -->
         <div class="flex items-center gap-2">
           <Popover v-model:open="accountComboboxOpen">
             <PopoverTrigger as-child>
-              <Button variant="outline" role="combobox" :aria-expanded="accountComboboxOpen" class="w-[180px] justify-between">
+              <Button variant="outline" size="sm" role="combobox" :aria-expanded="accountComboboxOpen" class="w-[180px] justify-between">
                 <span class="truncate">{{ selectedAccountName }}</span>
                 <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
@@ -678,7 +681,7 @@ const chartOptions = barLineOptions()
 
         <!-- Granularity Filter -->
         <Select v-model="selectedGranularity">
-          <SelectTrigger class="w-[130px]" :aria-label="$t('metaInsights.granularity')">
+          <SelectTrigger class="h-8 w-[130px]" :aria-label="$t('metaInsights.granularity')">
             <SelectValue :placeholder="$t('metaInsights.granularity')" />
           </SelectTrigger>
           <SelectContent>
@@ -698,14 +701,9 @@ const chartOptions = barLineOptions()
         />
 
         <!-- Refresh Button -->
-        <Button variant="outline" size="icon" :aria-label="$t('metaInsights.refreshCache')" @click="refreshCache" :disabled="isRefreshing">
+        <Button variant="outline" size="icon-sm" :aria-label="$t('metaInsights.refreshCache')" :title="$t('metaInsights.refreshCache')" @click="refreshCache" :disabled="isRefreshing">
           <RefreshCw :class="['h-4 w-4', isRefreshing && 'animate-spin']" />
         </Button>
-
-        <!-- Cache indicator -->
-        <Badge v-if="isCached" variant="secondary" class="ml-2">
-          {{ $t('metaInsights.cached') }}
-        </Badge>
       </template>
     </PageHeader>
 

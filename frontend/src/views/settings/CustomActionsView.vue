@@ -191,7 +191,7 @@ onMounted(() => fetchActions())
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('customActions.title')" :description="$t('customActions.subtitle')" :icon="Zap">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('customActions.addAction') }}</Button>
+        <Button size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('customActions.addAction') }}</Button>
       </template>
     </PageHeader>
 

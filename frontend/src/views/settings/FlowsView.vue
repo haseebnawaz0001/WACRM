@@ -237,7 +237,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
     <PageHeader :title="$t('flows.title')" :description="$t('flows.subtitle')" :icon="Workflow">
       <template #actions>
         <Button variant="outline" size="sm" @click="syncFlows" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'"><RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />{{ $t('flows.syncFromMeta') }}</Button>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}</Button>
+        <Button size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}</Button>
       </template>
     </PageHeader>
 

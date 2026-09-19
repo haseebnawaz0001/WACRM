@@ -124,12 +124,11 @@ const emptyDescription = computed(() => {
     <PageHeader
       :title="$t('keywords.title')"
       :icon="Key"
-      back-link="/chatbot"
-      :breadcrumbs="[{ label: $t('keywords.backToChatbot'), href: '/chatbot' }, { label: $t('nav.keywords') }]"
+      :description="$t('keywords.subtitle')"
     >
       <template #actions>
         <RouterLink to="/chatbot/keywords/new">
-          <Button variant="outline" size="sm">
+          <Button size="sm">
             <Plus class="h-4 w-4 mr-2" />
             {{ $t('keywords.addRule') }}
           </Button>

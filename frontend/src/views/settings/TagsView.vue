@@ -119,9 +119,9 @@ async function confirmDelete() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('tags.title')" :description="$t('tags.subtitle')" :icon="Tags" back-link="/settings">
+    <PageHeader :title="$t('tags.title')" :description="$t('tags.subtitle')" :icon="Tags">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('tags.addTag') }}</Button>
+        <Button size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('tags.addTag') }}</Button>
       </template>
     </PageHeader>
 

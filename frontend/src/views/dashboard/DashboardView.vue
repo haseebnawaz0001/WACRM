@@ -58,7 +58,7 @@ import {
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Doughnut, chartColors, barLineOptions, pieOptions } from '@/lib/charts'
 import { getAvatarColor } from '@/lib/utils'
-import { DateRangePicker } from '@/components/shared'
+import { DateRangePicker, PageHeader } from '@/components/shared'
 import { useDateRange } from '@/composables/useDateRange'
 import { useAppToast } from '@/composables/useAppToast'
 
@@ -731,52 +731,31 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <!-- The header wraps rather than overflowing: on a phone the three
-           controls used to run off the right edge, taking the date range with
-           them, and the title sat underneath the app's own top bar. -->
-      <div class="flex min-h-16 flex-col gap-3 px-6 py-3 max-md:px-4 md:flex-row md:items-center">
-        <div class="flex min-w-0 items-center md:flex-1">
-          <!-- The same quiet glyph every other page header carries, so the one
-               page with a hand-rolled header still looks like the rest. -->
-          <LayoutDashboard class="mr-2.5 h-5 w-5 shrink-0 text-white/50 light:text-gray-400" aria-hidden="true" />
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ $t('dashboard.title') }}</h1>
-        </div>
-
-        <!-- Time Range Filter -->
-        <div class="flex items-center gap-2 max-md:w-full">
-          <Button v-if="canCreateWidget" variant="outline" size="sm" @click="openAddWidgetDialog" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700">
-            <Plus class="h-4 w-4 mr-2" />
-            {{ $t('dashboard.addWidget') }}
-          </Button>
-
-          <Button
-            v-if="canEditWidget && widgets.length > 1"
-            variant="outline"
-            size="sm"
-            @click="isDragMode = !isDragMode"
-            :class="[
-              isDragMode
-                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300'
-                : 'bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700'
-            ]"
-          >
-            <GripVertical class="h-4 w-4 mr-2" />
-            {{ isDragMode ? $t('common.done') : $t('dashboard.editLayout') }}
-          </Button>
-
-          <DateRangePicker
-            class="max-md:flex-1"
-            v-model:selected-range="selectedRange"
-            v-model:custom-date-range="customDateRange"
-            v-model:is-date-picker-open="isDatePickerOpen"
-            :format-date-range-display="formatDateRangeDisplay"
-            @apply-custom="applyCustomRange"
-          />
-        </div>
-      </div>
-    </header>
+    <!-- View controls first, then the page's own actions. -->
+    <PageHeader :title="$t('dashboard.title')" :description="$t('dashboard.subtitle')" :icon="LayoutDashboard">
+      <template #actions>
+        <DateRangePicker
+          v-model:selected-range="selectedRange"
+          v-model:custom-date-range="customDateRange"
+          v-model:is-date-picker-open="isDatePickerOpen"
+          :format-date-range-display="formatDateRangeDisplay"
+          @apply-custom="applyCustomRange"
+        />
+        <Button
+          v-if="canEditWidget && widgets.length > 1"
+          :variant="isDragMode ? 'active' : 'outline'"
+          size="sm"
+          @click="isDragMode = !isDragMode"
+        >
+          <GripVertical class="h-4 w-4 mr-2" />
+          {{ isDragMode ? $t('common.done') : $t('dashboard.editLayout') }}
+        </Button>
+        <Button v-if="canCreateWidget" variant="outline" size="sm" @click="openAddWidgetDialog">
+          <Plus class="h-4 w-4 mr-2" />
+          {{ $t('dashboard.addWidget') }}
+        </Button>
+      </template>
+    </PageHeader>
 
     <!-- Content -->
     <ScrollArea class="flex-1">

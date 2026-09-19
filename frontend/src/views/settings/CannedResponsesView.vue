@@ -29,8 +29,6 @@ const {
 } = useCrudState<CannedResponse, Record<string, never>>({})
 const selectedCategory = ref('all')
 
-const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('cannedResponses.title') }])
-
 const columns = computed<Column<CannedResponse>[]>(() => [
   { key: 'name', label: t('cannedResponses.name'), sortable: true },
   { key: 'category', label: t('cannedResponses.category'), sortable: true },
@@ -100,9 +98,9 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('cannedResponses.title')" :icon="MessageSquareText" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('cannedResponses.title')" :icon="MessageSquareText" :description="$t('cannedResponses.subtitle')">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreate"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
+        <Button size="sm" @click="openCreate"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
       </template>
     </PageHeader>
 

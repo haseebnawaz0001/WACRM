@@ -229,6 +229,14 @@
   },
   "components": [
     {
+      "name": "Page Bar",
+      "kind": "navigation",
+      "refersTo": "page-bar",
+      "description": "The one bar every page wears: 56px, glyph, title with status beside it, one line under it (a purpose sentence, or the trail to a record), then view controls, outlined secondary actions and one filled primary action last.",
+      "html": "<header class=\"ds-bar\"><div class=\"ds-bar-left\"><svg class=\"ds-bar-glyph\" width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2\"/></svg><div><div class=\"ds-bar-title\">Contacts</div><div class=\"ds-bar-sub\">Manage your contacts and customer information</div></div></div><div class=\"ds-bar-actions\"><button class=\"ds-bar-btn\">Import/Export</button><button class=\"ds-bar-btn ds-bar-primary\">Add Contact</button></div></header>",
+      "css": ".ds-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;height:56px;padding:0 21px;background:rgba(10,10,11,.95);border-bottom:1px solid rgba(255,255,255,.08);font-family:Inter,system-ui,sans-serif}.ds-bar-left{display:flex;align-items:center;gap:10.5px;min-width:0}.ds-bar-glyph{color:rgba(255,255,255,.5);flex-shrink:0}.ds-bar-title{font:600 15.75px/21px Inter,system-ui,sans-serif;color:#fff}.ds-bar-sub{font:400 12.25px/17.5px Inter,system-ui,sans-serif;color:rgba(255,255,255,.5)}.ds-bar-actions{display:flex;gap:7px}.ds-bar-btn{height:28px;padding:0 10.5px;border-radius:2px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.02);color:#fafafa;font:500 10.5px Inter,system-ui,sans-serif}.ds-bar-primary{background:hsl(160 84% 39%);border-color:transparent;color:#0a0a0b}"
+    },
+    {
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
