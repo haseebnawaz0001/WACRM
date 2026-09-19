@@ -2,112 +2,48 @@
 /**
  * The automations list (plan 08).
  *
- * Automation in this product used to mean answering messages. Nothing reacted
- * to the record itself changing — a tag added, a task going overdue, a customer
- * going quiet for a week — so the follow-up that mattered most was the one
- * somebody had to remember.
- *
- * The list leads with what each rule does in a sentence, and with whether it
- * has been failing: a rule nobody can read is a rule nobody will trust enough
- * to leave switched on.
+ * Each row says what the rule does in a sentence and whether it can be
+ * trusted right now: on and working, on and failing, or not finished. A rule
+ * nobody can read is a rule nobody will leave switched on, and a draft nobody
+ * can see is unfinished is a draft that stays that way.
  */
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
-} from '@/components/ui/dialog'
-import { PageHeader, ErrorState } from '@/components/shared'
+import { PageHeader, ErrorState, DeleteConfirmDialog } from '@/components/shared'
+import StatusDot from '@/components/shared/StatusDot.vue'
 import { automationsService, type Automation } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
-import { Zap, Plus, MoreVertical, AlertTriangle } from 'lucide-vue-next'
+import { Zap, Plus, MoreHorizontal, ArrowRight, Split, Hourglass } from 'lucide-vue-next'
 import { unwrapResponse, unwrapListResponse } from '@/lib/api-utils'
+import { useLookups } from '@/components/automations/useLookups'
+import { triggerSentence, stepSentence } from '@/components/automations/flow/sentences'
+import { triggerDef } from '@/components/automations/flow/triggers'
+import { toneTile } from '@/components/automations/flow/steps'
+import { recipes } from '@/components/automations/flow/recipes'
+import { countSteps, CONDITION, WAIT, type FlowStep } from '@/components/automations/flow/tree'
 
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const lookups = useLookups()
 
 const automations = ref<Automation[]>([])
 const isLoading = ref(true)
 const fetchError = ref(false)
 
-const showRecipes = ref(false)
 const canWrite = computed(() => authStore.hasPermission('automations', 'write'))
 const canDelete = computed(() => authStore.hasPermission('automations', 'delete'))
 
-/**
- * Recipes exist because a blank rule builder asks people to invent a process
- * before they know what the product can do. These are the four rules teams
- * write first.
- */
-const recipes = computed(() => [
-  {
-    key: 'blank',
-    name: t('automations.recipes.blank'),
-    body: { name: t('automations.untitled'), trigger_type: 'contact.tag_added', trigger_config: {}, actions: [] }
-  },
-  {
-    key: 'tagToTask',
-    name: t('automations.recipes.tagToTask'),
-    body: {
-      name: t('automations.recipes.tagToTask'),
-      trigger_type: 'contact.tag_added',
-      trigger_config: { tags: ['VIP'] },
-      actions: [{
-        id: 'a1', type: 'create_task',
-        config: {
-          title: t('automations.recipes.tagToTaskTitle'),
-          type_key: 'call_back',
-          due_in: { amount: 1, unit: 'days' },
-          owner: { mode: 'contact_owner' }
-        }
-      }]
-    }
-  },
-  {
-    key: 'quietCustomer',
-    name: t('automations.recipes.quietCustomer'),
-    body: {
-      name: t('automations.recipes.quietCustomer'),
-      trigger_type: 'time.no_customer_reply',
-      trigger_config: { after: { amount: 3, unit: 'days' } },
-      actions: [{
-        id: 'a1', type: 'add_tags',
-        config: { tags: [t('automations.recipes.quietTag')] }
-      }]
-    }
-  },
-  {
-    key: 'resolvedTag',
-    name: t('automations.recipes.resolvedTag'),
-    body: {
-      name: t('automations.recipes.resolvedTag'),
-      trigger_type: 'conversation.status_changed',
-      trigger_config: { to: ['resolved'] },
-      actions: [{
-        id: 'a1', type: 'add_tags',
-        config: { tags: [t('automations.recipes.servedTag')] }
-      }]
-    }
-  }
-])
-
 async function fetchAutomations() {
   try {
-    // The API wraps payloads in {status, data}. Reading the envelope directly
-    // left this list permanently empty however many rules the org had.
-    automations.value = unwrapListResponse<Automation>(
-      await automationsService.list(), 'automations'
-    )
+    automations.value = unwrapListResponse<Automation>(await automationsService.list(), 'automations')
     fetchError.value = false
   } catch {
     fetchError.value = true
@@ -116,9 +52,23 @@ async function fetchAutomations() {
   }
 }
 
+onMounted(() => {
+  fetchAutomations()
+  lookups.ensure('tags', 'users', 'teams', 'templates', 'pipelines', 'taskTypes', 'fields', 'filterFields', 'variables')
+})
+
+function problemsOf(rule: Automation): number {
+  return rule.problems?.length ?? 0
+}
+
 async function toggle(rule: Automation, enabled: boolean) {
-  // Optimistic, then corrected: a switch that waits for a round trip feels
-  // broken even when it works.
+  if (enabled && problemsOf(rule)) {
+    // Not an error to shout about: it is unfinished, and the builder shows
+    // exactly what is missing.
+    router.push(`/automations/${rule.id}`)
+    return
+  }
+  // Optimistic, then corrected: a switch that waits for a round trip feels broken.
   rule.enabled = enabled
   try {
     const response = enabled
@@ -127,18 +77,6 @@ async function toggle(rule: Automation, enabled: boolean) {
     Object.assign(rule, unwrapResponse<{ automation: Automation }>(response).automation)
   } catch (error: any) {
     rule.enabled = !enabled
-    toast.error(error?.response?.data?.message || t('common.error'))
-  }
-}
-
-async function createFromRecipe(recipe: { body: Record<string, any> }) {
-  try {
-    const created = unwrapResponse<{ automation: Automation }>(
-      await automationsService.create(recipe.body as any)
-    ).automation
-    showRecipes.value = false
-    router.push(`/automations/${created.id}`)
-  } catch (error: any) {
     toast.error(error?.response?.data?.message || t('common.error'))
   }
 }
@@ -152,32 +90,56 @@ async function duplicate(rule: Automation) {
         enabled: false
       } as any)
     ).automation
-    await fetchAutomations()
     router.push(`/automations/${copy.id}`)
   } catch (error: any) {
     toast.error(error?.response?.data?.message || t('common.error'))
   }
 }
 
-async function remove(rule: Automation) {
+const deleting = ref<Automation | null>(null)
+async function confirmDelete() {
+  const rule = deleting.value
+  if (!rule) return
   try {
     await automationsService.delete(rule.id)
     automations.value = automations.value.filter(a => a.id !== rule.id)
     toast.success(t('common.deletedSuccess'))
   } catch (error: any) {
     toast.error(error?.response?.data?.message || t('common.error'))
+  } finally {
+    deleting.value = null
   }
 }
 
-/** One sentence saying what the rule reacts to and what it then does. */
-function summarise(rule: Automation): string {
-  const trigger = t(`automations.triggers.${rule.trigger_type}`, rule.trigger_type)
-  if (!rule.actions?.length) return t('automations.summaryNoActions', { trigger })
-  const first = t(`automations.actions.${rule.actions[0].type}`, rule.actions[0].type)
-  const rest = rule.actions.length - 1
-  return rest > 0
-    ? t('automations.summaryMore', { trigger, action: first, count: rest })
-    : t('automations.summary', { trigger, action: first })
+/** "When a tag is added (VIP) → Create a follow-up, and 2 more steps". */
+function summary(rule: Automation) {
+  const trigger = triggerSentence(t, lookups, rule.trigger_type, rule.trigger_config)
+  const steps = (rule.actions || []) as FlowStep[]
+  const first = steps[0] ? stepSentence(t, lookups, lookups.state.filterFields, steps[0]).title : ''
+  const more = countSteps(steps) - (steps[0] ? 1 : 0)
+  return {
+    when: trigger.detail ? `${trigger.title} (${trigger.detail})` : trigger.title,
+    then: first
+      ? more > 0 ? t('automations.list.thenMore', { step: first, n: more }, more) : first
+      : t('automations.list.noSteps')
+  }
+}
+
+function hasKind(rule: Automation, kind: string): boolean {
+  const walk = (steps: FlowStep[] = []): boolean =>
+    steps.some(s => s.type === kind || walk(s.then) || walk(s.else))
+  return walk(rule.actions as FlowStep[])
+}
+
+function status(rule: Automation) {
+  if (rule.enabled) {
+    const failures = rule.stats?.failures_24h
+    if (failures) return { label: t('automations.builder.statusOnFailing', { n: failures }, failures), tone: 'bad' as const }
+    return { label: t('automations.builder.statusOn'), tone: 'good' as const }
+  }
+  const n = problemsOf(rule)
+  if (n) return { label: t('automations.builder.statusDraft', { n }, n), tone: 'warn' as const }
+  return { label: t('automations.list.off'), tone: 'neutral' as const }
 }
 
 function relative(when?: string | null): string {
@@ -190,122 +152,131 @@ function relative(when?: string | null): string {
   return t('automations.daysAgo', { count: Math.round(hours / 24) })
 }
 
-onMounted(fetchAutomations)
+const suggestions = computed(() => recipes.slice(0, 3))
+
+async function useRecipe(key: string) {
+  const recipe = recipes.find(r => r.key === key)
+  if (!recipe) return
+  try {
+    const created = unwrapResponse<{ automation: Automation }>(await automationsService.create(recipe.build(t) as any)).automation
+    router.push(`/automations/${created.id}`)
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || t('common.error'))
+  }
+}
 </script>
 
 <template>
-  <!-- <main> is overflow-hidden, so this page needs its own scroller;
-       without one everything past the fold was unreachable. -->
   <div class="flex h-full flex-col">
-    <PageHeader
-      :title="t('automations.title')"
-      :description="t('automations.description')"
-      :icon="Zap"
-    >
+    <PageHeader :title="t('automations.title')" :description="t('automations.description')" :icon="Zap">
       <template #actions>
-        <Button v-if="canWrite" size="sm" @click="showRecipes = true">
+        <Button v-if="canWrite" size="sm" @click="router.push('/automations/new')">
           <Plus class="mr-1.5 h-4 w-4" />
           {{ t('automations.new') }}
         </Button>
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
-      <div class="space-y-4 p-4">
+    <div class="flex-1 overflow-y-auto">
+      <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <ErrorState v-if="fetchError" :message="t('automations.loadFailed')" @retry="fetchAutomations" />
 
-    <ErrorState v-if="fetchError" :message="t('automations.loadFailed')" @retry="fetchAutomations" />
-    <p v-else-if="isLoading" class="text-muted-foreground">{{ t('common.loading') }}</p>
+        <div v-else-if="isLoading" class="space-y-2">
+          <div v-for="i in 5" :key="i" class="h-[72px] animate-pulse rounded-md bg-white/[0.03] light:bg-gray-100" />
+        </div>
 
-    <Card v-else-if="!automations.length">
-      <CardContent class="flex flex-col items-center gap-3 py-10 text-center">
-        <Zap class="h-8 w-8 text-muted-foreground" />
-        <p class="text-sm text-muted-foreground">{{ t('automations.empty') }}</p>
-        <Button v-if="canWrite" size="sm" @click="showRecipes = true">
-          {{ t('automations.new') }}
-        </Button>
-      </CardContent>
-    </Card>
+        <!-- First run: explain by example, not with a paragraph. -->
+        <div v-else-if="!automations.length" class="py-6">
+          <h2 class="text-lg font-semibold text-white light:text-gray-900">{{ t('automations.empty.title') }}</h2>
+          <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">{{ t('automations.empty.body') }}</p>
+          <ul v-if="canWrite" class="mt-6 divide-y divide-white/[0.06] rounded-lg border border-white/[0.08] light:divide-gray-100 light:border-gray-200">
+            <li v-for="recipe in suggestions" :key="recipe.key">
+              <button
+                type="button"
+                class="group flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-white/[0.03] light:hover:bg-gray-50"
+                @click="useRecipe(recipe.key)"
+              >
+                <span :class="['flex h-8 w-8 shrink-0 items-center justify-center rounded-md', toneTile.trigger]">
+                  <component :is="recipe.icon" class="h-4 w-4" />
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block text-sm font-medium">{{ t(`automations.recipes.${recipe.key}.name`) }}</span>
+                  <span class="block text-xs text-muted-foreground">{{ t(`automations.recipes.${recipe.key}.summary`) }}</span>
+                </span>
+                <ArrowRight class="h-4 w-4 shrink-0 text-white/25 group-hover:text-white/70 light:text-gray-300 light:group-hover:text-gray-600" />
+              </button>
+            </li>
+          </ul>
+          <Button v-if="canWrite" variant="outline" size="sm" class="mt-4" @click="router.push('/automations/new')">
+            {{ t('automations.empty.browse') }}
+          </Button>
+        </div>
 
-    <ul v-else class="space-y-2">
-      <li v-for="rule in automations" :key="rule.id">
-        <Card class="transition hover:shadow-sm">
-          <CardContent class="flex flex-wrap items-center gap-3 p-4">
-            <button
-              class="min-w-0 flex-1 text-left"
-              @click="router.push(`/automations/${rule.id}`)"
-            >
-              <div class="flex items-center gap-2">
-                <span class="truncate font-medium">{{ rule.name }}</span>
-                <!-- Failures get a badge rather than a log line: a rule
-                     failing quietly is the whole problem. -->
-                <Badge
-                  v-if="rule.stats?.failures_24h"
-                  variant="destructive"
-                  class="gap-1 px-1.5 py-0 text-[11px]"
-                >
-                  <AlertTriangle class="h-3 w-3" />
-                  {{ t('automations.failures', { count: rule.stats.failures_24h }) }}
-                </Badge>
+        <ul v-else class="divide-y divide-white/[0.06] rounded-lg border border-white/[0.08] light:divide-gray-100 light:border-gray-200">
+          <li
+            v-for="rule in automations"
+            :key="rule.id"
+            class="group flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 transition-colors hover:bg-white/[0.02] light:hover:bg-gray-50/70"
+          >
+            <span :class="['flex h-9 w-9 shrink-0 items-center justify-center rounded-md', toneTile.trigger]">
+              <component :is="triggerDef(rule.trigger_type)?.icon || Zap" class="h-4 w-4" />
+            </span>
+            <button type="button" class="min-w-0 flex-1 basis-64 text-left" @click="router.push(`/automations/${rule.id}`)">
+              <span class="flex items-center gap-2">
+                <span class="truncate text-sm font-medium">{{ rule.name }}</span>
+                <Split v-if="hasKind(rule, CONDITION)" class="h-3.5 w-3.5 shrink-0 text-amber-400/80 light:text-amber-600" :aria-label="t('automations.list.hasQuestion')" />
+                <Hourglass v-if="hasKind(rule, WAIT)" class="h-3.5 w-3.5 shrink-0 text-sky-400/80 light:text-sky-600" :aria-label="t('automations.list.hasWait')" />
+              </span>
+              <span class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+                <span class="truncate">{{ summary(rule).when }}</span>
+                <ArrowRight class="h-3 w-3 shrink-0 opacity-60" />
+                <span class="truncate">{{ summary(rule).then }}</span>
+              </span>
+            </button>
+
+            <div class="flex items-center gap-4">
+              <div class="hidden w-40 text-right sm:block">
+                <StatusDot :label="status(rule).label" :tone="status(rule).tone" class="justify-end text-xs" />
+                <p class="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {{ relative(rule.last_run_at) }}<template v-if="rule.stats?.runs_24h"> · {{ t('automations.runs24h', { count: rule.stats.runs_24h }) }}</template>
+                </p>
               </div>
-              <p class="mt-0.5 truncate text-sm text-muted-foreground">{{ summarise(rule) }}</p>
-            </button>
-
-            <div class="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>{{ relative(rule.last_run_at) }}</span>
-              <span v-if="rule.stats">{{ t('automations.runs24h', { count: rule.stats.runs_24h }) }}</span>
+              <Switch
+                :model-value="rule.enabled"
+                :disabled="!canWrite"
+                :aria-label="t('automations.enabledLabel', { name: rule.name })"
+                @update:model-value="(value: boolean) => toggle(rule, value)"
+              />
+              <DropdownMenu v-if="canWrite">
+                <DropdownMenuTrigger as-child>
+                  <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="t('common.actions')">
+                    <MoreHorizontal class="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem @click="router.push(`/automations/${rule.id}`)">{{ t('automations.list.open') }}</DropdownMenuItem>
+                  <DropdownMenuItem @click="duplicate(rule)">{{ t('automations.duplicate') }}</DropdownMenuItem>
+                  <template v-if="canDelete">
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem class="text-destructive focus:text-destructive" @click="deleting = rule">
+                      {{ t('common.delete') }}
+                    </DropdownMenuItem>
+                  </template>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-
-            <Switch
-              :model-value="rule.enabled"
-              :disabled="!canWrite"
-              :aria-label="t('automations.enabledLabel', { name: rule.name })"
-              @update:model-value="(value: boolean) => toggle(rule, value)"
-            />
-
-            <DropdownMenu v-if="canWrite">
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" :aria-label="t('common.actions')">
-                  <MoreVertical class="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem @click="duplicate(rule)">
-                  {{ t('automations.duplicate') }}
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="canDelete" class="text-destructive" @click="remove(rule)">
-                  {{ t('common.delete') }}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </CardContent>
-        </Card>
-      </li>
-    </ul>
-
-    <!-- Recipes -->
-      </div>
-    </ScrollArea>
-
-    <Dialog v-model:open="showRecipes">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{{ t('automations.new') }}</DialogTitle>
-          <DialogDescription>{{ t('automations.recipesHint') }}</DialogDescription>
-        </DialogHeader>
-        <ul class="space-y-2">
-          <li v-for="recipe in recipes" :key="recipe.key">
-            <button
-              class="w-full rounded-md border p-3 text-left text-sm transition hover:bg-accent"
-              @click="createFromRecipe(recipe)"
-            >
-              {{ recipe.name }}
-            </button>
           </li>
         </ul>
-        <DialogFooter>
-          <Button variant="outline" @click="showRecipes = false">{{ t('common.cancel') }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
+
+    <DeleteConfirmDialog
+      :open="!!deleting"
+      :title="t('automations.builder.deleteTitle')"
+      :description="t('automations.builder.deleteDescription', { name: deleting?.name || '' })"
+      :confirm-label="t('common.delete')"
+      @update:open="v => { if (!v) deleting = null }"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

@@ -2915,158 +2915,657 @@
   },
   "automations": {
     "title": "Automations",
-    "description": "React to what happens in the CRM: a tag added, a task going overdue, a customer going quiet.",
+    "description": "Things that happen on their own when something changes for a customer.",
     "new": "New automation",
     "untitled": "Untitled automation",
-    "empty": "No automations yet. The first one usually takes a minute.",
     "loadFailed": "Automations could not be loaded.",
     "copyOf": "Copy of {name}",
     "duplicate": "Duplicate",
-    "enabledLabel": "Enable {name}",
-    "failures": "{count} failed",
-    "runs24h": "{count} runs today",
-    "neverRun": "Never run",
+    "enabledLabel": "Turn {name} on or off",
+    "runs24h": "{count} today",
+    "neverRun": "Not run yet",
     "justNow": "Just now",
     "minutesAgo": "{count}m ago",
     "hoursAgo": "{count}h ago",
     "daysAgo": "{count}d ago",
-    "summary": "When {trigger}, {action}",
-    "summaryMore": "When {trigger}, {action} and {count} more",
-    "summaryNoActions": "When {trigger} — no actions yet",
-    "recipesHint": "Start from a common rule, or build one from scratch.",
-    "recipes": {
-      "blank": "Start from scratch",
-      "tagToTask": "Tag added → create a follow-up task",
-      "tagToTaskTitle": "Follow up with this customer",
-      "quietCustomer": "No reply in 3 days → tag the contact",
-      "quietTag": "Awaiting reply",
-      "resolvedTag": "Conversation resolved → tag the contact",
-      "servedTag": "Served"
+    "needed": "Needed",
+    "optional": "Optional",
+    "any": "Any",
+    "anyValue": "Any value",
+    "moreOptions": "More options",
+    "fewerOptions": "Fewer options",
+    "noSettings": "Nothing to set up. This step is ready.",
+    "carryOnIfFails": "Carry on if this one can't be done",
+    "addAction": "Add a step",
+    "noActions": "No steps yet.",
+    "empty": {
+      "title": "Let the follow-ups happen on their own",
+      "body": "Automations watch for things like a new tag, a missed call or a customer going quiet, and then take the next step for you: create a follow-up, send a message, tell the right person.",
+      "browse": "See all starting points"
     },
-    "name": "Name",
-    "descriptionLabel": "Description",
-    "when": "1. When",
-    "onlyIf": "2. Only if",
-    "onlyIfHint": "Conditions are checked against the contact at the moment the rule runs.",
-    "then": "3. Then",
-    "settings": "4. Settings",
-    "addAction": "Add action",
-    "noActions": "No actions yet. A rule with no actions does nothing.",
-    "continueOnError": "Carry on if this one fails",
-    "oncePerContact": "Run at most once per contact",
-    "cooldown": "Cooldown (minutes)",
-    "maxRunsPerHour": "Maximum runs per hour",
-    "maxRunsHint": "A cap is the difference between a mistake and a mass message.",
-    "test": "Test",
-    "testHint": "Pick a contact. Nothing is changed — you see what the rule would do.",
-    "testContactPlaceholder": "Search by name or number",
-    "tabBuild": "Build",
-    "tabRuns": "Runs",
-    "noRuns": "This rule has not run yet.",
-    "on": "On",
-    "off": "Off",
+    "list": {
+      "or": "{items} or {last}",
+      "and": "{items} and {last}",
+      "thenMore": "{step}, then 1 more step | {step}, then {n} more steps",
+      "noSteps": "No steps yet",
+      "off": "Off",
+      "open": "Open",
+      "hasQuestion": "Asks a question",
+      "hasWait": "Waits"
+    },
+    "gallery": {
+      "title": "New automation",
+      "description": "Start from something you want to stop worrying about, or from what should set it off.",
+      "goals": {
+        "waiting": "Never leave a customer waiting",
+        "followUp": "Follow up at the right moment",
+        "records": "Keep records up to date",
+        "team": "Keep the team in the loop"
+      },
+      "fromTrigger": "Or start from what happens",
+      "fromTriggerHint": "Pick what should set it off, then add the steps yourself."
+    },
+    "recipes": {
+      "chaseQuiet": {
+        "name": "Chase customers who go quiet",
+        "summary": "When a customer hasn't replied for 2 days, tag them and give their owner a follow-up.",
+        "tag": "Awaiting reply",
+        "task": "Check in with {name}"
+      },
+      "nobodyAnswered": {
+        "name": "Nudge the team when nobody answers",
+        "summary": "When a customer has waited 15 minutes, tell whoever is handling them and their owner.",
+        "title": "{name} is waiting for a reply",
+        "body": "Nobody has answered for 15 minutes."
+      },
+      "missedCall": {
+        "name": "Call back missed calls",
+        "summary": "When a customer's call is missed, give their owner a call-back due within the hour.",
+        "task": "Call back {name}",
+        "title": "Missed call from {name}"
+      },
+      "vipSplit": {
+        "name": "Give VIPs the right attention",
+        "summary": "When someone is tagged VIP, customers get a personal follow-up; new leads go to a team and their owner hears about it.",
+        "task": "Personal check-in with {name}",
+        "lead": "New VIP lead: {name}"
+      },
+      "welcome": {
+        "name": "Welcome new contacts",
+        "summary": "When someone new messages you, wait five minutes, then send a friendly welcome.",
+        "message": "Hi {name}, thanks for getting in touch! We have your message and will be with you shortly."
+      },
+      "feedback": {
+        "name": "Ask for feedback after helping someone",
+        "summary": "A day after a conversation is resolved, send a feedback template, once per customer.",
+        "tag": "Feedback asked"
+      },
+      "dateReminder": {
+        "name": "Remind before an important date",
+        "summary": "A week before a date on the contact, create a follow-up and send a reminder template.",
+        "task": "Upcoming date for {name}"
+      },
+      "dealWon": {
+        "name": "Onboard new customers",
+        "summary": "When a deal is won, mark the contact as a customer and plan an onboarding call.",
+        "tag": "Customer",
+        "task": "Onboarding call with {name}"
+      },
+      "overdue": {
+        "name": "Flag overdue follow-ups",
+        "summary": "When a follow-up goes overdue, tell the contact's owner and whoever is handling the conversation.",
+        "title": "Overdue follow-up for {name}"
+      }
+    },
     "groups": {
       "contacts": "Contacts",
       "conversations": "Conversations",
-      "tasks": "Tasks",
+      "time": "When nothing happens",
+      "tasks": "Follow-ups",
       "deals": "Deals",
-      "time": "Time"
+      "calls": "Calls",
+      "chatbot": "Chatbot",
+      "campaigns": "Campaigns",
+      "other": "Other"
     },
     "triggers": {
       "contact": {
-        "created": "a contact is created",
-        "tag_added": "a tag is added",
-        "tag_removed": "a tag is removed",
-        "field_changed": "a field changes",
-        "assigned": "a contact is assigned"
+        "created": "A new contact is added",
+        "tag_added": "A tag is added",
+        "tag_removed": "A tag is removed",
+        "lifecycle_stage_changed": "The lifecycle stage changes",
+        "field_changed": "A detail changes",
+        "assigned": "The contact gets a new owner"
       },
       "conversation": {
-        "created": "a conversation starts",
-        "status_changed": "a conversation changes status",
-        "assigned": "a conversation is assigned"
-      },
-      "task": {
-        "created": "a task is created",
-        "completed": "a task is completed",
-        "overdue": "a task goes overdue"
-      },
-      "deal": {
-        "created": "a deal is created",
-        "stage_changed": "a deal changes stage",
-        "won": "a deal is won",
-        "lost": "a deal is lost"
+        "created": "A new conversation starts",
+        "status_changed": "A conversation changes status",
+        "assigned": "A conversation is handed to someone",
+        "sla_breached": "A reply is overdue"
       },
       "time": {
-        "no_customer_reply": "the customer has not replied",
-        "no_agent_reply": "nobody has replied to the customer",
-        "date_field": "a date field comes due"
+        "no_customer_reply": "A customer stops replying",
+        "no_agent_reply": "Nobody has answered a customer",
+        "date_field": "A date is coming up"
+      },
+      "call": {
+        "missed": "A call is missed",
+        "completed": "A call ends"
+      },
+      "chatbot": {
+        "flow_completed": "A chatbot flow finishes"
+      },
+      "campaign": {
+        "replied": "Someone replies to a campaign"
+      },
+      "task": {
+        "created": "A follow-up is created",
+        "completed": "A follow-up is done",
+        "overdue": "A follow-up is overdue"
+      },
+      "deal": {
+        "created": "A deal is created",
+        "stage_changed": "A deal moves stage",
+        "won": "A deal is won",
+        "lost": "A deal is lost"
       }
     },
-    "actions": {
-      "add_tags": "add tags",
-      "remove_tags": "remove tags",
-      "set_field": "set a field",
-      "set_contact_owner": "set the contact owner",
-      "set_conversation_status": "set the conversation status",
-      "assign_conversation": "assign the conversation",
-      "create_task": "create a task",
-      "add_note": "add a note",
-      "notify_users": "notify people",
-      "call_webhook": "call a webhook",
-      "create_deal": "create a deal",
-      "move_deal_stage": "move the deal stage",
-      "send_message": "send a message",
-      "send_template": "send a template"
+    "triggerDescriptions": {
+      "contact": {
+        "created": "Someone new appears: they message you, are imported, or are added by hand.",
+        "tag_added": "A tag lands on a contact, by hand, from an import or from another automation.",
+        "tag_removed": "A tag is taken off a contact.",
+        "lifecycle_stage_changed": "A contact moves to a new stage, such as lead to customer.",
+        "field_changed": "One of a contact's details is changed.",
+        "assigned": "Someone becomes the contact's owner."
+      },
+      "conversation": {
+        "created": "A customer starts a new conversation.",
+        "status_changed": "A conversation is opened, set to pending, snoozed or resolved.",
+        "assigned": "A conversation is given to a person or a team.",
+        "sla_breached": "A customer waited longer than your reply-time target."
+      },
+      "time": {
+        "no_customer_reply": "You replied, and the customer has gone quiet for a while.",
+        "no_agent_reply": "A customer is waiting and nobody has answered for a while.",
+        "date_field": "A date on the contact (a renewal, a birthday, an appointment) is close."
+      },
+      "call": {
+        "missed": "A call nobody answered.",
+        "completed": "An answered call has ended."
+      },
+      "chatbot": {
+        "flow_completed": "A customer reaches the end of a chatbot flow."
+      },
+      "campaign": {
+        "replied": "A customer answers one of your campaigns."
+      },
+      "task": {
+        "created": "Somebody raises a follow-up for a contact.",
+        "completed": "A follow-up is marked done.",
+        "overdue": "A follow-up passes its due time without being done."
+      },
+      "deal": {
+        "created": "A new deal is opened for a contact.",
+        "stage_changed": "A deal moves to another stage.",
+        "won": "A deal is marked won.",
+        "lost": "A deal is marked lost."
+      }
     },
-    "config": {
+    "triggerPicker": {
+      "search": "Search: tag, call, quiet, deal…"
+    },
+    "triggerFields": {
+      "sources": "Where they came from",
+      "tags": "Which tags",
+      "toStage": "Moving to",
+      "field": "Which detail",
+      "toValues": "Changing to",
+      "toPeople": "To which people",
+      "toTeams": "To which teams",
+      "accounts": "On which WhatsApp numbers",
+      "toStatus": "Changing to",
+      "reasons": "Only for these reasons",
+      "quietFor": "Quiet for",
+      "whileStatus": "While the conversation is",
+      "unansweredFor": "Waiting for",
+      "dateField": "Which date",
+      "when": "When",
+      "atHour": "At what time",
+      "direction": "Which calls",
+      "flows": "Which flows",
+      "campaigns": "Which campaigns",
+      "taskTypes": "Which kinds of follow-up",
+      "pipeline": "Which pipeline",
+      "toStages": "Moving to",
+      "days": "Days",
+      "daysBefore": "day before the date | days before the date",
+      "daysAfter": "day after the date | days after the date"
+    },
+    "stepGroups": {
+      "flow": "Shape the path",
+      "message": "Message the customer",
+      "contact": "Update the contact",
+      "conversation": "Handle the conversation",
+      "work": "Get the team moving",
+      "deals": "Deals",
+      "connect": "Other apps",
+      "other": "More"
+    },
+    "steps": {
+      "condition": {
+        "title": "Check the contact",
+        "description": "Asks a yes-or-no question about the contact. Contacts who match go down Yes; everyone else goes down No."
+      },
+      "wait": {
+        "title": "Wait",
+        "description": "Pauses before the next step, for “wait a day, then check in”."
+      },
+      "send_message": {
+        "title": "Send a WhatsApp message",
+        "description": "Writes to the customer. Only works within 24 hours of their last message."
+      },
+      "send_template": {
+        "title": "Send a template",
+        "description": "Sends an approved WhatsApp template. Works at any time."
+      },
+      "add_tags": {
+        "title": "Add tags",
+        "description": "Tags the contact so they show up in lists, filters and other automations."
+      },
+      "remove_tags": {
+        "title": "Remove tags",
+        "description": "Takes tags off the contact."
+      },
+      "set_field": {
+        "title": "Update a detail",
+        "description": "Changes one of the contact's details, like their lifecycle stage."
+      },
+      "set_contact_owner": {
+        "title": "Change the contact owner",
+        "description": "Sets who looks after this customer."
+      },
+      "assign_conversation": {
+        "title": "Hand the conversation over",
+        "description": "Gives the conversation to a team's queue or to a person."
+      },
+      "set_conversation_status": {
+        "title": "Change the conversation status",
+        "description": "Marks the conversation open, resolved or snoozed."
+      },
+      "add_note": {
+        "title": "Add a note",
+        "description": "Leaves a note on the conversation for the team. Customers never see it."
+      },
+      "create_task": {
+        "title": "Create a follow-up",
+        "description": "Gives someone on the team a follow-up with a due date."
+      },
+      "notify_users": {
+        "title": "Notify the team",
+        "description": "Sends an in-app notification to the people you choose."
+      },
+      "create_deal": {
+        "title": "Create a deal",
+        "description": "Opens a deal for this contact in a pipeline."
+      },
+      "move_deal_stage": {
+        "title": "Move their deal",
+        "description": "Moves the contact's latest open deal to another stage."
+      },
+      "call_webhook": {
+        "title": "Send data to another app",
+        "description": "Calls a web address (a webhook) with the details you choose."
+      }
+    },
+    "fields": {
       "tags": "Tags",
-      "tagsPlaceholder": "VIP, Priority",
-      "to": "To",
-      "typeKeys": "Task types",
-      "field": "Field",
-      "value": "Value",
-      "after": "After",
-      "offsetDays": "Offset (days)",
-      "offsetHint": "Negative fires before the date, positive after.",
-      "atLocalHour": "At hour (local)",
-      "title": "Title",
-      "description": "Description",
-      "type_key": "Task type",
-      "content": "Content",
-      "text": "Message",
-      "template_id": "Template",
-      "body": "Body",
-      "url": "URL",
-      "method": "Method",
+      "field": "Which detail",
+      "newValue": "New value",
+      "newOwner": "New owner",
+      "person": "Person",
       "status": "Status",
-      "mode": "Mode",
-      "team_id": "Team",
-      "user_id": "User",
-      "stage_id": "Stage"
+      "snoozeFor": "Snooze for",
+      "assignTo": "Give it to",
+      "team": "Team",
+      "taskTitle": "What needs doing",
+      "dueIn": "Due in",
+      "taskOwner": "Who does it",
+      "taskType": "Kind of follow-up",
+      "details": "More detail",
+      "priority": "Priority",
+      "note": "Note",
+      "whoToTell": "Who to tell",
+      "notificationTitle": "Notification",
+      "notificationBody": "More detail",
+      "message": "Message",
+      "template": "Template",
+      "templateParams": "Fill in the template",
+      "dealTitle": "Deal name",
+      "dealValue": "Value",
+      "pipeline": "Pipeline",
+      "stage": "Stage",
+      "moveTo": "Move to stage",
+      "url": "Web address",
+      "method": "Method",
+      "webhookBody": "What to send",
+      "headers": "Headers",
+      "sign": "Sign each request",
+      "signingSecret": "Signing secret",
+      "amount": "Amount",
+      "unit": "Unit",
+      "headerName": "Name",
+      "headerValue": "Value",
+      "addHeader": "Add a header",
+      "noParams": "This template has no blanks to fill.",
+      "paramPlaceholder": "Text, or insert a detail"
+    },
+    "hints": {
+      "teamQueue": "It joins the team's queue, so their assignment rules and working hours apply.",
+      "serviceWindow": "WhatsApp only allows free text within 24 hours of the customer's last message. Outside that, send a template.",
+      "templateAnytime": "Approved templates can be sent at any time.",
+      "latestOpenDeal": "Moves the contact's most recent open deal.",
+      "sign": "Adds a signature so the other app can check the request came from here.",
+      "notApproved": "not approved yet",
+      "pickFieldFirst": "Choose the detail first."
+    },
+    "placeholders": {
+      "taskTitle": "Call them back",
+      "url": "https://example.com/hook",
+      "tags": "Choose or type tags"
+    },
+    "choices": {
+      "user": "A person",
+      "team": "A team",
+      "unassign": "Nobody",
+      "conversation_assignee": "Whoever is handling it",
+      "open": "Open",
+      "pending": "Pending",
+      "snoozed": "Snoozed",
+      "resolved": "Resolved",
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "inbound": "They messaged you",
+      "manual": "Added by hand",
+      "import": "Imported",
+      "campaign": "From a campaign",
+      "api": "From an integration",
+      "call": "From a call",
+      "agent": "Resolved by the team",
+      "automation": "By an automation",
+      "client_inactivity": "The customer went quiet",
+      "pending_timeout": "Pending for too long",
+      "sla_auto_close": "Closed by the reply-time rules",
+      "bulk": "Bulk action",
+      "incoming": "Calls from customers",
+      "outgoing": "Calls we make",
+      "either": "Either",
+      "date_before": "Before",
+      "date_on": "On the day",
+      "date_after": "After",
+      "anyTime": "Any time of day",
+      "owner_contact_owner": "The contact's owner",
+      "owner_conversation_assignee": "Whoever is handling the conversation",
+      "owner_rule_creator": "Whoever made this automation",
+      "owner_user": "A specific person"
+    },
+    "picker": {
+      "choose": "Choose…",
+      "clear": "Clear",
+      "create": "Add “{value}”",
+      "empty": "Nothing here yet.",
+      "noMatch": "No matches.",
+      "search": "Search",
+      "searchOrCreate": "Search, or type a new one",
+      "remove": "Remove {name}",
+      "approved": "Approved",
+      "notApproved": "Not approved yet"
+    },
+    "variables": {
+      "insert": "Insert detail",
+      "search": "Search details",
+      "hint": "Filled in for each contact when the step runs.",
+      "groups": {
+        "contact": "Contact",
+        "conversation": "Conversation",
+        "org": "Your organization",
+        "event": "What happened"
+      }
+    },
+    "recipients": {
+      "contactOwner": "The contact's owner",
+      "assignee": "Whoever is handling the conversation",
+      "people": "Particular people",
+      "roles": "Everyone with a role"
+    },
+    "duration": {
+      "minutes": "{n} minute | {n} minutes",
+      "hours": "{n} hour | {n} hours",
+      "days": "{n} day | {n} days"
     },
     "units": {
-      "minutes": "minutes",
-      "hours": "hours",
-      "days": "days"
+      "minutes": "minute | minutes",
+      "hours": "hour | hours",
+      "days": "day | days"
+    },
+    "sentence": {
+      "toValue": "to {value}",
+      "forDuration": "for {duration}",
+      "onTheDay": "on the day",
+      "daysBefore": "{n} day before | {n} days before",
+      "daysAfter": "{n} day after | {n} days after",
+      "atHour": "at {hour}",
+      "waitFor": "Wait {duration}",
+      "snoozeFor": "Snooze for {duration}",
+      "teamQueue": "To the {team} queue",
+      "dueIn": "due in {duration}",
+      "forOwner": "for {owner}",
+      "everyoneWithRole": "everyone who is {role}",
+      "params": "{n} blank to fill | {n} blanks to fill",
+      "has": "has"
+    },
+    "canvas": {
+      "everyone": "For everyone",
+      "onlyFor": "Only for contacts where {who}",
+      "yes": "Yes",
+      "no": "No",
+      "end": "End",
+      "carryOn": "Carry on",
+      "addHere": "Add a step here",
+      "addSearch": "What should happen here?",
+      "duplicate": "Duplicate",
+      "remove": "Remove",
+      "waitingHere": "{n} waiting here | {n} waiting here"
+    },
+    "trace": {
+      "yes": "Yes",
+      "no": "No",
+      "succeeded": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "waiting": "Waiting",
+      "waited": "Waited",
+      "wouldWait": "Would wait"
+    },
+    "inspector": {
+      "whatStarts": "What starts this automation",
+      "change": "Change",
+      "narrowIt": "Narrow it down",
+      "narrowItHint": "Leave anything empty to mean “any”.",
+      "whoFor": "Who it's for",
+      "everyone": "Everyone",
+      "onlySome": "Only some contacts",
+      "whoForHint": "Checked when it starts. Contacts who don't match are left alone.",
+      "ifFails": "If this can't be done",
+      "ifFailsHint": "For example, a message can't be sent outside the 24-hour window.",
+      "stopHere": "Stop here",
+      "carryOn": "Skip it and carry on",
+      "whatToCheck": "What to check",
+      "howLong": "How long to wait",
+      "resumesAt": "Someone arriving now would carry on around {when}.",
+      "waitHint": "Turning this automation off stops anyone still waiting here.",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
+    },
+    "overview": {
+      "whatItDoes": "What this does",
+      "when": "When {what}",
+      "forWho": "for contacts where {who}",
+      "forEveryone": "for everyone",
+      "ifYes": "If yes:",
+      "ifNo": "If no:",
+      "nothing": "carry on",
+      "noStepsYet": "Nothing yet. Press + on the path to add a step.",
+      "stillNeeds": "Before it can run",
+      "readiness": "Ready",
+      "ready": "Ready to turn on.",
+      "running": "On and running.",
+      "today": "Runs today",
+      "failed": "Failed today",
+      "waitingNow": "Waiting now",
+      "sameContact": "For the same contact",
+      "sameContactHint": "How often one customer can go through this automation.",
+      "everyTime": "Every time",
+      "onlyOnce": "Only once",
+      "notTooOften": "Not too often",
+      "atMostOnceEvery": "At most once every",
+      "safetyLimit": "Safety limit",
+      "perHour": "runs an hour, at most",
+      "safetyLimitHint": "If something goes wrong, this stops one mistake from reaching everyone at once.",
+      "note": "Note",
+      "notePlaceholder": "What is this for? Only your team sees this."
+    },
+    "problems": {
+      "fill": "Needs: {fields}",
+      "question": "Choose what to check",
+      "wait": "Choose how long to wait",
+      "noStepsTitle": "No steps yet",
+      "noSteps": "Add at least one step on the path."
+    },
+    "blocked": {
+      "limit": "An automation can have up to {n} steps.",
+      "nesting": "Questions can only go three deep."
+    },
+    "builder": {
+      "name": "Automation name",
+      "tryIt": "Try it on a contact",
+      "test": "Test",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "saveChanges": "Save changes",
+      "discard": "Discard",
+      "unsaved": "Unsaved changes",
+      "saving": "Saving…",
+      "draftSaved": "Draft saved",
+      "saveFailed": "Couldn't save",
+      "liveEditing": "This automation is on. Your changes apply when you save them.",
+      "changesLive": "Saved. Your changes apply from now on.",
+      "nowOn": "Turned on. It runs from now.",
+      "nowOff": "Turned off. Anyone waiting inside it stops.",
+      "finishFirst": "Finish the step marked in amber first. | Finish the {n} steps marked in amber first.",
+      "statusOn": "On",
+      "statusOnFailing": "On · {n} failed today | On · {n} failed today",
+      "statusDraft": "Draft · 1 thing to finish | Draft · {n} things to finish",
+      "statusReady": "Off · ready to turn on",
+      "undo": "Undo",
+      "redo": "Redo",
+      "removed": "Removed “{step}”",
+      "showingPath": "Showing the path {name} took",
+      "views": "Views",
+      "tab": {
+        "build": "Build",
+        "history": "History"
+      },
+      "inspector": "Step settings",
+      "deleteTitle": "Delete this automation?",
+      "deleteDescription": "“{name}” will stop running and be removed, and anyone waiting inside it stops. This can't be undone.",
+      "showingTestPath": "Showing the path {name} would take",
+      "fixNext": "Show what's left to finish"
+    },
+    "test": {
+      "title": "Try it on a contact",
+      "hint": "Pick a real customer to see exactly what would happen to them. Nothing is sent or changed.",
+      "searchPlaceholder": "Search by name or number",
+      "running": "Trying it on {name}…",
+      "resultFor": "What would happen to {name}",
+      "would": "Would: {step}",
+      "wouldWait": "{step}, then carry on",
+      "wentYes": "{step}: Yes",
+      "wentNo": "{step}: No",
+      "couldNot": "Couldn't: {step}",
+      "skipped": "Skipped: {step}",
+      "nothing": "Nothing would happen.",
+      "nothingChanged": "Nothing was sent or changed.",
+      "again": "Try again",
+      "clear": "Clear",
+      "skip": {
+        "conditions_not_met": "{name} isn't one of the contacts this automation is for, so nothing would happen.",
+        "trigger_not_met": "This doesn't match what starts the automation, so nothing would happen.",
+        "other": "Nothing would happen to {name}."
+      },
+      "failedHere": "It couldn't be done for this contact.",
+      "openStep": "Open step"
+    },
+    "history": {
+      "filters": {
+        "all": "All",
+        "problems": "Problems",
+        "waiting": "Waiting"
+      },
+      "empty": {
+        "all": "Nothing has run yet.",
+        "problems": "No problems.",
+        "waiting": "Nobody is waiting."
+      },
+      "emptyHint": "Runs appear here as soon as the automation starts working.",
+      "noContact": "No contact",
+      "test": "Test",
+      "showPath": "Show path",
+      "steps": "{n} step | {n} steps",
+      "waitingUntil": "Waiting until {when}",
+      "stoppedAt": "Stopped at “{step}”"
     },
     "status": {
-      "succeeded": "Succeeded",
+      "succeeded": "Done",
       "partially_failed": "Partly failed",
       "failed": "Failed",
       "skipped": "Skipped",
+      "waiting": "Waiting",
+      "cancelled": "Stopped",
       "running": "Running"
     },
     "skip": {
-      "conditions_not_met": "the conditions did not match",
-      "trigger_not_met": "the trigger settings did not match",
-      "cooldown": "still in cooldown",
-      "once_per_contact": "already run for this contact",
-      "rate_limited": "hourly limit reached",
-      "loop_depth": "the chain of rules was too long",
-      "self_trigger": "the rule caused this itself",
-      "disabled": "the rule is off"
+      "conditions_not_met": "Wasn't one of the contacts it's for",
+      "trigger_not_met": "Didn't match what starts it",
+      "cooldown": "Ran for them too recently",
+      "once_per_contact": "Already ran for them once",
+      "rate_limited": "Hit the hourly safety limit",
+      "loop_depth": "Stopped a chain of automations",
+      "self_trigger": "Caused by this automation itself",
+      "disabled": "The automation was off",
+      "rule_off": "Stopped: the automation was turned off",
+      "step_removed": "Stopped: the step they were waiting at was removed",
+      "contact_gone": "Stopped: the contact was deleted",
+      "rule_deleted": "Stopped: the automation was deleted"
     },
-    "noConfigurableFields": "This action takes no extra settings."
+    "prose": {
+      "when": "When {trigger}",
+      "forWho": ", for contacts where {who}",
+      "itWill": ", it will ",
+      "then": ", then ",
+      "afterThat": "After that, it will ",
+      "ifYes": "If yes, it will ",
+      "ifNo": "If no, it will ",
+      "ifYesMovesOn": "If yes, it moves straight on.",
+      "ifNoMovesOn": "If no, it moves straight on.",
+      "ifYesStops": "If yes, nothing more happens.",
+      "ifNoStops": "If no, nothing more happens.",
+      "checkWhether": "check whether {question}",
+      "checkUnset": "check the contact (the question isn't chosen yet)",
+      "nothingYet": ", nothing happens yet.",
+      "addHint": "Press + on the path to add the first step."
+    }
   },
   "crmReports": {
     "title": "CRM Reports",

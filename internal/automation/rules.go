@@ -24,25 +24,31 @@ var ErrNoActions = errors.New("automation: add at least one action before turnin
 
 // Limits. These are low on purpose: a rule nobody can read is a rule nobody
 // can debug, and an organization with a thousand rules has a process problem
-// that more rules will not fix.
+// that more rules will not fix. The per-rule step limit lives with the step
+// model in steps.go.
 const (
-	MaxActionsPerRule = 10
-	MaxRulesPerOrg    = 200
+	MaxRulesPerOrg = 200
 	// MaxDepth stops a chain of rules triggering each other. Three is enough
 	// for "tag → assign → notify" and short enough to notice a loop.
 	MaxDepth = 3
 )
 
-// ActionSpec is one entry in a rule's action list.
+// ActionSpec is one step on a rule's path: an action from the shared library,
+// or one of the flow-control steps in steps.go.
 type ActionSpec struct {
-	// ID is stable across retries, so a retry can skip the actions that
-	// already succeeded rather than sending the message twice.
+	// ID is stable across retries and edits, so a retry can skip the actions
+	// that already succeeded, and a paused run can find its place again in a
+	// rule somebody has edited since.
 	ID     string            `json:"id"`
 	Type   string            `json:"type"`
 	Config crmactions.Config `json:"config"`
 	// ContinueOnError keeps the rest of the list running when this one fails,
 	// for actions that are nice-to-have rather than the point of the rule.
 	ContinueOnError bool `json:"continue_on_error"`
+	// Then and Else are the two paths out of a condition step: the steps for
+	// a contact who matches, and for one who does not.
+	Then []ActionSpec `json:"then,omitempty"`
+	Else []ActionSpec `json:"else,omitempty"`
 }
 
 // RunPolicy bounds how often a rule may act.
@@ -87,48 +93,120 @@ type Input struct {
 // Validate rejects a rule the engine could not run.
 //
 // Everything checkable is checked here rather than at run time, because a rule
-// that fails at three in the morning is discovered by a customer.
+// that fails at three in the morning is discovered by a customer. A rule that
+// is switched off is a draft, though, and a draft is allowed to be unfinished:
+// people build a rule the way they describe it — pick what starts it, add a
+// step, then go and look up which template to send. Refusing to save until
+// every blank is filled lost that work, so an unfinished step only stops a
+// rule that is on (or being turned on). Structural mistakes are refused
+// either way.
 func (s *Service) Validate(ctx context.Context, orgID uuid.UUID, in Input) error {
-	if strings.TrimSpace(in.Name) == "" {
-		return fmt.Errorf("automation: a rule needs a name")
-	}
-	if err := validateTriggerConfig(in.TriggerType, in.TriggerConfig); err != nil {
+	problems, err := s.check(ctx, orgID, in)
+	if err != nil {
 		return err
 	}
-	// A rule with no actions is checked where it matters — at the point it is
-	// switched on — not here. Building one is how everybody starts: name it,
-	// pick the trigger, then work out what it should do. Refusing to save that
-	// meant "Start from scratch" could not be saved at all, because the blank
-	// rule it posts is precisely a rule with no actions yet.
-	if len(in.Actions) > MaxActionsPerRule {
-		return fmt.Errorf("automation: a rule may have at most %d actions", MaxActionsPerRule)
+	if in.Enabled != nil && *in.Enabled && len(problems) > 0 {
+		return &StepError{problems[0]}
+	}
+	return nil
+}
+
+// Problems lists what stops a rule from running, step by step, without
+// refusing anything. The builder shows them on the cards they belong to.
+func (s *Service) Problems(ctx context.Context, orgID uuid.UUID, in Input) ([]StepProblem, error) {
+	return s.check(ctx, orgID, in)
+}
+
+// ProblemsFor lists what stops a stored rule from running.
+func (s *Service) ProblemsFor(ctx context.Context, rule *models.AutomationRule) []StepProblem {
+	in := InputFromRule(rule)
+	problems, err := s.check(ctx, rule.OrganizationID, in)
+	if err != nil {
+		return []StepProblem{{Message: plainError(err)}}
+	}
+	return problems
+}
+
+// check separates what is wrong with a rule's shape (returned as an error)
+// from what is merely unfinished (returned as problems).
+func (s *Service) check(ctx context.Context, orgID uuid.UUID, in Input) ([]StepProblem, error) {
+	if strings.TrimSpace(in.Name) == "" {
+		return nil, fmt.Errorf("automation: a rule needs a name")
+	}
+	if err := validateTriggerConfig(in.TriggerType, in.TriggerConfig); err != nil {
+		return nil, err
 	}
 
-	seen := map[string]bool{}
-	for i, action := range in.Actions {
-		if action.ID == "" {
-			return fmt.Errorf("automation: action %d needs an id", i+1)
+	var registry *contactquery.Registry
+	loadRegistry := func() (*contactquery.Registry, error) {
+		if registry != nil {
+			return registry, nil
 		}
-		if seen[action.ID] {
-			return fmt.Errorf("automation: two actions share the id %q", action.ID)
+		built, err := s.Registry(ctx, orgID)
+		if err != nil {
+			return nil, err
 		}
-		seen[action.ID] = true
+		registry = built
+		return registry, nil
+	}
 
-		if err := crmactions.Validate(action.Type, action.Config); err != nil {
-			return fmt.Errorf("automation: action %d (%s): %w", i+1, action.Type, err)
+	var problems []StepProblem
+	// A time trigger with nothing to measure never fires, and nothing says
+	// so: the rule just sits there switched on. The setting it needs is a
+	// problem on the start card.
+	switch in.TriggerType {
+	case TriggerNoCustomerReply, TriggerNoAgentReply:
+		if _, ok := crmactions.Config(in.TriggerConfig).Duration("after"); !ok {
+			problems = append(problems, StepProblem{StepID: "trigger", Message: "choose how long to wait for a reply"})
 		}
+	case TriggerDateField:
+		if crmactions.Config(in.TriggerConfig).Str("field") == "" {
+			problems = append(problems, StepProblem{StepID: "trigger", Message: "choose which date to watch"})
+		}
+	}
+
+	checker := &stepChecker{ctx: ctx, registry: loadRegistry, seen: map[string]bool{}}
+	checker.walk(in.Actions, 0)
+	if checker.structural != nil {
+		return nil, checker.structural
+	}
+	problems = append(problems, checker.problems...)
+
+	// A rule with nothing to do is a draft, not a mistake: building one is how
+	// everybody starts.
+	if countSteps(in.Actions) == 0 {
+		problems = append(problems, StepProblem{Message: "add at least one step"})
 	}
 
 	if in.ContactFilter != nil && !in.ContactFilter.IsEmpty() {
-		registry, err := s.Registry(ctx, orgID)
+		reg, err := loadRegistry()
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := contactquery.Validate(registry, *in.ContactFilter); err != nil {
-			return err
+		if err := contactquery.Validate(reg, *in.ContactFilter); err != nil {
+			problems = append(problems, StepProblem{StepID: "filter", Message: plainError(err)})
 		}
 	}
-	return nil
+	return problems, nil
+}
+
+// InputFromRule reads a stored rule back into the shape Validate takes.
+func InputFromRule(rule *models.AutomationRule) Input {
+	in := Input{
+		Name:          rule.Name,
+		Description:   rule.Description,
+		TriggerType:   rule.TriggerType,
+		TriggerConfig: map[string]any(rule.TriggerConfig),
+		Actions:       RuleActions(rule),
+	}
+	enabled := rule.Enabled
+	in.Enabled = &enabled
+	policy := RulePolicy(rule)
+	in.RunPolicy = &policy
+	if filter, ok := RuleFilter(rule); ok {
+		in.ContactFilter = &filter
+	}
+	return in
 }
 
 // Registry builds the filter registry a rule's conditions compile against.
@@ -154,14 +232,13 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, in Input) (*model
 		return nil, fmt.Errorf("automation: an organization may have at most %d rules", MaxRulesPerOrg)
 	}
 
-	if err := s.Validate(ctx, orgID, in); err != nil {
-		return nil, err
-	}
-
 	// Saving a rule with nothing to do is fine; saving one that is switched on
 	// with nothing to do is not.
-	if in.Enabled != nil && *in.Enabled && len(in.Actions) == 0 {
+	if in.Enabled != nil && *in.Enabled && countSteps(in.Actions) == 0 {
 		return nil, ErrNoActions
+	}
+	if err := s.Validate(ctx, orgID, in); err != nil {
+		return nil, err
 	}
 
 	triggerConfig := models.JSONB(in.TriggerConfig)
@@ -198,16 +275,19 @@ func (s *Service) Update(ctx context.Context, orgID, ruleID uuid.UUID, in Input)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Validate(ctx, orgID, in); err != nil {
-		return nil, err
-	}
-
+	// A rule that is on stays held to the full standard while it is edited:
+	// the edit is live the moment it saves.
 	willBeEnabled := rule.Enabled
 	if in.Enabled != nil {
 		willBeEnabled = *in.Enabled
 	}
-	if willBeEnabled && len(in.Actions) == 0 {
+	if willBeEnabled && countSteps(in.Actions) == 0 {
 		return nil, ErrNoActions
+	}
+	strict := in
+	strict.Enabled = &willBeEnabled
+	if err := s.Validate(ctx, orgID, strict); err != nil {
+		return nil, err
 	}
 
 	updates := map[string]any{
@@ -250,8 +330,14 @@ func (s *Service) SetEnabled(ctx context.Context, orgID, ruleID uuid.UUID, enabl
 		if err != nil {
 			return nil, err
 		}
-		if len(RuleActions(rule)) == 0 {
+		if countSteps(RuleActions(rule)) == 0 {
 			return nil, ErrNoActions
+		}
+		// A draft may be unfinished; a rule that is about to run may not.
+		in := InputFromRule(rule)
+		in.Enabled = &enabled
+		if err := s.Validate(ctx, orgID, in); err != nil {
+			return nil, err
 		}
 	}
 	updates := map[string]any{"enabled": enabled}
@@ -402,4 +488,21 @@ func filterToJSON(filter contactquery.Filter) models.JSONB {
 	var out map[string]any
 	_ = json.Unmarshal(raw, &out)
 	return models.JSONB(out)
+}
+
+// DraftRule is a stored rule with unsaved edits applied, for a dry run. It is
+// never written: the id is the stored rule's, so the test lands in that rule's
+// history.
+func DraftRule(saved *models.AutomationRule, in Input) *models.AutomationRule {
+	draft := *saved
+	draft.Name = strings.TrimSpace(in.Name)
+	draft.TriggerType = in.TriggerType
+	draft.TriggerConfig = jsonbOrEmpty(in.TriggerConfig)
+	draft.Actions = actionsToJSON(in.Actions)
+	draft.RunPolicy = policyToJSON(in.RunPolicy)
+	draft.ContactFilter = nil
+	if in.ContactFilter != nil && !in.ContactFilter.IsEmpty() {
+		draft.ContactFilter = filterToJSON(*in.ContactFilter)
+	}
+	return &draft
 }

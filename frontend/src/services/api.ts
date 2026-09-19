@@ -748,6 +748,15 @@ export interface AutomationActionSpec {
   type: string
   config: Record<string, any>
   continue_on_error?: boolean
+  /** A question's two paths: contacts who match, and everyone else. */
+  then?: AutomationActionSpec[]
+  else?: AutomationActionSpec[]
+}
+
+/** Something that stops a rule from running, pinned to a step (or 'trigger'). */
+export interface AutomationProblem {
+  step_id?: string
+  message: string
 }
 
 export interface AutomationRunPolicy {
@@ -771,12 +780,15 @@ export interface Automation {
   error_count: number
   created_at: string
   stats?: { runs_24h: number; failures_24h: number }
+  problems?: AutomationProblem[]
+  /** Contacts parked at each wait step right now. */
+  waiting?: Record<string, number>
 }
 
 export interface AutomationActionResult {
   id: string
   type: string
-  status: 'succeeded' | 'failed' | 'skipped'
+  status: 'succeeded' | 'failed' | 'skipped' | 'waiting'
   error?: string
   output?: Record<string, any>
 }
@@ -787,7 +799,8 @@ export interface AutomationRun {
   event_id: string
   event_type: string
   contact_id?: string
-  status: 'succeeded' | 'partially_failed' | 'failed' | 'skipped'
+  contact_name?: string
+  status: 'succeeded' | 'partially_failed' | 'failed' | 'skipped' | 'waiting' | 'cancelled'
   skip_reason?: string
   depth: number
   action_results: { list?: AutomationActionResult[] }
@@ -806,8 +819,12 @@ export interface AutomationTrigger {
 export interface AutomationCatalog {
   triggers: AutomationTrigger[]
   actions: string[]
+  /** Flow control: a question that splits the path, and a wait. */
+  steps: string[]
   limits: {
-    max_actions_per_rule: number
+    max_steps_per_rule: number
+    max_nesting: number
+    max_wait_days: number
     max_rules_per_org: number
     max_depth: number
   }
@@ -823,10 +840,12 @@ export const automationsService = {
   delete: (id: string) => api.delete(`/automations/${id}`),
   enable: (id: string) => api.post<{ automation: Automation }>(`/automations/${id}/enable`, {}),
   disable: (id: string) => api.post<{ automation: Automation }>(`/automations/${id}/disable`, {}),
-  test: (id: string, contactId: string, eventData: Record<string, any> = {}) =>
+  /** Dry-runs the rule on a contact; `rule` tests unsaved edits instead of the saved rule. */
+  test: (id: string, contactId: string, rule?: Partial<Automation>, eventData: Record<string, any> = {}) =>
     api.post<{ run: AutomationRun }>(`/automations/${id}/test`, {
       contact_id: contactId,
-      event_data: eventData
+      event_data: eventData,
+      rule
     }),
   runs: (id: string, params: { status?: string; contact_id?: string; limit?: number } = {}) =>
     api.get<{ runs: AutomationRun[] }>(`/automations/${id}/runs${toQuery(params)}`),

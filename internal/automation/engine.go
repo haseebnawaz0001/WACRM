@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"github.com/shridarpatil/whatomate/internal/contactquery"
 	"github.com/shridarpatil/whatomate/internal/crmactions"
+	"github.com/shridarpatil/whatomate/internal/crmcontext"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/notify"
@@ -28,7 +28,7 @@ const AutoDisableAfter = 10
 type ActionResult struct {
 	ID     string         `json:"id"`
 	Type   string         `json:"type"`
-	Status string         `json:"status"` // succeeded | failed | skipped
+	Status string         `json:"status"` // succeeded | failed | skipped | waiting
 	Error  string         `json:"error,omitempty"`
 	Output map[string]any `json:"output,omitempty"`
 }
@@ -130,16 +130,30 @@ func (e *Engine) runRule(ctx context.Context, rule *models.AutomationRule, event
 		}
 	}
 
-	results := e.execute(ctx, rule, event, dryRun)
+	results, paused := e.execute(ctx, rule, event, dryRun)
 	run.Status = statusFor(results)
+	if paused != nil {
+		run.Status = models.AutomationWaiting
+	}
 	run.ActionResults = models.JSONB{"list": toAnySlice(results)}
 
-	return e.finish(ctx, rule, run, subjectKey(event))
+	out, err := e.finish(ctx, rule, run, subjectKey(event))
+	if err != nil || paused == nil {
+		return out, err
+	}
+	if err := e.park(ctx, rule, run, event, paused); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // skipReason decides whether the rule should not act, and says why.
 func (e *Engine) skipReason(ctx context.Context, rule *models.AutomationRule, event crmevents.Event, dryRun bool) string {
-	if !MatchTrigger(rule, event) {
+	// A dry run asks "suppose this happened to this contact — what then?".
+	// The event is a stand-in with none of the details a real one carries
+	// (which tag, which stage), so judging it against the trigger's settings
+	// would answer every test with "it would not have started".
+	if !dryRun && !MatchTrigger(rule, event) {
 		return models.SkipTriggerNotMet
 	}
 
@@ -180,38 +194,14 @@ func (e *Engine) skipReason(ctx context.Context, rule *models.AutomationRule, ev
 	return ""
 }
 
-// conditionsMatch asks the database whether this contact satisfies the rule's
-// filter. Compiling the filter and adding "AND contacts.id = ?" reuses one
-// query language rather than reimplementing the operators in Go.
+// conditionsMatch asks whether this contact satisfies the rule's own filter,
+// the "only if" that gates the whole rule.
 func (e *Engine) conditionsMatch(ctx context.Context, rule *models.AutomationRule, contactID uuid.UUID) (bool, error) {
 	filter, ok := RuleFilter(rule)
 	if !ok {
 		return true, nil
 	}
-
-	registry, err := e.Rules.Registry(ctx, rule.OrganizationID)
-	if err != nil {
-		return false, err
-	}
-
-	viewer := contactquery.Viewer{
-		OrgID: rule.OrganizationID,
-		// A rule is not a person: it sees whatever its conditions name, or an
-		// automation would behave differently depending on who saved it.
-		CanSeeAllContacts: true,
-		Location:          e.location(rule.OrganizationID),
-	}
-
-	query, err := contactquery.Apply(e.db().WithContext(ctx).Model(&models.Contact{}), registry, viewer, filter)
-	if err != nil {
-		return false, err
-	}
-
-	var count int64
-	if err := query.Where("contacts.id = ?", contactID).Count(&count).Error; err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	return e.filterMatches(ctx, rule.OrganizationID, filter, contactID)
 }
 
 // policyReason enforces once-per-contact and cooldown.
@@ -275,85 +265,42 @@ func (e *Engine) claim(ctx context.Context, run *models.AutomationRun) (bool, er
 	return res.RowsAffected > 0, nil
 }
 
-// execute performs the rule's actions in order.
-func (e *Engine) execute(ctx context.Context, rule *models.AutomationRule, event crmevents.Event, dryRun bool) []ActionResult {
-	actions := RuleActions(rule)
-	results := make([]ActionResult, 0, len(actions))
-
-	ruleID := rule.ID
-	rc := crmactions.RunContext{
-		OrgID: rule.OrganizationID,
-		Event: event,
-		Actor: crmevents.Actor{
-			Type: crmevents.ActorAutomation,
-			ID:   &ruleID,
-			Name: rule.Name,
-		},
-		// Everything this rule causes is one step further from the change a
-		// person actually made.
-		Origin: crmevents.Origin{RuleID: &ruleID, Depth: event.Origin.Depth + 1},
-		// An automation is not a person, so actions that need a human — a
-		// task's last-resort owner, a note's author — fall back to whoever
-		// wrote the rule.
-		CreatorID: rule.CreatedByID,
-		DryRun:    dryRun,
-		Location:  e.location(rule.OrganizationID),
+// execute walks the rule's path for the event's contact. It returns what each
+// step did, and where the run is parked when it reached a wait.
+func (e *Engine) execute(ctx context.Context, rule *models.AutomationRule, event crmevents.Event, dryRun bool) ([]ActionResult, *pause) {
+	runner := &stepRunner{
+		e: e, ctx: ctx, rule: rule, dryRun: dryRun,
+		rc: e.runContext(ctx, rule, event, dryRun),
 	}
-	if event.ContactID != nil {
-		rc.ContactID = *event.ContactID
-	}
-	rc.Vars = e.variables(ctx, rule, event, rc.ContactID)
-
-	for _, action := range actions {
-		output, err := crmactions.Execute(ctx, e.Deps, rc, action.Type, action.Config)
-		result := ActionResult{ID: action.ID, Type: action.Type, Output: output}
-
-		if err == nil {
-			result.Status = "succeeded"
-			results = append(results, result)
-			continue
-		}
-
-		result.Status = "failed"
-		result.Error = err.Error()
-		results = append(results, result)
-
-		if !action.ContinueOnError {
-			// The remaining actions are recorded as skipped rather than left
-			// out, so the run log shows the whole intended sequence.
-			for _, remaining := range actions[len(results):] {
-				results = append(results, ActionResult{
-					ID: remaining.ID, Type: remaining.Type, Status: "skipped",
-					Error: "an earlier action failed",
-				})
-			}
-			break
-		}
-	}
-	return results
+	runner.run(RuleActions(rule))
+	return runner.results, runner.paused
 }
 
 // variables are what a rule's templated text can refer to.
+//
+// They come from the shared CRM context (plan 10, S6), the same namespace the
+// variable picker offers for automations: the contact with its custom fields
+// and owner, the live conversation, and the organization. The engine used to
+// build its own three-key map, so a message written as "Hi
+// {{contact.fields.first_name}}" or "{{contact.owner.name}} will call you"
+// went out with the blanks empty although the picker had offered them.
 func (e *Engine) variables(ctx context.Context, rule *models.AutomationRule, event crmevents.Event, contactID uuid.UUID) map[string]any {
-	vars := map[string]any{
+	extra := map[string]any{
 		"rule":  map[string]any{"name": rule.Name},
 		"event": map[string]any{"type": event.Type, "data": event.Data},
-		"now":   time.Now().In(e.location(rule.OrganizationID)).Format("2006-01-02 15:04"),
 	}
-
-	if contactID == uuid.Nil {
-		return vars
+	vars, err := crmcontext.New(e.db()).Build(ctx, rule.OrganizationID, crmcontext.Opts{
+		ContactID:     contactID,
+		IncludeFields: true,
+		Extra:         extra,
+	})
+	if err != nil {
+		e.log().Warn("Automation variables unavailable", "error", err, "rule_id", rule.ID)
+		vars = extra
 	}
-
-	var contact models.Contact
-	if err := e.db().WithContext(ctx).Where("id = ?", contactID).First(&contact).Error; err != nil {
-		return vars
-	}
-	vars["contact"] = map[string]any{
-		"name":         contact.ProfileName,
-		"phone_number": contact.PhoneNumber,
-		"tags":         contact.Tags,
-	}
+	// "now" as a person reads it, in the organization's own clock, rather
+	// than a machine timestamp in a customer's message.
+	vars["now"] = time.Now().In(e.location(rule.OrganizationID)).Format("2006-01-02 15:04")
 	return vars
 }
 
@@ -376,6 +323,25 @@ func (e *Engine) finish(ctx context.Context, rule *models.AutomationRule, run *m
 		// duplicate means the same event was already judged; leave it alone.
 		if _, err := e.claim(ctx, run); err != nil {
 			return nil, err
+		}
+		return run, nil
+	}
+
+	if run.Status == models.AutomationWaiting {
+		// Parked, not finished: the counters move when the run completes,
+		// but the contact is marked now so once-per-contact and cooldowns
+		// cannot start a second journey while the first is still waiting.
+		run.FinishedAt = nil
+		if err := e.db().WithContext(ctx).Model(&models.AutomationRun{}).
+			Where("id = ?", run.ID).
+			Updates(map[string]any{
+				"status":         run.Status,
+				"action_results": run.ActionResults,
+			}).Error; err != nil {
+			return nil, err
+		}
+		if run.ContactID != nil {
+			e.recordContactState(ctx, rule, *run.ContactID, subject, run)
 		}
 		return run, nil
 	}

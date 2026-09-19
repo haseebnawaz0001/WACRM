@@ -47,6 +47,14 @@ func (a *App) RegisterJobs(s *scheduler.Scheduler) {
 		Timeout:  10 * time.Minute,
 		Run:      a.runAutomationTimeTriggers,
 	})
+	// Automation waits (plan 08). A run parked at "wait a day" carries on when
+	// the day is up; every minute, because the shortest wait is one.
+	s.Register(scheduler.Job{
+		Name:     "automation_waits",
+		Interval: time.Minute,
+		Timeout:  5 * time.Minute,
+		Run:      a.resumeAutomationWaits,
+	})
 	// Run history is for debugging what happened recently, not an archive.
 	s.Register(scheduler.Job{
 		Name:     "automation_runs_retention",
@@ -203,14 +211,28 @@ func (a *App) runAutomationTimeTriggers(ctx context.Context) error {
 	return nil
 }
 
+// resumeAutomationWaits carries on runs whose wait is over.
+func (a *App) resumeAutomationWaits(ctx context.Context) error {
+	resumed, err := a.AutomationEngine().ResumeWaits(ctx)
+	if err != nil {
+		return err
+	}
+	if resumed > 0 {
+		a.Log.Info("Automation waits resumed", "count", resumed)
+	}
+	return nil
+}
+
 // AutomationRunRetention is how long a run stays readable.
 const AutomationRunRetention = 30 * 24 * time.Hour
 
 // pruneAutomationRuns deletes run history past the retention window.
 func (a *App) pruneAutomationRuns(ctx context.Context) error {
 	cutoff := time.Now().UTC().Add(-AutomationRunRetention)
+	// A run still waiting is not history yet: deleting it would strand the
+	// contact parked inside it.
 	res := a.DB.WithContext(ctx).
-		Where("started_at < ?", cutoff).
+		Where("started_at < ? AND status <> ?", cutoff, models.AutomationWaiting).
 		Delete(&models.AutomationRun{})
 	if res.Error != nil {
 		return res.Error

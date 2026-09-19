@@ -142,6 +142,7 @@ func GetMigrationModels() []MigrationModel {
 		{"AutomationRule", &models.AutomationRule{}},
 		{"AutomationRun", &models.AutomationRun{}},
 		{"AutomationContactState", &models.AutomationContactState{}},
+		{"AutomationWait", &models.AutomationWait{}},
 	}
 }
 

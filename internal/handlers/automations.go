@@ -63,6 +63,11 @@ type AutomationResponse struct {
 	ErrorCount    int64                    `json:"error_count"`
 	CreatedAt     time.Time                `json:"created_at"`
 	Stats         *automationStatsResponse `json:"stats,omitempty"`
+	// Problems is what stops the rule from running, pinned to steps. A draft
+	// may have some; a rule that is on has none.
+	Problems []automation.StepProblem `json:"problems"`
+	// Waiting counts the contacts parked at each wait step right now.
+	Waiting map[string]int64 `json:"waiting,omitempty"`
 }
 
 type automationStatsResponse struct {
@@ -91,7 +96,33 @@ func toAutomationResponse(rule models.AutomationRule) AutomationResponse {
 	if out.Actions == nil {
 		out.Actions = []automation.ActionSpec{}
 	}
+	out.Problems = []automation.StepProblem{}
 	return out
+}
+
+// automationDetail is the response for one rule: what it is, what still stops
+// it from running, and who is waiting inside it.
+func (a *App) automationDetail(rule *models.AutomationRule) AutomationResponse {
+	out := toAutomationResponse(*rule)
+	out.Problems = a.Automations().ProblemsFor(context.Background(), rule)
+	waiting, err := a.AutomationEngine().WaitingCounts(context.Background(), rule.ID)
+	if err != nil {
+		a.Log.Error("Failed to count waiting contacts", "error", err, "rule_id", rule.ID)
+	}
+	out.Waiting = waiting
+	return out
+}
+
+// sendAutomationError answers a failed save or switch-on. A problem pinned to
+// a step comes back with its id, so the builder can mark the card it belongs
+// to instead of showing a sentence nobody can place.
+func sendAutomationError(r *fastglue.Request, err error) error {
+	var stepErr *automation.StepError
+	if errors.As(err, &stepErr) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, stepErr.Message,
+			map[string]any{"step_id": stepErr.StepID}, "")
+	}
+	return r.SendErrorEnvelope(fasthttp.StatusBadRequest, strings.TrimPrefix(err.Error(), "automation: "), nil, "")
 }
 
 type automationRequest struct {
@@ -137,9 +168,13 @@ func (a *App) ListAutomations(r *fastglue.Request) error {
 		a.Log.Error("Failed to load automation stats", "error", err, "org_id", orgID)
 	}
 
+	svc := a.Automations()
 	items := make([]AutomationResponse, 0, len(rules))
-	for _, rule := range rules {
+	for i, rule := range rules {
 		item := toAutomationResponse(rule)
+		// The list says which rules are unfinished, so a draft left half-built
+		// is visible from the list rather than discovered by opening it.
+		item.Problems = svc.ProblemsFor(context.Background(), &rules[i])
 		if stat, ok := stats[rule.ID]; ok {
 			item.Stats = stat
 		}
@@ -190,12 +225,12 @@ func (a *App) CreateAutomation(r *fastglue.Request) error {
 
 	rule, err := a.Automations().Create(context.Background(), orgID, req.input(userID))
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		return sendAutomationError(r, err)
 	}
 
 	a.logAudit(orgID, userID, models.ResourceAutomations, rule.ID, models.AuditActionCreated, nil,
 		map[string]any{"name": rule.Name, "trigger": rule.TriggerType})
-	return r.SendEnvelope(map[string]any{"automation": toAutomationResponse(*rule)})
+	return r.SendEnvelope(map[string]any{"automation": a.automationDetail(rule)})
 }
 
 // GetAutomation returns one rule.
@@ -213,7 +248,7 @@ func (a *App) GetAutomation(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Automation not found", nil, "")
 	}
-	return r.SendEnvelope(map[string]any{"automation": toAutomationResponse(*rule)})
+	return r.SendEnvelope(map[string]any{"automation": a.automationDetail(rule)})
 }
 
 // UpdateAutomation edits a rule.
@@ -237,12 +272,12 @@ func (a *App) UpdateAutomation(r *fastglue.Request) error {
 		if errors.Is(err, automation.ErrNotFound) {
 			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Automation not found", nil, "")
 		}
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		return sendAutomationError(r, err)
 	}
 
 	a.logAudit(orgID, userID, models.ResourceAutomations, rule.ID, models.AuditActionUpdated, nil,
 		map[string]any{"name": rule.Name, "trigger": rule.TriggerType})
-	return r.SendEnvelope(map[string]any{"automation": toAutomationResponse(*rule)})
+	return r.SendEnvelope(map[string]any{"automation": a.automationDetail(rule)})
 }
 
 // DeleteAutomation removes a rule.
@@ -296,15 +331,15 @@ func (a *App) setAutomationEnabled(r *fastglue.Request, orgID, userID uuid.UUID,
 	if err != nil {
 		// Every failure here used to come back as "Automation not found",
 		// which is only one of the things that can go wrong.
-		if errors.Is(err, automation.ErrNoActions) {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		if errors.Is(err, automation.ErrNotFound) {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Automation not found", nil, "")
 		}
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Automation not found", nil, "")
+		return sendAutomationError(r, err)
 	}
 
 	a.logAudit(orgID, userID, models.ResourceAutomations, ruleID, models.AuditActionUpdated, nil,
 		map[string]any{"enabled": enabled})
-	return r.SendEnvelope(map[string]any{"automation": toAutomationResponse(*rule)})
+	return r.SendEnvelope(map[string]any{"automation": a.automationDetail(rule)})
 }
 
 // TestAutomation dry-runs a rule against a real contact.
@@ -324,6 +359,11 @@ func (a *App) TestAutomation(r *fastglue.Request) error {
 	var req struct {
 		ContactID string         `json:"contact_id"`
 		EventData map[string]any `json:"event_data"`
+		// Rule, when given, is tested instead of the saved version. A rule
+		// that is on holds its edits until they are saved, and "does my
+		// change do what I think?" is exactly the question to answer before
+		// saving it.
+		Rule *automationRequest `json:"rule"`
 	}
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
@@ -336,6 +376,20 @@ func (a *App) TestAutomation(r *fastglue.Request) error {
 	rule, err := a.Automations().Get(context.Background(), orgID, ruleID)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Automation not found", nil, "")
+	}
+	// A contact the tester cannot open is not one they may run a rule
+	// against: the result would describe that contact to them.
+	if !a.canSeeContact(orgID, userID, contactID) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Contact not found", nil, "")
+	}
+	if req.Rule != nil {
+		draft := req.Rule.input(userID)
+		if _, err := a.Automations().Problems(context.Background(), orgID, draft); err != nil {
+			return sendAutomationError(r, err)
+		}
+		// Tested in memory under the saved rule's id, so the dry run lands
+		// in this rule's history; nothing about the rule itself is written.
+		rule = automation.DraftRule(rule, draft)
 	}
 
 	data := req.EventData
@@ -383,7 +437,49 @@ func (a *App) AutomationRuns(r *fastglue.Request) error {
 		a.Log.Error("Failed to load automation runs", "error", err, "rule_id", ruleID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load runs", nil, "")
 	}
-	return r.SendEnvelope(map[string]any{"runs": runs})
+	return r.SendEnvelope(map[string]any{"runs": a.namedRuns(orgID, runs)})
+}
+
+// automationRunResponse is a run with the name of the contact it was for.
+// History is read as "what happened to Amara", and a list of contact ids
+// answers nobody.
+type automationRunResponse struct {
+	models.AutomationRun
+	ContactName string `json:"contact_name,omitempty"`
+}
+
+// namedRuns attaches contact names in one query, masked like every other
+// place a phone number stands in for a name.
+func (a *App) namedRuns(orgID uuid.UUID, runs []models.AutomationRun) []automationRunResponse {
+	ids := make([]uuid.UUID, 0, len(runs))
+	for _, run := range runs {
+		if run.ContactID != nil {
+			ids = append(ids, *run.ContactID)
+		}
+	}
+	names := map[uuid.UUID]string{}
+	if len(ids) > 0 {
+		var contacts []models.Contact
+		if err := a.DB.Unscoped().Select("id", "profile_name", "phone_number").
+			Where("organization_id = ? AND id IN ?", orgID, ids).Find(&contacts).Error; err == nil {
+			for _, c := range contacts {
+				name, phone := a.MaskContactFields(orgID, c.ProfileName, c.PhoneNumber)
+				if name == "" {
+					name = phone
+				}
+				names[c.ID] = name
+			}
+		}
+	}
+	out := make([]automationRunResponse, 0, len(runs))
+	for _, run := range runs {
+		item := automationRunResponse{AutomationRun: run}
+		if run.ContactID != nil {
+			item.ContactName = names[*run.ContactID]
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 // ContactAutomationRuns returns the runs that touched one contact, which is
@@ -419,10 +515,14 @@ func (a *App) AutomationCatalog(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]any{
 		"triggers": automation.Triggers(),
 		"actions":  automation.Actions(),
+		// Flow control: a question that splits the path, and a pause.
+		"steps": automation.FlowSteps(),
 		"limits": map[string]any{
-			"max_actions_per_rule": automation.MaxActionsPerRule,
-			"max_rules_per_org":    automation.MaxRulesPerOrg,
-			"max_depth":            automation.MaxDepth,
+			"max_steps_per_rule": automation.MaxStepsPerRule,
+			"max_nesting":        automation.MaxNesting,
+			"max_wait_days":      int(automation.MaxWait.Hours() / 24),
+			"max_rules_per_org":  automation.MaxRulesPerOrg,
+			"max_depth":          automation.MaxDepth,
 		},
 	})
 }

@@ -45,6 +45,12 @@ function remove(index: number) {
   emit('update:modelValue', next)
 }
 
+function update(index: number, action: CrmActionSpec) {
+  const next = [...props.modelValue]
+  next[index] = action
+  emit('update:modelValue', next)
+}
+
 function move(index: number, direction: -1 | 1) {
   const target = index + direction
   if (target < 0 || target >= props.modelValue.length) return
@@ -58,12 +64,12 @@ function move(index: number, direction: -1 | 1) {
   <div class="space-y-3">
     <div v-if="canAdd" class="flex justify-end">
       <Select @update:model-value="v => add(String(v))">
-        <SelectTrigger class="w-48" :aria-label="$t('automations.addAction')">
+        <SelectTrigger class="w-56" :aria-label="$t('automations.addAction')">
           <SelectValue :placeholder="t('automations.addAction')" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem v-for="type in availableTypes" :key="type" :value="type">
-            {{ t(`automations.actions.${type}`, type) }}
+            {{ t(`automations.steps.${type}.title`, type) }}
           </SelectItem>
         </SelectContent>
       </Select>
@@ -83,6 +89,7 @@ function move(index: number, direction: -1 | 1) {
       :show-continue-on-error="showContinueOnError"
       @remove="remove(index)"
       @move="d => move(index, d)"
+      @update="a => update(index, a)"
     />
   </div>
 </template>

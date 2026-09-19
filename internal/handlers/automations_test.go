@@ -81,21 +81,45 @@ func TestCreateAutomation_RejectsAnUnknownTrigger(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
 
-func TestCreateAutomation_RejectsAnActionThatCannotRun(t *testing.T) {
+// A step that cannot run keeps a rule from running, and the answer names the
+// step so the builder can mark that card. As a draft it saves, with the
+// problem attached.
+func TestCreateAutomation_AStepThatCannotRunIsPinnedToTheStep(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	admin := adminFor(t, app, org)
 
-	req := testutil.NewJSONRequest(t, tagAutomationBody(map[string]any{
-		"actions": []map[string]any{{
-			"id": "a1", "type": crmactions.TypeCallWebhook,
-			"config": map[string]any{"url": "not a url"},
-		}},
-	}))
-	testutil.SetAuthContext(req, org.ID, admin.ID)
+	broken := []map[string]any{{
+		"id": "a1", "type": crmactions.TypeCallWebhook,
+		"config": map[string]any{"url": "not a url"},
+	}}
 
-	require.NoError(t, app.CreateAutomation(req))
-	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	live := testutil.NewJSONRequest(t, tagAutomationBody(map[string]any{
+		"enabled": true, "actions": broken,
+	}))
+	testutil.SetAuthContext(live, org.ID, admin.ID)
+	require.NoError(t, app.CreateAutomation(live))
+	require.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(live))
+	var refused struct {
+		Data struct {
+			StepID string `json:"step_id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(live), &refused))
+	assert.Equal(t, "a1", refused.Data.StepID)
+
+	draft := testutil.NewJSONRequest(t, tagAutomationBody(map[string]any{"actions": broken}))
+	testutil.SetAuthContext(draft, org.ID, admin.ID)
+	require.NoError(t, app.CreateAutomation(draft))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(draft))
+	var saved struct {
+		Data struct {
+			Automation handlers.AutomationResponse `json:"automation"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(draft), &saved))
+	require.Len(t, saved.Data.Automation.Problems, 1)
+	assert.Equal(t, "a1", saved.Data.Automation.Problems[0].StepID)
 }
 
 // A rule one agent writes acts on everybody's customers, so writing one is not

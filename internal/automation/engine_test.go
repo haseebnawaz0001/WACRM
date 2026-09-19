@@ -96,16 +96,35 @@ func TestCreate_RejectsTriggerSettingsTheTriggerDoesNotUnderstand(t *testing.T) 
 	require.ErrorContains(t, err, "does not understand")
 }
 
-func TestCreate_RejectsAnUnconfigurableAction(t *testing.T) {
+// An unfinished step is a draft, not a mistake: people add "tag them" and
+// then decide which tag. It saves, it is reported against the step it belongs
+// to, and it stops the rule being switched on until it is finished.
+func TestCreate_AnUnfinishedStepIsADraftUntilSwitchedOn(t *testing.T) {
 	_, svc, _, org, _, _ := setup(t)
 
-	_, err := svc.Create(ctx(), org.ID, automation.Input{
-		Name: "Broken", TriggerType: "contact.tag_added",
+	in := automation.Input{
+		Name: "Unfinished", TriggerType: "contact.tag_added",
 		Actions: []automation.ActionSpec{{
 			ID: "a1", Type: crmactions.TypeAddTags, Config: crmactions.Config{},
 		}},
-	})
-	require.ErrorContains(t, err, "at least one tag")
+	}
+	rule, err := svc.Create(ctx(), org.ID, in)
+	require.NoError(t, err, "a draft may be unfinished")
+
+	problems := svc.ProblemsFor(ctx(), rule)
+	require.Len(t, problems, 1)
+	assert.Equal(t, "a1", problems[0].StepID)
+	assert.Contains(t, problems[0].Message, "at least one tag")
+
+	_, err = svc.SetEnabled(ctx(), org.ID, rule.ID, true)
+	var stepErr *automation.StepError
+	require.ErrorAs(t, err, &stepErr, "a rule that is about to run may not be")
+	assert.Equal(t, "a1", stepErr.StepID)
+
+	enabled := true
+	in.Enabled = &enabled
+	_, err = svc.Create(ctx(), org.ID, in)
+	require.ErrorAs(t, err, &stepErr, "nor may one created switched on")
 }
 
 // A rule that starts messaging customers the moment it is saved leaves no room

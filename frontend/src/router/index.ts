@@ -276,6 +276,13 @@ const router = createRouter({
           meta: { permission: 'automations' }
         },
         {
+          // Before :id, or "new" would be read as an automation id.
+          path: 'automations/new',
+          name: 'automation-new',
+          component: () => import('@/views/automations/AutomationNewView.vue'),
+          meta: { permission: 'automations' }
+        },
+        {
           path: 'automations/:id',
           name: 'automation-detail',
           component: () => import('@/views/automations/AutomationDetailView.vue'),

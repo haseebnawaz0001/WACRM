@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-19T05:50:36.429727+00:00",
+  "title": "Design System: WA CRM",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Brand Emerald",
+        "canonical": "hsl(160 84% 39%)",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#065f46",
+          "#047857",
+          "#059669",
+          "#10b981",
+          "#6ee7b7",
+          "#ecfdf5"
+        ]
+      },
+      "primary-link-light": {
+        "role": "primary",
+        "displayName": "Deep Emerald Link",
+        "canonical": "hsl(160 84% 27%)"
+      },
+      "question-violet": {
+        "role": "secondary",
+        "displayName": "Question Violet",
+        "canonical": "#8b5cf6",
+        "tonalRamp": [
+          "#2e1065",
+          "#4c1d95",
+          "#5b21b6",
+          "#6d28d9",
+          "#7c3aed",
+          "#8b5cf6",
+          "#c4b5fd",
+          "#f5f3ff"
+        ]
+      },
+      "wait-sky": {
+        "role": "secondary",
+        "displayName": "Wait Sky",
+        "canonical": "#0ea5e9",
+        "tonalRamp": [
+          "#082f49",
+          "#0c4a6e",
+          "#075985",
+          "#0369a1",
+          "#0284c7",
+          "#0ea5e9",
+          "#7dd3fc",
+          "#f0f9ff"
+        ]
+      },
+      "unfinished-amber": {
+        "role": "tertiary",
+        "displayName": "Unfinished Amber",
+        "canonical": "#f59e0b",
+        "tonalRamp": [
+          "#451a03",
+          "#78350f",
+          "#92400e",
+          "#b45309",
+          "#d97706",
+          "#f59e0b",
+          "#fcd34d",
+          "#fffbeb"
+        ]
+      },
+      "destructive": {
+        "role": "tertiary",
+        "displayName": "Destructive Red",
+        "canonical": "hsl(0 72% 51%)",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#991b1b",
+          "#b91c1c",
+          "#dc2626",
+          "#ef4444",
+          "#fca5a5",
+          "#fef2f2"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Near-Black Page",
+        "canonical": "hsl(0 0% 2.5%)",
+        "tonalRamp": [
+          "#060606",
+          "#0d0d0d",
+          "#121212",
+          "#1a1a1a",
+          "#1f1f1f",
+          "#666666",
+          "#e6e6e6",
+          "#fafafa"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card Surface",
+        "canonical": "hsl(0 0% 5%)"
+      },
+      "popover": {
+        "role": "neutral",
+        "displayName": "Popover",
+        "canonical": "hsl(0 0% 7%)"
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "hsl(0 0% 12%)"
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Foreground",
+        "canonical": "hsl(0 0% 98%)"
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Muted Foreground",
+        "canonical": "hsl(0 0% 55%)"
+      },
+      "flow-edge": {
+        "role": "neutral",
+        "displayName": "Flow Edge",
+        "canonical": "rgba(255, 255, 255, 0.18)"
+      },
+      "flow-dots": {
+        "role": "neutral",
+        "displayName": "Flow Dots",
+        "canonical": "rgba(255, 255, 255, 0.2)"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The editable rule name in the builder's top bar; empty-state headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "A flow card's title: the sentence of what the step does."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Inspector section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Rows, fields, menu items, tabs."
+      },
+      "prose": {
+        "displayName": "Prose",
+        "purpose": "The rule read back as paragraphs in \"What this does\"."
+      },
+      "detail": {
+        "displayName": "Detail",
+        "purpose": "Card detail lines, hints, problem lines, the status pill."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Yes/No branch labels, trace marks, waiting counts."
+      }
+    },
+    "shadows": [
+      {
+        "name": "flow-card-rest",
+        "value": "0 1px 2px rgba(0,0,0,0.2), 0 4px 12px -6px rgba(0,0,0,0.35)",
+        "purpose": "Lifts a step card off the dot grid (light: 0.05 / 0.12)."
+      },
+      {
+        "name": "flow-start-rest",
+        "value": "0 1px 2px rgba(0,0,0,0.2), 0 6px 16px -8px rgba(0,0,0,0.4)",
+        "purpose": "The start card, a touch deeper because it anchors the path (light: 0.05 / 0.14)."
+      },
+      {
+        "name": "selection-ring",
+        "value": "0 0 0 2px rgba(16,185,129,0.25)",
+        "purpose": "Selected card, outside an emerald-at-70% border."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-quart",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Trace drawing and trace marks."
+      },
+      {
+        "name": "trace-stretch",
+        "value": "240ms",
+        "purpose": "Drawing one walked stretch of the path."
+      },
+      {
+        "name": "trace-stagger",
+        "value": "140ms",
+        "purpose": "Delay between stretches, in walk order."
+      },
+      {
+        "name": "trace-mark",
+        "value": "220ms, 200ms after its edge",
+        "purpose": "A card's result mark fading up after the stretch into it."
+      },
+      {
+        "name": "reveal-pan",
+        "value": "300ms",
+        "purpose": "Panning the minimum amount to reveal a card, or framing a trace."
+      },
+      {
+        "name": "state",
+        "value": "150-200ms",
+        "purpose": "Hover, border and opacity transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "640px",
+        "purpose": "Below: canvas opens at zoom 1 with the start card centred; trace framing floor 0.75."
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "purpose": "From here the 400px inspector sits beside the canvas; below it is a bottom sheet (max 85vh)."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The next thing to do: Turn on, Save changes.",
+      "html": "<button class=\"ds-btn-primary\">Turn on</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 10.5px;border:0;border-radius:var(--radius-sm,2px);background:hsl(var(--primary,160 84% 39%));color:hsl(var(--primary-foreground,0 0% 9%));font:500 10.5px/1 Inter,system-ui,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer;transition:all .2s}.ds-btn-primary:hover{background:hsl(var(--primary,160 84% 39%) / .9)}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 2px #060606,0 0 0 4px hsl(160 84% 39%)}.ds-btn-primary:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary actions such as Try it on a contact.",
+      "html": "<button class=\"ds-btn-outline\">Try it on a contact</button>",
+      "css": ".ds-btn-outline{display:inline-flex;align-items:center;height:28px;padding:0 10.5px;border:1px solid rgba(255,255,255,.1);border-radius:2px;background:rgba(255,255,255,.02);color:#fafafa;font:500 10.5px/1 Inter,system-ui,sans-serif;cursor:pointer;transition:all .2s}.ds-btn-outline:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.2)}.ds-btn-outline:focus-visible{outline:none;box-shadow:0 0 0 2px #060606,0 0 0 4px hsl(160 84% 39%)}.ds-btn-outline:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "The shared field chrome for inputs and picker faces.",
+      "html": "<input class=\"ds-field\" placeholder=\"Choose...\">",
+      "css": ".ds-field{width:100%;padding:7px 10.5px;border:1px solid rgba(255,255,255,.1);border-radius:2px;background:rgba(255,255,255,.04);color:#fff;font:400 12.25px/1.4 Inter,system-ui,sans-serif;transition:border-color .15s}.ds-field::placeholder{color:rgba(255,255,255,.4)}.ds-field:hover{border-color:rgba(255,255,255,.2)}.ds-field:focus-visible{outline:none;border-color:rgba(16,185,129,.6);box-shadow:0 0 0 2px rgba(16,185,129,.3)}"
+    },
+    {
+      "name": "Variable Chip",
+      "kind": "chip",
+      "refersTo": "variable-chip",
+      "description": "A variable in a field, wearing its plain name; syntax is never shown.",
+      "html": "<span class=\"ds-field-text\">Personal check-in with <span class=\"ds-vt-chip\">Contact name</span> today</span>",
+      "css": ".ds-field-text{font:400 12.25px/1.6 Inter,system-ui,sans-serif;color:#fff}.ds-vt-chip{display:inline-block;margin:0;padding:0 6px;border-radius:4px;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);color:#fff;font-size:.923em;font-weight:500;line-height:1.5;white-space:nowrap}"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill-draft",
+      "description": "A draft with problems is a button to the first problem.",
+      "html": "<button class=\"ds-pill ds-pill-warn\"><span class=\"ds-dot\"></span>Draft · 1 thing to finish<svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"m9 18 6-6-6-6\"/></svg></button>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;gap:5px;padding:3.5px 5px 3.5px 9px;border-radius:9999px;border:1px solid;font:500 10.5px/1.3 Inter,system-ui,sans-serif;cursor:pointer;transition:all .15s}.ds-pill-warn{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08);color:#fde68a}.ds-pill-warn:hover{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.14)}.ds-pill:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(16,185,129,.4)}.ds-dot{width:6px;height:6px;border-radius:50%;background:#fbbf24}.ds-pill svg{opacity:.7}"
+    },
+    {
+      "name": "Flow Card",
+      "kind": "card",
+      "refersTo": "flow-card",
+      "description": "One step as a sentence: tone tile, title, detail with chosen values in weight.",
+      "html": "<div class=\"ds-flow-card\" tabindex=\"0\"><span class=\"ds-tile ds-tile-q\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M16 3h5v5\"/><path d=\"M8 3H3v5\"/><path d=\"M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3\"/><path d=\"m15 9 6-6\"/></svg></span><div><p class=\"ds-title\">Check the contact</p><p class=\"ds-detail\">Lifecycle stage is <b>Customer</b></p></div></div>",
+      "css": ".ds-flow-card{display:flex;gap:10.5px;align-items:flex-start;width:296px;padding:10.5px 12.25px;border:1px solid rgba(255,255,255,.09);border-radius:6px;background:hsl(0 0% 5%);color:#fafafa;box-shadow:0 1px 2px rgba(0,0,0,.2),0 4px 12px -6px rgba(0,0,0,.35);cursor:pointer;transition:border-color .2s,box-shadow .2s}.ds-flow-card:hover{border-color:rgba(255,255,255,.2)}.ds-flow-card:focus-visible{outline:none;border-color:rgba(16,185,129,.7);box-shadow:0 0 0 2px rgba(16,185,129,.25)}.ds-tile{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;border-radius:4px}.ds-tile-q{background:rgba(139,92,246,.15);color:#c4b5fd}.ds-title{margin:0;font:500 13.5px/20px Inter,system-ui,sans-serif}.ds-detail{margin:2px 0 0;font:400 10.5px/14px Inter,system-ui,sans-serif;color:rgba(255,255,255,.5)}.ds-detail b{font-weight:500;color:rgba(255,255,255,.9)}"
+    },
+    {
+      "name": "Add Step",
+      "kind": "custom",
+      "refersTo": "add-step-button",
+      "description": "The + on every edge of the path.",
+      "html": "<button class=\"ds-add\" aria-label=\"Add a step here\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M5 12h14\"/><path d=\"M12 5v14\"/></svg></button>",
+      "css": ".ds-add{display:flex;align-items:center;justify-content:center;width:21px;height:21px;padding:0;border-radius:9999px;border:1px solid rgba(255,255,255,.2);background:#171717;color:rgba(255,255,255,.7);box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer;transition:transform .15s,background-color .15s,border-color .15s,color .15s}.ds-add:hover{transform:scale(1.1);border-color:rgba(16,185,129,.6);color:#6ee7b7}.ds-add:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(16,185,129,.5)}.ds-add:active{background:hsl(160 84% 39%);border-color:hsl(160 84% 39%);color:#171717}"
+    },
+    {
+      "name": "Build / History Tabs",
+      "kind": "nav",
+      "refersTo": "tabs",
+      "description": "The builder's view switch, underlined in emerald.",
+      "html": "<nav class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">Build</button><button role=\"tab\" aria-selected=\"false\">History</button></nav>",
+      "css": ".ds-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,.08)}.ds-tabs button{margin-bottom:-1px;padding:3.5px 10.5px 7px;border:0;border-bottom:2px solid transparent;background:none;color:rgba(255,255,255,.55);font:400 12.25px/1.4 Inter,system-ui,sans-serif;cursor:pointer;transition:color .15s}.ds-tabs button:hover{color:#fff}.ds-tabs button[aria-selected=true]{border-bottom-color:#10b981;color:#fff;font-weight:500}.ds-tabs button:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(16,185,129,.4)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Plain-Spoken Workbench",
+    "overview": "WA CRM is a working tool for people who run a front desk, not a showcase. It is dark-first (a near-black page, a barely lifted card surface, hairline borders) with a clean white light mode bound to the `.light` class, set entirely in Inter on a 14px root, so every rem-based utility renders at seven eighths of Tailwind's nominal size (text-sm is 12.25px, text-xs 10.5px, h-9 31.5px). Density is moderate: rows and cards are compact, but every block breathes on space and a single rule rather than nested boxes.\n\nColour is spent as meaning, never as decoration. Emerald is the one accent and marks what is live, chosen, or the next action; every other hue on a screen answers one specific question. Words do the rest of the work: a card is a sentence, a status says what to do next, and a failure is told in the builder's own language. The automation builder is the fullest expression of this system: a path drawn top to bottom, whose cards read as plain sentences and whose rule reads back as prose.",
+    "keyCharacteristics": [
+      "Near-black and white themes from one set of HSL variables; emerald primary with a near-black label.",
+      "One meaning per hue; amber is reserved for \"something still needs finishing\".",
+      "Sentences over forms: chosen values in weight, connecting words muted.",
+      "Flat surfaces separated by 1px borders and space; soft shadow only where something floats over the canvas.",
+      "Small corners from a three-step scale (2px / 4px / 6px) plus full pills."
+    ],
+    "rules": [
+      {
+        "name": "The One Meaning Per Hue Rule",
+        "body": "On the path, emerald starts it, is selected, or is lit; violet asks; sky waits; amber needs finishing; actions stay neutral. A hue never borrows another's meaning: the idle trigger card border is neutral, not emerald, and amber is never a step's own colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quiet Emerald Rule",
+        "body": "Emerald is the action and the live state, not the brand wallpaper. A running rule's pill is emerald at 8% fill with a pale label; a link inside prose is the only text allowed to be green, and links elsewhere inherit their colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weighted Value Rule",
+        "body": "In any sentence built from parts, the values a person chose are medium weight in foreground colour (white at 90% / gray-900) and the connecting words stay muted (white at 50% / gray-500). The sentence scans as its values.",
+        "section": "typography"
+      },
+      {
+        "name": "The No Eyebrow Rule",
+        "body": "A title starts the sentence itself (\"When a tag is added\"); nothing sits above it as a small uppercase label.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Before Shadow Rule",
+        "body": "Separate with a 1px border and space first; a shadow is only for something that sits over the canvas.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** give each path hue one meaning: emerald for start, selection and the lit path; violet for a question; sky for a wait; amber only for unfinished; neutral for actions.",
+      "**Do** write card titles as the sentence of what the step does, and build details from parts with chosen values in medium weight and foreground.",
+      "**Do** size flow cards from their measured words (53 / 57 / 71px for 0 / 1 / 2 detail lines at the 14px rem), deriving every size from the root font.",
+      "**Do** show variables as chips in fields and as ‹Label› in read-only text.",
+      "**Do** make a status actionable when there is something to act on: draft with problems goes to the first problem, failing goes to History.",
+      "**Do** keep every animation behind prefers-reduced-motion.",
+      "**Do** take every corner from the 2px / 4px / 6px / full scale."
+    ],
+    "donts": [
+      "**Don't** use amber for anything that is not \"still needs finishing\", and don't give the idle trigger card an emerald border.",
+      "**Don't** let people drag or wire nodes; the canvas lays itself out and steps are added with +.",
+      "**Don't** show `{{variable}}` syntax or raw engine error strings to the person building the rule.",
+      "**Don't** put an eyebrow or kicker above a card title.",
+      "**Don't** put a white label on the emerald primary; it measures 2.6:1.",
+      "**Don't** paint links green by default; only a link inside prose uses the link style.",
+      "**Don't** shrink a desktop canvas below 0.6 zoom, or open a phone canvas zoomed out."
+    ]
+  }
+}

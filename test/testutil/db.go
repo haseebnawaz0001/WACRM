@@ -178,6 +178,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.AutomationRule{},
 		&models.AutomationRun{},
 		&models.AutomationContactState{},
+		&models.AutomationWait{},
 	)
 }
 
@@ -192,6 +193,7 @@ func cleanupTables(db *gorm.DB) {
 		"notifications",
 		"automation_runs",
 		"automation_contact_state",
+		"automation_waits",
 		"automation_rules",
 		"deal_stage_history",
 		"deals",
@@ -265,6 +267,7 @@ func TruncateTables(db *gorm.DB) {
 		"notifications",
 		"automation_runs",
 		"automation_contact_state",
+		"automation_waits",
 		"automation_rules",
 		"deal_stage_history",
 		"deals",
