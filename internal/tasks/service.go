@@ -304,8 +304,10 @@ type ListOpts struct {
 	OverdueOnly bool
 	// DueBefore returns tasks due before a moment ("today", "this week").
 	DueBefore *time.Time
-	Limit     int
-	Offset    int
+	// Scope narrows to what the viewer may see. Nil means everything.
+	Scope  func(*gorm.DB) *gorm.DB
+	Limit  int
+	Offset int
 }
 
 // List returns tasks, soonest deadline first.
@@ -337,6 +339,9 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, opts ListOpts) ([]m
 	}
 	if opts.DueBefore != nil {
 		q = q.Where("tasks.due_at < ?", *opts.DueBefore)
+	}
+	if opts.Scope != nil {
+		q = opts.Scope(q)
 	}
 
 	var total int64

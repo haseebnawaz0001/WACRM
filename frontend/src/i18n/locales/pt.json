@@ -509,6 +509,7 @@
     "phoneHint": "Insira o número de telefone com o código do país (sem +)",
     "namePlaceholder": "João da Silva",
     "phoneRequired": "O número de telefone é obrigatório",
+    "requiredFieldsMissing": "Preencha os campos obrigatórios: {fields}",
     "deleteWarning": "Isto excluirá o contato e ocultará a sua conversa. Se ele enviar uma nova mensagem, o contato será restaurado.",
     "openChat": "Abrir conversa",
     "never": "Nunca",

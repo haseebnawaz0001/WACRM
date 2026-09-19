@@ -57,6 +57,10 @@ func (setConversationStatus) Execute(ctx context.Context, d Deps, rc RunContext,
 	)
 
 	switch status {
+	case string(models.ConversationOpen):
+		// Validate has always accepted "open"; this branch did not exist, so a
+		// rule saved with it failed on every run.
+		result, err = svc.Open(ctx, rc.OrgID, rc.ContactID, rc.Actor)
 	case string(models.ConversationResolved):
 		result, err = svc.Resolve(ctx, rc.OrgID, rc.ContactID, models.ResolutionAutomation, rc.Actor)
 	case string(models.ConversationSnoozed):

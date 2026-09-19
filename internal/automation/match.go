@@ -34,6 +34,13 @@ func MatchTrigger(rule *models.AutomationRule, event crmevents.Event) bool {
 		if field := cfg.Str("field"); field != "" && field != dataString(event, "field") {
 			return false
 		}
+		// The builder saves "to" as a list of values, the shape the other
+		// "changed to" triggers use; the matcher read only an {operator,
+		// value} object, found none, and so matched every value. Both
+		// shapes are honoured.
+		if values := cfg.Strings("to"); len(values) > 0 {
+			return anyOrMemberFold(values, strings.TrimSpace(toText(event.Data["to"])))
+		}
 		return matchValueCondition(cfg.Object("to"), event.Data["to"])
 
 	case "contact.assigned":

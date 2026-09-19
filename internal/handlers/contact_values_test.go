@@ -109,6 +109,40 @@ func TestUpdateContact_RecordsFieldLevelActivity(t *testing.T) {
 	assert.Equal(t, models.FieldKeyCompany, events[0].Data["field"])
 }
 
+// The change carries what the value was and what it became. With only the
+// field's key, an automation narrowed to "lifecycle becomes customer" had
+// nothing to compare and the lifecycle funnel — which reads the new value from
+// the activity log — never counted a stage somebody set by hand.
+func TestUpdateContact_FieldChangeCarriesTheOldAndNewValue(t *testing.T) {
+	app := newTestApp(t)
+	org := seedFieldOrg(t, app)
+	admin := adminFor(t, app, org)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithPhoneNumber("15558130002"))
+
+	_, err := customfields.New(app.DB).SetValues(app.DB, org.ID, contact.ID,
+		models.FieldEntityContact, map[string]any{models.FieldKeyLifecycleStage: models.LifecycleLead}, nil)
+	require.NoError(t, err)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"fields": map[string]any{models.FieldKeyLifecycleStage: models.LifecycleCustomer},
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+	req.RequestCtx.SetUserValue("id", contact.ID.String())
+	require.NoError(t, app.UpdateContact(req))
+
+	var changed models.CRMEventOutbox
+	require.NoError(t, app.DB.Where("contact_id = ? AND type = ?", contact.ID, "contact.field_changed").
+		First(&changed).Error)
+	assert.Equal(t, models.LifecycleLead, changed.Data["from"])
+	assert.Equal(t, models.LifecycleCustomer, changed.Data["to"])
+
+	var stage models.CRMEventOutbox
+	require.NoError(t, app.DB.Where("contact_id = ? AND type = ?", contact.ID, "contact.lifecycle_stage_changed").
+		First(&stage).Error)
+	assert.Equal(t, models.LifecycleCustomer, stage.Data["stage"])
+	assert.Equal(t, models.LifecycleLead, stage.Data["from"])
+}
+
 // Re-saving an unchanged value must not fill the timeline with noise.
 func TestUpdateContact_UnchangedFieldRecordsNothing(t *testing.T) {
 	app := newTestApp(t)

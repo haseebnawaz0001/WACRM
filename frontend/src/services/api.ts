@@ -240,6 +240,8 @@ export interface ContactField {
   validation: Record<string, unknown>
   is_system: boolean
   is_required: boolean
+  /** What a new contact gets when nobody fills the field in. */
+  default_value?: { value?: unknown } | null
   show_in_list: boolean
   show_in_chat_panel: boolean
   group_label: string

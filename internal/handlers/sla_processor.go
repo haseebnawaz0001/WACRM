@@ -169,6 +169,9 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 			continue
 		}
 
+		transfer.Status = models.TransferStatusExpired
+		p.app.mirrorTransfer(&transfer)
+
 		closedCount++
 		p.app.Log.Info("Transfer auto-closed due to expiry",
 			"transfer_id", transfer.ID,

@@ -87,6 +87,26 @@ func (a *App) dealScope(orgID, userID uuid.UUID) func(*gorm.DB) *gorm.DB {
 	return deals.VisibleTo(userID, a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID))
 }
 
+// visibleDeal answers 404 unless the caller may see this deal, by the same
+// rule as the board and the list (plan 10, S9).
+//
+// Every by-id route looked the deal up by organization alone, so an agent the
+// board hides a deal from could still open it, edit it, move it, delete it or
+// read its history by putting its id in the URL.
+func (a *App) visibleDeal(r *fastglue.Request, orgID, userID, dealID uuid.UUID) bool {
+	query := a.DB.Model(&models.Deal{}).
+		Where("deals.id = ? AND deals.organization_id = ?", dealID, orgID)
+	if scope := a.dealScope(orgID, userID); scope != nil {
+		query = scope(query)
+	}
+	var found int64
+	if err := query.Count(&found).Error; err != nil || found == 0 {
+		_ = r.SendErrorEnvelope(fasthttp.StatusNotFound, "Deal not found", nil, "")
+		return false
+	}
+	return true
+}
+
 // broadcastDeal tells open boards that a card changed.
 //
 // The payload is ids and positions, not the deal: boards are shared and a
@@ -178,6 +198,11 @@ func (a *App) CreateDeal(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact id", nil, "")
 	}
+	// A contact the caller cannot open gets the answer a contact that does
+	// not exist gets; anything else confirms it is there.
+	if !a.canSeeContact(orgID, userID, contactID) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Contact not found", nil, "")
+	}
 
 	in := deals.CreateInput{
 		OrgID:     orgID,
@@ -215,13 +240,16 @@ func (a *App) CreateDeal(r *fastglue.Request) error {
 
 // GetDeal returns one deal.
 func (a *App) GetDeal(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceDeals, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceDeals, models.ActionRead)
 	if err != nil {
 		return err
 	}
 	dealID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid deal id", nil, "")
+	}
+	if !a.visibleDeal(r, orgID, userID, dealID) {
+		return nil
 	}
 
 	deal, err := a.Deals().Get(context.Background(), orgID, dealID)
@@ -252,6 +280,9 @@ func (a *App) UpdateDeal(r *fastglue.Request) error {
 	dealID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid deal id", nil, "")
+	}
+	if !a.visibleDeal(r, orgID, userID, dealID) {
+		return nil
 	}
 
 	var req updateDealRequest
@@ -309,6 +340,9 @@ func (a *App) DeleteDeal(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid deal id", nil, "")
 	}
+	if !a.visibleDeal(r, orgID, userID, dealID) {
+		return nil
+	}
 
 	if err := a.Deals().Delete(context.Background(), orgID, dealID, crmActorForUser(userID)); err != nil {
 		if errors.Is(err, deals.ErrNotFound) {
@@ -338,6 +372,9 @@ func (a *App) MoveDeal(r *fastglue.Request) error {
 	dealID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid deal id", nil, "")
+	}
+	if !a.visibleDeal(r, orgID, userID, dealID) {
+		return nil
 	}
 
 	var req moveDealRequest
@@ -374,13 +411,16 @@ func (a *App) MoveDeal(r *fastglue.Request) error {
 
 // DealHistory returns every stage move for a deal.
 func (a *App) DealHistory(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceDeals, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceDeals, models.ActionRead)
 	if err != nil {
 		return err
 	}
 	dealID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid deal id", nil, "")
+	}
+	if !a.visibleDeal(r, orgID, userID, dealID) {
+		return nil
 	}
 
 	history, err := a.Deals().History(context.Background(), orgID, dealID)

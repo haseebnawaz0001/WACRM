@@ -11,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/tasks"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // MaxBulkTasks caps one bulk request (plan 04).
@@ -182,6 +183,37 @@ func (a *App) BulkTasks(r *fastglue.Request) error {
 		"failed":   len(failures),
 		"failures": failures,
 	})
+}
+
+// taskScope restricts a task list to what the viewer may see, by the same rule
+// as canSeeTask: their own tasks, and tasks on contacts they can open. Nil for
+// a viewer who can read every contact.
+//
+// The "everyone" view skipped it, so any agent with tasks:read could list every
+// follow-up in the organization — customer names and all — including ones on
+// contacts the contact list deliberately hides from them (plan 10, S9).
+func (a *App) taskScope(orgID, userID uuid.UUID) func(*gorm.DB) *gorm.DB {
+	if a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
+		return nil
+	}
+	visible := a.scopeAssignedContact(
+		a.DB.Model(&models.Contact{}).Select("id").Where("organization_id = ?", orgID),
+		userID, orgID)
+	return func(q *gorm.DB) *gorm.DB {
+		return q.Where("tasks.owner_id = ? OR tasks.contact_id IN (?)", userID, visible)
+	}
+}
+
+// visibleTask loads a task the viewer may act on, answering 404 otherwise —
+// the same answer as a task that does not exist, because confirming one is
+// there on a contact they cannot open is itself the leak.
+func (a *App) visibleTask(r *fastglue.Request, orgID, userID, taskID uuid.UUID) (*models.Task, bool) {
+	task, err := a.Tasks().Get(context.Background(), orgID, taskID)
+	if err != nil || !a.canSeeTask(orgID, userID, task) {
+		_ = r.SendErrorEnvelope(fasthttp.StatusNotFound, "Task not found", nil, "")
+		return nil, false
+	}
+	return task, true
 }
 
 // canSeeTask applies the task's contact scope to the viewer.

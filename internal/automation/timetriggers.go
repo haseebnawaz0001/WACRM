@@ -172,9 +172,29 @@ func (e *Engine) dateFieldEvents(ctx context.Context, rule *models.AutomationRul
 		return nil, err
 	}
 
+	// The subject names the contact. It used to be only field, date and
+	// offset, and the event id is derived from rule and subject — so every
+	// contact sharing a date shared one id, the unique run index let the first
+	// through, and everyone else with a renewal that day was silently dropped.
+	//
+	// Runs made under the old id are filed against it, one contact per rule
+	// and date. That contact is skipped for the date, so correcting the id
+	// does not send them the message a second time.
+	legacyID := uuid.NewSHA1(timeTriggerNamespace,
+		[]byte(rule.ID.String()+"|"+fmt.Sprintf("%s:%s:%d", field, target, offset)))
+	var alreadyRan []uuid.UUID
+	if err := e.db().WithContext(ctx).Model(&models.AutomationRun{}).
+		Where("rule_id = ? AND event_id = ? AND contact_id IS NOT NULL", rule.ID, legacyID).
+		Pluck("contact_id", &alreadyRan).Error; err != nil {
+		return nil, err
+	}
+
 	out := make([]crmevents.Event, 0, len(rows))
 	for _, r := range rows {
-		subject := fmt.Sprintf("%s:%s:%d", field, r.ValueDate.Format("2006-01-02"), offset)
+		if containsID(alreadyRan, r.ContactID) {
+			continue
+		}
+		subject := fmt.Sprintf("%s:%s:%s:%d", r.ContactID, field, r.ValueDate.Format("2006-01-02"), offset)
 		out = append(out, e.syntheticEvent(rule, r.ContactID, subject, map[string]any{
 			"field": field,
 			"date":  r.ValueDate.Format("2006-01-02"),
@@ -200,4 +220,13 @@ func (e *Engine) syntheticEvent(rule *models.AutomationRule, contactID uuid.UUID
 		OccurredAt: time.Now().UTC(),
 	}
 	return event
+}
+
+func containsID(ids []uuid.UUID, want uuid.UUID) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
 }

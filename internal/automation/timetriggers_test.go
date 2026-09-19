@@ -8,6 +8,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/automation"
 	"github.com/shridarpatil/whatomate/internal/crmactions"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -232,4 +233,50 @@ func TestRunTimeTriggers_DateFieldIgnoresOtherDates(t *testing.T) {
 // once — the failure people most fear, and the hardest to take back.
 func TestTimeTriggerBatch_IsBounded(t *testing.T) {
 	assert.LessOrEqual(t, automation.TimeTriggerBatch, 1000)
+}
+
+// Every contact with a renewal on the day is due the reminder. The event id
+// is derived from the subject, and the subject did not name the contact, so
+// all of them shared one id and the unique run index let only the first
+// through — the rest were dropped without an error anywhere.
+func TestRunTimeTriggers_DateFieldFiresForEveryContactOnTheDay(t *testing.T) {
+	db, svc, engine, org, contact, _ := setup(t)
+
+	field := models.CustomFieldDefinition{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		EntityType:     models.FieldEntityContact,
+		Key:            "renewal_date",
+		Label:          "Renewal date",
+		Type:           models.FieldTypeDate,
+	}
+	require.NoError(t, db.Create(&field).Error)
+
+	due := utcDay(time.Now(), 7)
+	second := testutil.CreateTestContact(t, db, org.ID)
+	for _, id := range []uuid.UUID{contact.ID, second.ID} {
+		require.NoError(t, db.Create(&models.CustomFieldValue{
+			ID:             uuid.New(),
+			OrganizationID: org.ID,
+			EntityType:     models.FieldEntityContact,
+			EntityID:       id,
+			FieldID:        field.ID,
+			ValueDate:      &due,
+		}).Error)
+	}
+
+	timeRule(t, svc, org.ID, automation.TriggerDateField, map[string]any{
+		"field": "renewal_date", "offset_days": -7.0,
+	})
+
+	fired, err := engine.RunTimeTriggers(ctx())
+	require.NoError(t, err)
+	assert.Equal(t, 2, fired)
+	assert.Contains(t, contactTags(t, db, contact.ID), "Chased")
+	assert.Contains(t, contactTags(t, db, second.ID), "Chased")
+
+	// Still once per contact per date: the next tick changes nothing.
+	again, err := engine.RunTimeTriggers(ctx())
+	require.NoError(t, err)
+	assert.Equal(t, 0, again)
 }

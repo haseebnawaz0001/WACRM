@@ -211,3 +211,34 @@ func TestLifecycleFunnel_ExplainsHowItCounts(t *testing.T) {
 func uniquePhone(i int) string {
 	return "1555930000" + string(rune('0'+i))
 }
+
+// A contact that moved lead → customer in the period is one contact. Counting
+// per stage and summing up the funnel counted it at both, so every step before
+// customer was inflated by exactly the people who progressed.
+func TestLifecycleFunnel_CountsAProgressingContactOnce(t *testing.T) {
+	db, svc, org, viewer := setup(t)
+	contact := testutil.CreateTestContactWith(t, db, org.ID, testutil.WithPhoneNumber("15559200009"))
+
+	for _, stage := range []string{"lead", "customer"} {
+		require.NoError(t, activity.Record(db, activity.Entry{
+			OrgID: org.ID, ContactID: contact.ID, Type: "contact.field_changed",
+			Actor: crmevents.SystemActor(),
+			Data:  map[string]any{"field": models.FieldKeyLifecycleStage, "to": stage},
+		}))
+	}
+
+	funnel, err := svc.LifecycleFunnel(ctx(), viewer, lastMonth())
+	require.NoError(t, err)
+
+	reached := map[string]int64{}
+	for _, step := range funnel.Steps {
+		reached[step.Key] = step.Reached
+	}
+	assert.Equal(t, int64(1), reached["lead"], "one person, not two")
+	assert.Equal(t, int64(1), reached["customer"])
+	for _, step := range funnel.Steps {
+		if step.Key == "customer" {
+			assert.InDelta(t, 100.0, step.Conversion, 0.01)
+		}
+	}
+}

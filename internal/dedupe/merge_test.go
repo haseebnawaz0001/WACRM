@@ -3,6 +3,7 @@ package dedupe_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
@@ -294,6 +295,74 @@ func TestMerge_ResolvesTheSecondaryActiveConversation(t *testing.T) {
 		Where("contact_id = ? AND status <> ?", primary.ID, models.ConversationResolved).
 		Count(&active).Error)
 	assert.EqualValues(t, 1, active, "the survivor keeps exactly one active conversation")
+}
+
+// A contact has at most one active transfer — the index says so — and merging
+// two contacts that were both mid-handoff used to move the secondary's across
+// and fail on that index, so the merge could not be done at all. The survivor
+// keeps its own handoff; the secondary's ends.
+func TestMerge_BothMidHandoffKeepsThePrimarysTransfer(t *testing.T) {
+	db, svc, org, user := setup(t)
+
+	primary := contactWithPhone(t, db, org.ID, "15558400011", "15558400011")
+	secondary := contactWithPhone(t, db, org.ID, "15558400012", "15558400012")
+
+	transferFor := func(contact *models.Contact) models.AgentTransfer {
+		transfer := models.AgentTransfer{
+			BaseModel:       models.BaseModel{ID: uuid.New()},
+			OrganizationID:  org.ID,
+			ContactID:       contact.ID,
+			WhatsAppAccount: "acct",
+			PhoneNumber:     contact.PhoneNumber,
+			Status:          models.TransferStatusActive,
+			TransferredAt:   time.Now().UTC(),
+		}
+		require.NoError(t, db.Create(&transfer).Error)
+		return transfer
+	}
+	keep := transferFor(primary)
+	drop := transferFor(secondary)
+
+	_, err := svc.Merge(ctx(), dedupe.MergeInput{
+		OrgID: org.ID, PrimaryID: primary.ID, SecondaryID: secondary.ID, ActorID: user.ID,
+	})
+	require.NoError(t, err, "two handoffs must not make the merge impossible")
+
+	var kept, ended models.AgentTransfer
+	require.NoError(t, db.First(&kept, keep.ID).Error)
+	require.NoError(t, db.First(&ended, drop.ID).Error)
+	assert.Equal(t, models.TransferStatusActive, kept.Status)
+	assert.Equal(t, models.TransferStatusExpired, ended.Status)
+	assert.Equal(t, primary.ID, ended.ContactID, "its history still belongs to the survivor")
+}
+
+// Only the secondary mid-handoff: the handoff is the customer's, not the
+// record's, so it moves to the survivor still active.
+func TestMerge_MovesTheSecondarysOnlyHandoff(t *testing.T) {
+	db, svc, org, user := setup(t)
+
+	primary := contactWithPhone(t, db, org.ID, "15558400021", "15558400021")
+	secondary := contactWithPhone(t, db, org.ID, "15558400022", "15558400022")
+	transfer := models.AgentTransfer{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		ContactID:       secondary.ID,
+		WhatsAppAccount: "acct",
+		PhoneNumber:     secondary.PhoneNumber,
+		Status:          models.TransferStatusActive,
+		TransferredAt:   time.Now().UTC(),
+	}
+	require.NoError(t, db.Create(&transfer).Error)
+
+	_, err := svc.Merge(ctx(), dedupe.MergeInput{
+		OrgID: org.ID, PrimaryID: primary.ID, SecondaryID: secondary.ID, ActorID: user.ID,
+	})
+	require.NoError(t, err)
+
+	var moved models.AgentTransfer
+	require.NoError(t, db.First(&moved, transfer.ID).Error)
+	assert.Equal(t, models.TransferStatusActive, moved.Status)
+	assert.Equal(t, primary.ID, moved.ContactID)
 }
 
 // Without a snapshot, "why does this contact have that name?" has no answer.

@@ -213,6 +213,10 @@ func (setField) Execute(ctx context.Context, d Deps, rc RunContext, cfg Config) 
 		return map[string]any{"field": key, "value": value}, nil
 	}
 
+	// The old value travels with the change, as it does for an edit made by
+	// hand, so "changed from lead" is expressible downstream.
+	before, _ := customfields.New(d.DB).Values(ctx, rc.OrgID, rc.ContactID, models.FieldEntityContact)
+
 	var changed []string
 	err := d.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var setErr error
@@ -222,12 +226,23 @@ func (setField) Execute(ctx context.Context, d Deps, rc RunContext, cfg Config) 
 			return setErr
 		}
 		for _, field := range changed {
-			event := crmevents.New(rc.OrgID, "contact.field_changed", rc.Actor, map[string]any{
-				"field": field, "to": value,
-			}).ForContact(rc.ContactID)
-			event.Origin = rc.Origin
-			if err := crmevents.PublishTx(tx, event); err != nil {
-				return err
+			events := []crmevents.Event{crmevents.New(rc.OrgID, "contact.field_changed", rc.Actor, map[string]any{
+				"field": field, "from": before[field], "to": value,
+			})}
+			// A stage set by a rule is a stage change like any other. Without
+			// its own event, "became a customer" rules never saw it and the
+			// lifecycle funnel missed every contact an automation promoted.
+			if field == models.FieldKeyLifecycleStage {
+				events = append(events, crmevents.New(rc.OrgID, "contact.lifecycle_stage_changed", rc.Actor, map[string]any{
+					"stage": value, "from": before[field], "to": value,
+				}))
+			}
+			for _, event := range events {
+				event = event.ForContact(rc.ContactID)
+				event.Origin = rc.Origin
+				if err := crmevents.PublishTx(tx, event); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

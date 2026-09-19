@@ -238,3 +238,39 @@ func TestTasksByAgent_AnAgentSeesOnlyTheirOwnRow(t *testing.T) {
 	require.Len(t, result.Rows, 1)
 	assert.Equal(t, mine.ID.String(), result.Rows[0].UserID)
 }
+
+// Each duration belongs to whoever did that part. An agent who only closed a
+// conversation somebody else answered was credited with that colleague's
+// response time, which made a closer look fast or slow for work they never
+// did.
+func TestAgentPerformance_FirstResponseBelongsToWhoeverResponded(t *testing.T) {
+	db, svc, org, viewer := setup(t)
+	responder := testutil.CreateTestUser(t, db, org.ID)
+	closer := testutil.CreateTestUser(t, db, org.ID)
+
+	opened := time.Now().UTC().Add(-2 * time.Hour)
+	responded := opened.Add(90 * time.Second)
+	resolved := opened.Add(time.Hour)
+	conversationWith(t, db, org.ID, anotherContact(t, db, org.ID, 50).ID, models.Conversation{
+		OpenedAt:               opened,
+		Status:                 models.ConversationResolved,
+		FirstCustomerMessageAt: &opened,
+		FirstResponseAt:        &responded,
+		FirstResponderID:       &responder.ID,
+		ResolvedAt:             &resolved,
+		ResolvedByID:           &closer.ID,
+	})
+
+	result, err := svc.AgentPerformance(ctx(), viewer, lastMonth(), nil)
+	require.NoError(t, err)
+
+	byUser := map[string]reports.AgentRow{}
+	for _, row := range result.Rows {
+		byUser[row.UserID] = row
+	}
+	require.NotNil(t, byUser[responder.ID.String()].FirstResponseMedianSeconds)
+	assert.InDelta(t, 90, *byUser[responder.ID.String()].FirstResponseMedianSeconds, 0.01)
+	assert.Nil(t, byUser[closer.ID.String()].FirstResponseMedianSeconds,
+		"the closer did not respond first, so they have no first response to report")
+	require.NotNil(t, byUser[closer.ID.String()].ResolutionMedianSeconds)
+}

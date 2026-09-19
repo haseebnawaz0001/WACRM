@@ -195,6 +195,22 @@ func (a *App) ExportReport(r *fastglue.Request) error {
 		return err
 	}
 	key, _ := r.RequestCtx.UserValue("key").(string)
+
+	// An export is the report's data in another format, so it answers to the
+	// same permissions as the report's own page. Export skipped them: the
+	// pipeline funnel is deal data and the task report is task data, and
+	// reports:export alone handed both to people refused them on screen.
+	switch key {
+	case "pipeline-funnel":
+		if !a.HasPermission(userID, models.ResourceDeals, models.ActionRead, orgID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+		}
+	case "tasks-by-agent":
+		if !a.HasPermission(userID, models.ResourceTasks, models.ActionRead, orgID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+		}
+	}
+
 	viewer, period := a.reportContext(r, orgID, userID)
 
 	rows, err := a.reportRows(context.Background(), key, r, viewer, period, orgID)

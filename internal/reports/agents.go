@@ -62,11 +62,13 @@ func (s *Service) AgentPerformance(ctx context.Context, v Viewer, r Range, teamI
 			count(*) AS handled,
 			percentile_cont(0.5) WITHIN GROUP (
 				ORDER BY EXTRACT(EPOCH FROM (c.first_response_at - c.first_customer_message_at))
-			) FILTER (WHERE c.first_response_at IS NOT NULL AND c.first_customer_message_at IS NOT NULL)
+			) FILTER (WHERE c.first_responder_id = u.id
+			            AND c.first_response_at IS NOT NULL AND c.first_customer_message_at IS NOT NULL)
 				AS first_response_median,
 			percentile_cont(0.9) WITHIN GROUP (
 				ORDER BY EXTRACT(EPOCH FROM (c.first_response_at - c.first_customer_message_at))
-			) FILTER (WHERE c.first_response_at IS NOT NULL AND c.first_customer_message_at IS NOT NULL)
+			) FILTER (WHERE c.first_responder_id = u.id
+			            AND c.first_response_at IS NOT NULL AND c.first_customer_message_at IS NOT NULL)
 				AS first_response_p90,
 			percentile_cont(0.5) WITHIN GROUP (
 				ORDER BY EXTRACT(EPOCH FROM (c.resolved_at - c.opened_at))
@@ -79,7 +81,10 @@ func (s *Service) AgentPerformance(ctx context.Context, v Viewer, r Range, teamI
 			count(*) FILTER (WHERE c.resolved_by_id = u.id) AS resolved,
 			count(*) FILTER (WHERE c.resolved_by_id = u.id AND c.reopened_count > 0) AS reopened`).
 		// An agent counts as handling a conversation if they answered it first
-		// or closed it. Assignment alone is not work.
+		// or closed it. Assignment alone is not work. Each duration belongs to
+		// whoever did that part: the join brings in the closer too, and without
+		// the first_responder_id filter an agent who only resolved a
+		// conversation was credited with somebody else's response time.
 		Joins("JOIN users u ON u.id = c.first_responder_id OR u.id = c.resolved_by_id").
 		Where("c.organization_id = ?", v.OrgID).
 		Where("c.opened_at >= ? AND c.opened_at <= ?", r.From, r.To)

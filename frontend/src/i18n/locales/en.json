@@ -553,6 +553,7 @@
     "phoneHint": "Enter phone number with country code (without +)",
     "namePlaceholder": "John Doe",
     "phoneRequired": "Phone number is required",
+    "requiredFieldsMissing": "Fill in the required fields: {fields}",
     "deleteWarning": "This will delete the contact and hide their conversation. If they message again, the contact will be restored.",
     "openChat": "Open chat",
     "never": "Never",

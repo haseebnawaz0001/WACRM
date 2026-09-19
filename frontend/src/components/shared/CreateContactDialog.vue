@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { contactsService, accountsService, type Tag } from '@/services/api'
+import { contactsService, accountsService, contactFieldsService, type Tag, type ContactField } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { toast } from 'vue-sonner'
 import { Loader2, Check, ChevronsUpDown, X } from 'lucide-vue-next'
@@ -44,13 +44,56 @@ const tagSelectorOpen = ref(false)
 const availableTags = ref<Tag[]>([])
 const availableAccounts = ref<{ id: string; name: string; phone_number: string }[]>([])
 
+/**
+ * The organization's required fields, asked for up front.
+ *
+ * The server refuses a contact typed in by hand without them, and this dialog
+ * used to offer no way to give them — so the moment an admin marked any field
+ * required, nobody could add a contact from the UI at all. Fields with a
+ * default are shown filled in, so the person can see what the contact will get.
+ */
+const contactFields = ref<ContactField[]>([])
+const fieldValues = ref<Record<string, any>>({})
+const requiredFields = computed(() =>
+  contactFields.value.filter(field => field.is_required && !field.archived_at)
+)
+
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
-    formData.value = { ...defaultFormData }
+    formData.value = { ...defaultFormData, tags: [] }
+    fieldValues.value = {}
     fetchTags()
     fetchAccounts()
+    fetchFields()
   }
 })
+
+async function fetchFields() {
+  try {
+    const { data: envelope } = await contactFieldsService.list()
+    const data = (envelope as any)?.data ?? envelope
+    contactFields.value = data.fields || []
+    const prefilled: Record<string, any> = {}
+    for (const field of requiredFields.value) {
+      const fallback = field.default_value?.value
+      if (fallback !== undefined && fallback !== null) prefilled[field.key] = String(fallback)
+    }
+    fieldValues.value = prefilled
+  } catch {
+    // The server still enforces required fields; without the list the dialog
+    // just cannot help fill them in.
+    contactFields.value = []
+  }
+}
+
+/** Only the values somebody gave; an empty box is "not set", not "". */
+function filledFieldValues(): Record<string, any> | undefined {
+  const out: Record<string, any> = {}
+  for (const [key, value] of Object.entries(fieldValues.value)) {
+    if (value !== undefined && value !== null && String(value).trim() !== '') out[key] = value
+  }
+  return Object.keys(out).length ? out : undefined
+}
 
 async function fetchTags() {
   try {
@@ -77,13 +120,20 @@ async function saveContact() {
     toast.error(t('contacts.phoneRequired'))
     return
   }
+  const fields = filledFieldValues()
+  const missing = requiredFields.value.filter(field => fields?.[field.key] === undefined)
+  if (missing.length) {
+    toast.error(t('contacts.requiredFieldsMissing', { fields: missing.map(field => field.label).join(', ') }))
+    return
+  }
   isSubmitting.value = true
   try {
     const response = await contactsService.create({
       phone_number: formData.value.phone_number.trim(),
       profile_name: formData.value.profile_name.trim() || undefined,
       whatsapp_account: formData.value.whatsapp_account || undefined,
-      tags: formData.value.tags.length > 0 ? formData.value.tags : undefined
+      tags: formData.value.tags.length > 0 ? formData.value.tags : undefined,
+      fields
     })
     const contact = response.data?.data || response.data
     toast.success(t('common.createdSuccess', { resource: t('resources.Contact') }))
@@ -138,6 +188,27 @@ function closeDialog() {
         <div class="space-y-2">
           <Label>{{ $t('contacts.profileName') }}</Label>
           <Input v-model="formData.profile_name" :placeholder="$t('contacts.namePlaceholder')" />
+        </div>
+        <div v-for="field in requiredFields" :key="field.id" class="space-y-2">
+          <Label :for="`new-contact-field-${field.key}`">
+            {{ field.label }} <span class="text-destructive">*</span>
+          </Label>
+          <Select v-if="field.type === 'dropdown'" v-model="fieldValues[field.key]">
+            <SelectTrigger :id="`new-contact-field-${field.key}`" :aria-label="field.label">
+              <SelectValue :placeholder="t('contactFields.notSet')" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="option in field.options || []" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            v-else
+            :id="`new-contact-field-${field.key}`"
+            v-model="fieldValues[field.key]"
+            :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : 'text'"
+          />
         </div>
         <div v-if="availableAccounts.length > 0" class="space-y-2">
           <Label>{{ $t('contacts.whatsappAccount') }}</Label>

@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/conversation"
 	"github.com/shridarpatil/whatomate/internal/crmactions"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -183,6 +185,27 @@ func TestCreateTask_RendersTheTitleFromTemplateVariables(t *testing.T) {
 	var task models.Task
 	require.NoError(t, db.Where("contact_id = ?", contact.ID).First(&task).Error)
 	assert.Equal(t, models.TaskSourceAutomation, task.Source)
+}
+
+// Validate accepts "open", so the builder offers it and rules get saved with
+// it. Execute had no branch for it and failed every run — a rule that looked
+// fine and never once worked.
+func TestSetConversationStatus_OpenTakesAConversationOutOfPending(t *testing.T) {
+	db, deps, rc, org, contact, user := setup(t)
+	svc := conversation.New(db)
+	_, err := svc.TouchInbound(ctx(), org.ID, contact.ID, "acct", time.Now().UTC(), false)
+	require.NoError(t, err)
+	_, err = svc.SetPending(ctx(), org.ID, contact.ID, crmevents.UserActor(user.ID, ""))
+	require.NoError(t, err)
+
+	cfg := crmactions.Config{"status": "open"}
+	require.NoError(t, crmactions.Validate(crmactions.TypeSetConversationStatus, cfg))
+	_, err = crmactions.Execute(ctx(), deps, rc, crmactions.TypeSetConversationStatus, cfg)
+	require.NoError(t, err)
+
+	live, err := svc.Active(ctx(), org.ID, contact.ID)
+	require.NoError(t, err)
+	assert.Equal(t, models.ConversationOpen, live.Status)
 }
 
 // An owner who does not exist is a configuration problem: nobody becomes

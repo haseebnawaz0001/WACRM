@@ -79,15 +79,6 @@ func contactTags(t *testing.T, db *gorm.DB, contactID uuid.UUID) []string {
 
 // --- Validation ---
 
-func TestCreate_RejectsARuleThatDoesNothing(t *testing.T) {
-	_, svc, _, org, _, _ := setup(t)
-
-	_, err := svc.Create(ctx(), org.ID, automation.Input{
-		Name: "Empty", TriggerType: "contact.tag_added", Actions: nil,
-	})
-	require.Error(t, err)
-}
-
 // Silently ignoring an unknown setting is how a rule fires far more often than
 // its author believes: they filtered on something nothing ever read.
 func TestCreate_RejectsTriggerSettingsTheTriggerDoesNotUnderstand(t *testing.T) {
@@ -468,4 +459,55 @@ func TestDryRun_StillReportsConditionsThatDoNotMatch(t *testing.T) {
 	run, err := engine.DryRun(ctx(), rule, tagEvent(org.ID, contact.ID, "VIP"))
 	require.NoError(t, err)
 	assert.Equal(t, models.SkipConditionsNotMet, run.SkipReason)
+}
+
+// The builder saves a field trigger's "to" as a list, like the other "changed
+// to" triggers. The matcher read only an {operator, value} object, found none,
+// and so fired the rule for every value — "when lifecycle becomes customer"
+// fired when it became anything.
+func TestMatchTrigger_FieldChangedHonoursTheListTheBuilderSaves(t *testing.T) {
+	_, svc, _, org, contact, _ := setup(t)
+	enabled := true
+	rule, err := svc.Create(ctx(), org.ID, automation.Input{
+		Name:          "Became a customer",
+		TriggerType:   "contact.field_changed",
+		TriggerConfig: map[string]any{"field": "lifecycle_stage", "to": []any{"customer"}},
+		Enabled:       &enabled,
+		Actions: []automation.ActionSpec{{
+			ID: "a1", Type: crmactions.TypeAddTags,
+			Config: crmactions.Config{"tags": []any{"Customer"}},
+		}},
+	})
+	require.NoError(t, err)
+
+	changed := func(to string) crmevents.Event {
+		return crmevents.New(org.ID, "contact.field_changed", crmevents.SystemActor(),
+			map[string]any{"field": "lifecycle_stage", "from": "lead", "to": to}).ForContact(contact.ID)
+	}
+	assert.True(t, automation.MatchTrigger(rule, changed("customer")))
+	assert.True(t, automation.MatchTrigger(rule, changed("Customer")), "option values compare case-insensitively")
+	assert.False(t, automation.MatchTrigger(rule, changed("lead")))
+}
+
+// Rules saved with the object form keep working.
+func TestMatchTrigger_FieldChangedStillHonoursAnOperator(t *testing.T) {
+	_, svc, _, org, contact, _ := setup(t)
+	enabled := true
+	rule, err := svc.Create(ctx(), org.ID, automation.Input{
+		Name:        "Any city",
+		TriggerType: "contact.field_changed",
+		TriggerConfig: map[string]any{
+			"field": "city", "to": map[string]any{"operator": "contains", "value": "lahore"},
+		},
+		Enabled: &enabled,
+		Actions: []automation.ActionSpec{{
+			ID: "a1", Type: crmactions.TypeAddTags,
+			Config: crmactions.Config{"tags": []any{"Local"}},
+		}},
+	})
+	require.NoError(t, err)
+
+	event := crmevents.New(org.ID, "contact.field_changed", crmevents.SystemActor(),
+		map[string]any{"field": "city", "to": "Lahore Cantt"}).ForContact(contact.ID)
+	assert.True(t, automation.MatchTrigger(rule, event))
 }

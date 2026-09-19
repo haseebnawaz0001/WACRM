@@ -151,6 +151,8 @@ func (a *App) ListTasks(r *fastglue.Request) error {
 		}
 	}
 
+	opts.Scope = a.taskScope(orgID, userID)
+
 	rows, total, err := a.Tasks().List(context.Background(), orgID, opts)
 	if err != nil {
 		a.Log.Error("Failed to list tasks", "error", err, "org_id", orgID)
@@ -194,6 +196,12 @@ func (a *App) CreateTask(r *fastglue.Request) error {
 	contactID, err := uuid.Parse(req.ContactID)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact id", nil, "")
+	}
+	// A follow-up is about a contact; raising one on a contact the viewer
+	// cannot open would confirm it exists and attach their work to it. The
+	// answer is the one a contact that does not exist gets.
+	if !a.canSeeContact(orgID, userID, contactID) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Contact not found", nil, "")
 	}
 
 	in := tasks.CreateInput{
@@ -271,6 +279,9 @@ func (a *App) closeTask(r *fastglue.Request, orgID, userID uuid.UUID, complete b
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid task id", nil, "")
 	}
+	if _, visible := a.visibleTask(r, orgID, userID, taskID); !visible {
+		return nil
+	}
 
 	actor := crmActorForUser(userID)
 	var task *models.Task
@@ -300,6 +311,9 @@ func (a *App) ReassignTask(r *fastglue.Request) error {
 	taskID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid task id", nil, "")
+	}
+	if _, visible := a.visibleTask(r, orgID, userID, taskID); !visible {
+		return nil
 	}
 
 	var req struct {
@@ -376,6 +390,9 @@ func (a *App) UpdateTask(r *fastglue.Request) error {
 	if err != nil {
 		return nil
 	}
+	if _, visible := a.visibleTask(r, orgID, userID, taskID); !visible {
+		return nil
+	}
 
 	var req UpdateTaskRequest
 	if err := a.decodeRequest(r, &req); err != nil {
@@ -440,6 +457,9 @@ func (a *App) ReopenTask(r *fastglue.Request) error {
 
 	taskID, err := parsePathUUID(r, "id", "task")
 	if err != nil {
+		return nil
+	}
+	if _, visible := a.visibleTask(r, orgID, userID, taskID); !visible {
 		return nil
 	}
 

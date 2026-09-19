@@ -316,6 +316,21 @@ func (s *Service) Merge(ctx context.Context, in MergeInput) (*models.ContactMerg
 
 		moved := map[string]any{}
 
+		// A contact has at most one live handoff and one live chatbot session.
+		// When both records have one, moving the secondary's across would give
+		// the survivor two — which the one-active-transfer index refuses, so
+		// the whole merge failed, and which for sessions means two prompt
+		// nodes waiting on the same customer's next message. The primary's is
+		// the one that carries on; the secondary's ends here. When only the
+		// secondary has one, it moves across below and the handoff survives.
+		ended, err := endDuplicateWork(tx, in.OrgID, in.PrimaryID, in.SecondaryID)
+		if err != nil {
+			return err
+		}
+		for key, count := range ended {
+			moved[key] = count
+		}
+
 		// Re-point everything that referenced the secondary. Moving rows keeps
 		// one history rather than leaving half of it unreachable.
 		//
@@ -467,6 +482,55 @@ func (s *Service) addIdentity(tx *gorm.DB, orgID, contactID uuid.UUID, identityT
 		Normalized:     normalized,
 		Source:         source,
 	}).Error
+}
+
+// endDuplicateWork ends the secondary's live transfer and chatbot session when
+// the primary has its own, and reports what it ended for the merge snapshot.
+func endDuplicateWork(tx *gorm.DB, orgID, primaryID, secondaryID uuid.UUID) (map[string]any, error) {
+	ended := map[string]any{}
+	now := time.Now().UTC()
+
+	var primaryTransfers int64
+	if err := tx.Model(&models.AgentTransfer{}).
+		Where("organization_id = ? AND contact_id = ? AND status = ?",
+			orgID, primaryID, models.TransferStatusActive).
+		Count(&primaryTransfers).Error; err != nil {
+		return nil, err
+	}
+	if primaryTransfers > 0 {
+		result := tx.Model(&models.AgentTransfer{}).
+			Where("organization_id = ? AND contact_id = ? AND status = ?",
+				orgID, secondaryID, models.TransferStatusActive).
+			Updates(map[string]any{"status": models.TransferStatusExpired, "resumed_at": now})
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected > 0 {
+			ended["agent_transfers_ended"] = result.RowsAffected
+		}
+	}
+
+	var primarySessions int64
+	if err := tx.Model(&models.ChatbotSession{}).
+		Where("organization_id = ? AND contact_id = ? AND status = ?",
+			orgID, primaryID, models.SessionStatusActive).
+		Count(&primarySessions).Error; err != nil {
+		return nil, err
+	}
+	if primarySessions > 0 {
+		result := tx.Model(&models.ChatbotSession{}).
+			Where("organization_id = ? AND contact_id = ? AND status = ?",
+				orgID, secondaryID, models.SessionStatusActive).
+			Updates(map[string]any{"status": models.SessionStatusCancelled, "completed_at": now})
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected > 0 {
+			ended["chatbot_sessions_ended"] = result.RowsAffected
+		}
+	}
+
+	return ended, nil
 }
 
 // mergeTags unions two tag lists without duplicates.

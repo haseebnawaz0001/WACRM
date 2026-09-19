@@ -328,18 +328,53 @@ async function applySnooze(until: Date) {
   }
 }
 
+const isPicking = ref(false)
+
 /**
- * Takes the next waiting conversation and opens it.
+ * Takes the customer who has waited longest and opens them.
  *
  * The point of a queue is not having to choose: an agent finishing one
  * conversation should be able to start the next without reading a list.
+ *
+ * The server decides, not the list on screen. The list is sorted newest first,
+ * so the first unassigned row was the customer who had waited *least*, and
+ * when nothing was unassigned it took the first row regardless — which could
+ * be a colleague's conversation. The server's queue is oldest first, only
+ * draws from queues this person may take from, honours the organization's
+ * "allow queue pickup" setting, and locks so two agents never get the same
+ * customer.
+ *
+ * A conversation can wait with no transfer behind it (a handoff suppressed out
+ * of hours, a chat that never had a bot), so when the transfer queue is empty
+ * the longest-waiting unassigned conversation is next. Never an assigned one.
  */
 async function pickNext() {
-  const next = queueRows.value.find(r => !r.assignee_id && r.handling !== 'bot')
-    ?? queueRows.value[0]
-  if (!next) return
-  await takeConversation(next.contact_id)
-  router.push(`/inbox/${next.contact_id}`)
+  if (isPicking.value) return
+  isPicking.value = true
+  try {
+    const { data: envelope } = await chatbotService.pickNextTransfer()
+    const picked = ((envelope as any)?.data ?? envelope)?.transfer
+    let contactId: string | undefined = picked?.contact_id
+
+    if (!contactId) {
+      const { data: listEnvelope } = await inboxService.list({ view: 'unassigned', sort: 'waiting', limit: 1 })
+      const waiting = (((listEnvelope as any)?.data ?? listEnvelope)?.conversations || []) as InboxRow[]
+      const next = waiting.find(r => !r.assignee_id)
+      if (!next) {
+        toast.info(t('inbox.queueEmpty'))
+        return
+      }
+      await inboxService.assign(next.contact_id, authStore.user?.id)
+      contactId = next.contact_id
+    }
+
+    await refreshList()
+    router.push(`/inbox/${contactId}`)
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, t('common.error')))
+  } finally {
+    isPicking.value = false
+  }
 }
 
 const route = useRoute()
@@ -2611,7 +2646,7 @@ async function sendMediaMessage() {
                 variant="outline"
                 size="sm"
                 class="h-7 shrink-0 px-2 text-[12px]"
-                :disabled="!queueRows.length"
+                :disabled="isPicking"
                 @click="pickNext"
               >
                 {{ $t('inbox.pickNext') }}

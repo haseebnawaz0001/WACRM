@@ -537,6 +537,11 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 			"completed_at": time.Now(),
 		})
 
+	// Same as a handoff from the chatbot: a person owns the conversation now,
+	// even while it waits in a queue, and the conversation shows who.
+	a.setConversationHandling(orgID, contactID, models.HandlingHuman)
+	a.mirrorTransfer(&transfer)
+
 	// Broadcast WebSocket notification
 	a.broadcastTransferCreated(&transfer, contact)
 
@@ -780,6 +785,7 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		a.Log.Error("Failed to assign transfer", "error", err, "transfer_id", transfer.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign transfer", nil, "")
 	}
+	a.mirrorTransfer(&transfer)
 
 	// Update contact assignment using the same rule as pickup / auto-assign:
 	// only pin the relationship manager when AssignToSameAgent is enabled and
@@ -1189,6 +1195,7 @@ func (a *App) saveAndFinalizeTransfer(transfer *models.AgentTransfer, account *m
 	// A transfer means a person now owns the conversation, even while it is
 	// still waiting in a queue (plan 10, S5).
 	a.setConversationHandling(account.OrganizationID, contact.ID, models.HandlingHuman)
+	a.mirrorTransfer(transfer)
 
 	// Broadcast to WebSocket
 	a.broadcastTransferCreated(transfer, contact)
@@ -1410,6 +1417,17 @@ func (a *App) setConversationHandling(orgID, contactID uuid.UUID, handling model
 	if err := a.Conversations().SetHandling(context.Background(), orgID, contactID, handling); err != nil {
 		a.Log.Error("Failed to update conversation handling",
 			"error", err, "contact_id", contactID, "handling", handling)
+	}
+}
+
+// mirrorTransfer copies a transfer's agent and team onto the live
+// conversation (plan 03, §4.4). The inbox lists conversations by assignee, so
+// a transfer that changed hands without this left the customer out of the
+// agent's Mine view and still in the queue.
+func (a *App) mirrorTransfer(t *models.AgentTransfer) {
+	if err := transfers.MirrorToConversation(a.DB, t); err != nil {
+		a.Log.Error("Failed to mirror transfer onto conversation",
+			"error", err, "transfer_id", t.ID, "contact_id", t.ContactID)
 	}
 }
 

@@ -822,7 +822,11 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 		// Try to find the contact first using the FindContact helper
 		contact, err := contactutil.FindContact(a.DB, account.OrganizationID, contactPhone)
 		if err == nil {
-			if err := a.DB.Delete(contact).Error; err != nil {
+			// Recorded as a sync removal, the one deletion a later message may
+			// undo: the phone's address book dropped a number, nobody decided
+			// the customer should go.
+			if err := a.Contacts().Delete(context.Background(), account.OrganizationID, contact.ID,
+				contacts.ReasonAddressBookSync, crmevents.SystemActor()); err != nil {
 				a.Log.Error("Failed to delete contact on sync remove", "contact_id", contact.ID, "error", err)
 			} else {
 				a.Log.Info("Soft-deleted synced contact (remove) from mobile app", "contact_id", contact.ID, "phone", contactPhone)

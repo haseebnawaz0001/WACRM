@@ -182,6 +182,28 @@ func TestRecordOutbound_AutoPendingWhenConfigured(t *testing.T) {
 	assert.Equal(t, models.ConversationPending, replied.Status)
 }
 
+// Production builds the service with SettingsFor, reading each organization's
+// own inbox rules. The pending rule read the static defaults instead, so an
+// organization that switched it on saw nothing change — the test above passed
+// only because it set the defaults directly.
+func TestRecordOutbound_AutoPendingFollowsTheOrganizationsSetting(t *testing.T) {
+	db, _, org, contact := setup(t)
+	svc := conversation.New(db)
+	svc.SettingsFor = func(uuid.UUID) conversation.Settings {
+		set := conversation.DefaultSettings()
+		set.AutoPendingOnAgentReply = true
+		return set
+	}
+	agent := uuid.New()
+
+	_, err := svc.TouchInbound(ctx(), org.ID, contact.ID, "acct", time.Now().UTC(), true)
+	require.NoError(t, err)
+
+	replied, err := svc.RecordOutbound(ctx(), org.ID, contact.ID, models.SenderAgent, &agent, time.Now().UTC())
+	require.NoError(t, err)
+	assert.Equal(t, models.ConversationPending, replied.Status)
+}
+
 // --- Resolving and reopening ---
 
 func TestResolve(t *testing.T) {

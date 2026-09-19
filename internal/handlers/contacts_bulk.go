@@ -131,6 +131,7 @@ func (a *App) applyBulkChange(orgID, userID uuid.UUID, contact *models.Contact, 
 	}
 
 	if len(req.Fields) > 0 {
+		before := a.fieldValuesBefore(orgID, contact.ID)
 		changedKeys, err := customfields.New(a.DB).SetValues(
 			a.DB, orgID, contact.ID, models.FieldEntityContact, req.Fields, &userID)
 		if err != nil {
@@ -138,14 +139,7 @@ func (a *App) applyBulkChange(orgID, userID uuid.UUID, contact *models.Contact, 
 				"error", err, "contact_id", contact.ID)
 		} else if len(changedKeys) > 0 {
 			changed = true
-			for _, key := range changedKeys {
-				a.PublishEvent(crmevents.New(orgID, "contact.field_changed",
-					crmevents.UserActor(userID, ""), map[string]any{"field": key}).
-					ForContact(contact.ID))
-				if key == models.FieldKeyLifecycleStage {
-					a.publishLifecycleStageChanged(orgID, userID, contact.ID)
-				}
-			}
+			a.publishFieldChanges(orgID, crmevents.UserActor(userID, ""), contact.ID, before, changedKeys)
 		}
 	}
 

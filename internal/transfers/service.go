@@ -112,6 +112,9 @@ func (s *Service) PickNext(ctx context.Context, in PickInput) (*models.AgentTran
 			if err := tx.Save(&row).Error; err != nil {
 				return err
 			}
+			if err := MirrorToConversation(tx, &row); err != nil {
+				return err
+			}
 
 			if in.AssignContactOwner {
 				// Only when the contact has no owner: the active transfer
@@ -199,12 +202,17 @@ func (s *Service) ReturnToQueue(ctx context.Context, orgID, userID uuid.UUID) ([
 			if err := lockContact(tx, transfer.ContactID); err != nil {
 				return err
 			}
-			return tx.Model(&models.AgentTransfer{}).
+			if err := tx.Model(&models.AgentTransfer{}).
 				Where("id = ? AND status = ?", transfer.ID, models.TransferStatusActive).
 				Updates(map[string]any{
 					"agent_id":     nil,
 					"picked_up_at": nil,
-				}).Error
+				}).Error; err != nil {
+				return err
+			}
+			queued := transfer
+			queued.AgentID = nil
+			return MirrorToConversation(tx, &queued)
 		})
 		if err != nil {
 			// One stuck contact must not strand the agent's other
@@ -252,7 +260,7 @@ func (s *Service) Resume(ctx context.Context, orgID, transferID, byUserID uuid.U
 			return err
 		}
 		out = transfer
-		return nil
+		return MirrorToConversation(tx, &transfer)
 	})
 
 	switch {
@@ -280,9 +288,14 @@ func (s *Service) Expire(ctx context.Context, orgID, transferID uuid.UUID) error
 		if err := lockContact(tx, transfer.ContactID); err != nil {
 			return err
 		}
-		return tx.Model(&models.AgentTransfer{}).
+		result := tx.Model(&models.AgentTransfer{}).
 			Where("id = ? AND status = ?", transferID, models.TransferStatusActive).
-			Update("status", models.TransferStatusExpired).Error
+			Update("status", models.TransferStatusExpired)
+		if result.Error != nil || result.RowsAffected == 0 {
+			return result.Error
+		}
+		transfer.Status = models.TransferStatusExpired
+		return MirrorToConversation(tx, &transfer)
 	})
 }
 

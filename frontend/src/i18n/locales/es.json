@@ -470,6 +470,7 @@
     "phoneHint": "Ingrese el número de teléfono con código de país (sin +)",
     "namePlaceholder": "Juan Pérez",
     "phoneRequired": "El número de teléfono es obligatorio",
+    "requiredFieldsMissing": "Completa los campos obligatorios: {fields}",
     "deleteWarning": "Esto eliminará el contacto y ocultará su conversación. Si envía un mensaje nuevamente, el contacto se restaurará.",
     "openChat": "Abrir chat",
     "never": "Nunca",

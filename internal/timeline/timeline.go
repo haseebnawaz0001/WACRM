@@ -37,6 +37,7 @@ const (
 	TypeAssignment   = "assignment"
 	TypeTransfer     = "transfer"
 	TypeLifecycle    = "lifecycle_stage"
+	TypeDeal         = "deal"
 	// TypeCampaignSend is a bulk message this contact received (plan 02).
 	// Read straight from the recipients table rather than copied into the
 	// activity log: a campaign to forty thousand people would otherwise write
@@ -199,7 +200,7 @@ func (s *Service) Build(ctx context.Context, orgID, contactID uuid.UUID, opts Op
 		items = append(items, sessions...)
 	}
 
-	activities, err := s.activities(ctx, orgID, contactID, opts, limit)
+	activities, err := s.activities(ctx, orgID, contactID, opts, want, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -362,10 +363,11 @@ func (s *Service) notes(ctx context.Context, orgID, contactID uuid.UUID, opts Op
 }
 
 // activities reads the recorded state changes and maps them to item types.
-func (s *Service) activities(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, limit int) ([]Item, error) {
+func (s *Service) activities(ctx context.Context, orgID, contactID uuid.UUID, opts Opts, want map[string]bool, limit int) ([]Item, error) {
 	q := s.DB.WithContext(ctx).Model(&models.ContactActivity{}).
 		Where("organization_id = ? AND contact_id = ?", orgID, contactID)
 	q = opts.bound(q, "occurred_at")
+	q = narrowActivities(q, want)
 	// Excluded in SQL rather than after the read, so a contact whose history is
 	// mostly deal activity still fills a page for a viewer who cannot see deals.
 	if len(opts.HideActivity) > 0 {
@@ -435,25 +437,71 @@ func changedFieldName(data map[string]any) string {
 	return strings.ToUpper(words[:1]) + words[1:]
 }
 
-// itemTypeForActivity groups activity types into what the UI renders.
+// activityItemTypes groups activity types into what the UI renders. One table
+// serves both directions: labelling a row, and narrowing the query when the
+// reader asks for one kind of entry.
+var activityItemTypes = map[string]string{
+	"conversation.created":            TypeConversation,
+	"conversation.status_changed":     TypeConversation,
+	"conversation.assigned":           TypeAssignment,
+	"contact.assigned":                TypeAssignment,
+	"transfer.created":                TypeTransfer,
+	"transfer.assigned":               TypeTransfer,
+	"transfer.resumed":                TypeTransfer,
+	"transfer.expired":                TypeTransfer,
+	"contact.tag_added":               TypeTag,
+	"contact.tag_removed":             TypeTag,
+	"contact.field_changed":           TypeFieldChange,
+	"contact.lifecycle_stage_changed": TypeLifecycle,
+	"task.created":                    TypeTask,
+	"task.completed":                  TypeTask,
+	"task.cancelled":                  TypeTask,
+	"task.overdue":                    TypeTask,
+}
+
+// dealActivityPrefix marks every deal event. Deals get a type of their own:
+// under the catch-all "activity" the profile's Deals filter asked for a type
+// nothing was ever given, and always came back empty.
+const dealActivityPrefix = "deal."
+
+// itemTypeForActivity names the item type an activity renders as.
 func itemTypeForActivity(activityType string) string {
-	switch activityType {
-	case "conversation.created", "conversation.status_changed":
-		return TypeConversation
-	case "conversation.assigned", "contact.assigned":
-		return TypeAssignment
-	case "transfer.created", "transfer.assigned", "transfer.resumed", "transfer.expired":
-		return TypeTransfer
-	case "contact.tag_added", "contact.tag_removed":
-		return TypeTag
-	case "contact.field_changed":
-		return TypeFieldChange
-	case "contact.lifecycle_stage_changed":
-		return TypeLifecycle
-	case "task.created", "task.completed", "task.cancelled", "task.overdue":
-		return TypeTask
+	if itemType, ok := activityItemTypes[activityType]; ok {
+		return itemType
+	}
+	if strings.HasPrefix(activityType, dealActivityPrefix) {
+		return TypeDeal
 	}
 	return TypeActivity
+}
+
+// narrowActivities restricts the activity query to the item types asked for.
+//
+// Filtering after the read was not enough: the query takes a bounded batch of
+// the newest rows, so a contact whose recent history is all tags and
+// assignments showed an empty Deals page even with deals further back.
+// "activity" is the catch-all and cannot be expressed as a list, so asking for
+// it reads everything and leaves the sorting to itemTypeForActivity.
+func narrowActivities(q *gorm.DB, want map[string]bool) *gorm.DB {
+	if len(want) == 0 || want[TypeActivity] {
+		return q
+	}
+	var exact []string
+	for activityType, itemType := range activityItemTypes {
+		if want[itemType] {
+			exact = append(exact, activityType)
+		}
+	}
+	switch {
+	case want[TypeDeal] && len(exact) > 0:
+		return q.Where("(type IN ? OR type LIKE ?)", exact, dealActivityPrefix+"%")
+	case want[TypeDeal]:
+		return q.Where("type LIKE ?", dealActivityPrefix+"%")
+	case len(exact) > 0:
+		return q.Where("type IN ?", exact)
+	}
+	// Only non-activity kinds were asked for (messages, calls, notes).
+	return q.Where("1 = 0")
 }
 
 // summaryForActivity renders the English fallback. The UI prefers its own

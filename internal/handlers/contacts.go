@@ -1697,6 +1697,11 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No fields to update", nil, "")
 	}
 
+	var fieldsBefore map[string]any
+	if len(req.Fields) > 0 {
+		fieldsBefore = a.fieldValuesBefore(orgID, contact.ID)
+	}
+
 	// Column updates and custom field values are written together, so a
 	// rejected field value cannot leave half an edit applied.
 	var changedFields []string
@@ -1734,21 +1739,7 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 
 	// One activity entry per field that actually changed, so the timeline says
 	// what was edited rather than just "contact updated".
-	for _, key := range changedFields {
-		a.PublishEvent(crmevents.New(orgID, "contact.field_changed",
-			crmevents.UserActor(userID, ""), map[string]any{
-				"field": key,
-			}).ForContact(contact.ID))
-
-		// Lifecycle stage gets its own event as well (plan 01). "Became a
-		// customer" is the change reporting counts and automation reacts to,
-		// and digging it out of a generic field_changed payload meant every
-		// consumer re-implemented the same filter — and the funnel report and
-		// the automation trigger disagreed about what counted.
-		if key == models.FieldKeyLifecycleStage {
-			a.publishLifecycleStageChanged(orgID, userID, contact.ID)
-		}
-	}
+	a.publishFieldChanges(orgID, crmevents.UserActor(userID, ""), contact.ID, fieldsBefore, changedFields)
 
 	// One contact.updated for subscribers, carrying the record and its typed
 	// fields (plan 01). Integrations want "here is the contact now", not a
@@ -1781,8 +1772,13 @@ func (a *App) DeleteContact(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Soft delete the contact
-	if err := a.DB.Delete(contact).Error; err != nil {
+	// Through the lifecycle service (plan 10, S2), never a bare soft delete. It
+	// records that a person did this, which is what stops the next message from
+	// that number quietly restoring the record, and it ends the chatbot
+	// session, the queued transfer and the open conversation the contact left
+	// behind.
+	if err := a.Contacts().Delete(context.Background(), orgID, contactID,
+		contacts.ReasonUser, crmevents.UserActor(userID, "")); err != nil {
 		a.Log.Error("Failed to delete contact", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete contact", nil, "")
 	}
@@ -1884,21 +1880,49 @@ func (a *App) publishContactUpdated(orgID, userID uuid.UUID, contact *models.Con
 		}).ForContact(contact.ID))
 }
 
-// publishLifecycleStageChanged emits the dedicated lifecycle event, carrying
-// the new stage so a subscriber does not have to fetch the contact to learn
-// what it became.
-func (a *App) publishLifecycleStageChanged(orgID, userID, contactID uuid.UUID) {
-	values, err := customfields.New(a.DB).Values(
-		context.Background(), orgID, contactID, models.FieldEntityContact)
+// fieldValuesBefore reads a contact's custom field values ahead of an edit, so
+// the change can be announced with what it was as well as what it became.
+// A failed read yields no "from" values rather than failing the edit.
+func (a *App) fieldValuesBefore(orgID, contactID uuid.UUID) map[string]any {
+	values, err := customfields.New(a.DB).Values(context.Background(), orgID, contactID, models.FieldEntityContact)
 	if err != nil {
-		a.Log.Error("Failed to read lifecycle stage for event", "error", err, "contact_id", contactID)
+		a.Log.Error("Failed to read field values before an edit", "error", err, "contact_id", contactID)
+		return nil
+	}
+	return values
+}
+
+// publishFieldChanges announces each changed custom field with its old and new
+// value (plan 01, §4.3), and the lifecycle stage with its own event as well.
+//
+// The events used to carry only the field's key. An automation trigger
+// narrowed to "lifecycle changed to customer" therefore had nothing to compare
+// and the funnel report, which reads the new value from the activity log,
+// never counted a stage somebody set by hand.
+//
+// "Became a customer" gets its own event because it is the change reporting
+// counts and automation reacts to; digging it out of a generic field_changed
+// payload meant every consumer re-implemented the same filter.
+func (a *App) publishFieldChanges(orgID uuid.UUID, actor crmevents.Actor, contactID uuid.UUID, before map[string]any, changed []string) {
+	if len(changed) == 0 {
 		return
 	}
+	after, err := customfields.New(a.DB).Values(context.Background(), orgID, contactID, models.FieldEntityContact)
+	if err != nil {
+		a.Log.Error("Failed to read field values for change events", "error", err, "contact_id", contactID)
+	}
 
-	a.PublishEvent(crmevents.New(orgID, "contact.lifecycle_stage_changed",
-		crmevents.UserActor(userID, ""), map[string]any{
-			"stage": values[models.FieldKeyLifecycleStage],
+	for _, key := range changed {
+		a.PublishEvent(crmevents.New(orgID, "contact.field_changed", actor, map[string]any{
+			"field": key, "from": before[key], "to": after[key],
 		}).ForContact(contactID))
+
+		if key == models.FieldKeyLifecycleStage {
+			a.PublishEvent(crmevents.New(orgID, "contact.lifecycle_stage_changed", actor, map[string]any{
+				"stage": after[key], "from": before[key], "to": after[key],
+			}).ForContact(contactID))
+		}
+	}
 }
 
 // messagesAround returns the page containing one message, with context on both

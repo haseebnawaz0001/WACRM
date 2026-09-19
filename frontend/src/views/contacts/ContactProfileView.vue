@@ -102,6 +102,7 @@ const iconForType: Record<string, any> = {
   lifecycle_stage: RefreshCw,
   campaign_send: Megaphone,
   chatbot_session: Bot,
+  deal: KanbanSquare,
   activity: CircleDot
 }
 

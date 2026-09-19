@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/crmevents"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/transfers"
 	"gorm.io/gorm"
 )
 
@@ -307,7 +308,7 @@ func (s *Service) RecordOutbound(ctx context.Context, orgID, contactID uuid.UUID
 				updates["first_response_at"] = at
 				updates["first_responder_id"] = senderID
 			}
-			if s.Set.AutoPendingOnAgentReply && existing.Status == models.ConversationOpen {
+			if s.settings(orgID).AutoPendingOnAgentReply && existing.Status == models.ConversationOpen {
 				updates["status"] = models.ConversationPending
 			}
 		}
@@ -442,6 +443,14 @@ func (s *Service) Assign(ctx context.Context, orgID, contactID uuid.UUID, assign
 
 		if err := tx.Model(&models.Conversation{}).Where("id = ?", existing.ID).
 			Updates(updates).Error; err != nil {
+			return err
+		}
+
+		// While a transfer is active it is the source of truth (plan 03,
+		// §4.4), so assigning the conversation assigns the transfer too.
+		// Otherwise the customer an agent just took stays unpicked in the
+		// queue and its response deadline escalates anyway.
+		if err := transfers.AssignActiveTx(tx, orgID, contactID, assignee, teamID); err != nil {
 			return err
 		}
 
@@ -629,6 +638,14 @@ func (s *Service) SetPending(ctx context.Context, orgID, contactID uuid.UUID, ac
 	return s.setStatus(ctx, orgID, contactID, models.ConversationPending, actor, func(c *models.Conversation) map[string]any {
 		// Waiting on them, not on us.
 		return map[string]any{"waiting_since": nil}
+	})
+}
+
+// Open moves the live conversation back to Open — out of Pending, or out of a
+// snooze before it was due. A resolved conversation is Reopen's business.
+func (s *Service) Open(ctx context.Context, orgID, contactID uuid.UUID, actor crmevents.Actor) (*models.Conversation, error) {
+	return s.setStatus(ctx, orgID, contactID, models.ConversationOpen, actor, func(c *models.Conversation) map[string]any {
+		return map[string]any{"snoozed_until": nil, "snoozed_by_id": nil}
 	})
 }
 
