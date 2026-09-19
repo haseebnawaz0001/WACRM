@@ -979,6 +979,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/widgets", app.ListWidgets)
 	g.POST("/api/widgets", app.CreateWidget)
 	g.GET("/api/widgets/data-sources", app.GetWidgetDataSources)
+	g.GET("/api/widgets/catalog", app.GetWidgetCatalog)
+	g.POST("/api/widgets/preview", app.PreviewWidget)
 	g.GET("/api/widgets/data", app.GetAllWidgetsData)
 	g.GET("/api/widgets/{id}", app.GetWidget)
 	g.PUT("/api/widgets/{id}", app.UpdateWidget)

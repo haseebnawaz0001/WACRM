@@ -263,6 +263,23 @@ Every page inside the app wears the same bar (`PageHeader`); pages do not draw t
 - **A page's own views** (the automation builder's Build and History) sit in a tab row inside the bar.
 - **The inbox** is the one exception. It is a workspace whose panes each carry a 56px header of their own on the same line.
 
+### Dashboard Widget
+One card frame for every widget (`WidgetCard`), drawn by one renderer (`WidgetBody`) that the builder's preview also uses, so a widget looks the same while it is built as when it lands.
+- **Card:** the card surface, a 6px corner, a white-at-8% hairline, and 1.25rem padding. The title is 0.875rem medium at white 60%. Chart, table, leaderboard and funnel cards add a one-line description. A 2.25rem tile in the area's colour sits top right, and edit and delete appear on hover.
+- **Number:** 1.875rem bold. Beneath it is the change from the previous period, green or red by whether the move is good news: more overdue follow-ups is red. A count of right now shows an emerald dot and "Right now" instead, because it has no earlier period.
+- **Units:** money reads as money in the board's currency ("€12.4K"), time as time ("1h 20m"), and an average with nothing behind it as "—", never "0m".
+- **Leaderboard:** a rank, initials, name and value, over a 4px emerald bar scaled to the leader.
+- **Funnel:** each step's count over an 8px emerald bar scaled to the first step, with its share of the step before at the right.
+- **Split labels:** a name the server resolved (a person, a stage) is kept, an enum is put into words, and a blank reads "Not set". Colours follow the raw value, so "failed" is red whatever it is called.
+
+### Widget Builder
+Three questions in the order a person thinks them: what to see, how it should look, and what to include. A live preview sits beside them.
+- **What to see:** measures named as questions ("Waiting for a reply"), found by area chips or by search, each marked "Right now" or "Over the date range". A choice collapses to a summary with a Change button.
+- **How it looks:** only the views the measure supports, as tiles with an icon, a name and a one-line hint. A split view adds "Split by" chips; a leaderboard offers only people.
+- **Only include:** optional conditions as three pickers (what, is or is not, value). A person condition offers "Me (whoever is looking)". Nothing is typed.
+- **Name:** filled in from the choices ("Open follow-ups by type"), until the person edits it.
+- **Old widgets:** a widget made before measures opens with a notice offering "Rebuild It Here" or "Edit the Old Way".
+
 ### Navigation
 - **Tabs:** 0.875rem text with a 2px underline; active is foreground, medium weight, emerald underline; idle is white at 55%.
 - **Sidebar:** the active item carries a 3px emerald bar on its leading edge.
@@ -290,6 +307,7 @@ Problems use the builder's own words: the step's title, then "Needs: team", link
 - **Do** keep every animation behind prefers-reduced-motion.
 - **Do** take every corner from the 2px / 4px / 6px / full scale.
 
+- **Do** build dashboard widgets from measures named as the question they answer, and colour a change by whether it is good news, not by its sign.
 - **Do** give every page the shared page bar, a glyph and one line under its title; a page's main action is the filled button, last in the row.
 
 ### Don't:

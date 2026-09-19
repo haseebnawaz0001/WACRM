@@ -86,6 +86,10 @@ func init() {
 		Name: "2026_09_28_top_up_source_options",
 		Run:  topUpSourceOptions,
 	})
+	Register(Migration{
+		Name: "2026_09_29_seed_measure_widgets",
+		Run:  seedMeasureWidgets,
+	})
 }
 
 // backfillContactSourceField copies contacts.source into the built-in "source"

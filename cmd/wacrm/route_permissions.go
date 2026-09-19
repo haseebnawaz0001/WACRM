@@ -376,6 +376,8 @@ var routePermissions = map[string]routeAccess{
 	"POST /api/widgets":                                      needs(models.ResourceAnalytics, models.ActionWrite),        // CreateWidget
 	"GET /api/widgets/data":                                  needs(models.ResourceAnalytics, models.ActionRead),         // GetAllWidgetsData
 	"GET /api/widgets/data-sources":                          needs(models.ResourceAnalytics, models.ActionRead),         // GetWidgetDataSources
+	"GET /api/widgets/catalog":                               needs(models.ResourceAnalytics, models.ActionRead),         // GetWidgetCatalog
+	"POST /api/widgets/preview":                              needs(models.ResourceAnalytics, models.ActionRead),         // PreviewWidget
 	"POST /api/widgets/layout":                               needs(models.ResourceAnalytics, models.ActionRead),         // SaveWidgetLayout
 	"DELETE /api/widgets/{id}":                               needs(models.ResourceAnalytics, models.ActionDelete),       // DeleteWidget
 	"GET /api/widgets/{id}":                                  needs(models.ResourceAnalytics, models.ActionRead),         // GetWidget

@@ -93,6 +93,12 @@ type WidgetDataResponse struct {
 	DataPoints    []DataPoint        `json:"data_points"`    // Breakdown data
 	GroupedSeries *GroupedSeriesData `json:"grouped_series"` // For grouped time-series (line charts with group_by)
 	TableRows     []TableRow         `json:"table_rows"`     // For table display type
+	// For widgets built on a measure: how to read the number.
+	Unit          string `json:"unit,omitempty"`     // "money", "minutes", "seconds"
+	Currency      string `json:"currency,omitempty"` // for money
+	LowerIsBetter bool   `json:"lower_is_better,omitempty"`
+	// Snapshot is a count of right now, which the date range does not change.
+	Snapshot bool `json:"snapshot,omitempty"`
 }
 
 // GroupedSeriesData represents multiple datasets for grouped time-series charts
@@ -118,6 +124,9 @@ type DataPoint struct {
 	Label string  `json:"label"`
 	Value float64 `json:"value"`
 	Color string  `json:"color,omitempty"`
+	// Key is the raw value behind the label, so an enum can be put into words
+	// in the viewer's language.
+	Key string `json:"key,omitempty"`
 }
 
 // Available data sources and their filterable fields
@@ -250,8 +259,18 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid display type", nil, "")
 	}
 
+	isMeasure := measureKey(req.Config) != ""
+	if isMeasure {
+		if msg := normalizeMeasureWidget(&req); msg != "" {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, msg, nil, "")
+		}
+		displayType = req.DisplayType
+	}
+
 	// For static display types (e.g. shortcuts), auto-set data_source and metric
-	if staticDisplayTypes[displayType] {
+	if isMeasure {
+		// Checked against the measure above.
+	} else if staticDisplayTypes[displayType] {
 		req.DataSource = displayType
 		req.Metric = "count"
 	} else {
@@ -306,7 +325,7 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 	}
 
 	// Validate group_by_field if provided (only for non-static types)
-	if req.GroupByField != "" && !staticDisplayTypes[displayType] {
+	if req.GroupByField != "" && !staticDisplayTypes[displayType] && !isMeasure {
 		fields := widgetDataSources[req.DataSource]
 		if !contains(fields, req.GroupByField) {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid group by field for this data source", nil, "")
@@ -320,7 +339,7 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 	case "chart":
 		gridW = 6
 		gridH = 5
-	case "table", "shortcuts":
+	case "table", "shortcuts", "leaderboard", "funnel":
 		gridW = 6
 		gridH = 8
 	}
@@ -408,6 +427,34 @@ func (a *App) UpdateWidget(r *fastglue.Request) error {
 	var req WidgetRequest
 	if err := a.decodeRequest(r, &req); err != nil {
 		return nil
+	}
+
+	if measureKey(req.Config) != "" {
+		if msg := normalizeMeasureWidget(&req); msg != "" {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, msg, nil, "")
+		}
+		if req.Name != "" {
+			widget.Name = req.Name
+		}
+		widget.Description = req.Description
+		widget.DataSource = req.DataSource
+		widget.Metric = req.Metric
+		widget.Field = req.Field
+		widget.Filters = filtersToJSONB(req.Filters)
+		widget.DisplayType = req.DisplayType
+		widget.ChartType = req.ChartType
+		widget.GroupByField = req.GroupByField
+		widget.ShowChange = *req.ShowChange
+		widget.Color = req.Color
+		widget.Config = models.JSONB(req.Config)
+		if req.IsShared != nil {
+			widget.IsShared = *req.IsShared
+		}
+		if err := a.DB.Save(widget).Error; err != nil {
+			a.Log.Error("Failed to update widget", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update widget", nil, "")
+		}
+		return r.SendEnvelope(widgetToResponse(*widget, userID))
 	}
 
 	// Update fields
@@ -626,6 +673,14 @@ func (a *App) GetWidgetDataSources(r *fastglue.Request) error {
 
 // Helper functions
 
+func filtersToJSONB(filters []FilterInput) models.JSONBArray {
+	out := make(models.JSONBArray, len(filters))
+	for i, f := range filters {
+		out[i] = map[string]any{"field": f.Field, "operator": f.Operator, "value": f.Value}
+	}
+	return out
+}
+
 func widgetToResponse(w models.Widget, currentUserID uuid.UUID) WidgetResponse {
 	// Parse filters from JSONBArray
 	filters := make([]FilterInput, 0)
@@ -817,6 +872,10 @@ func (a *App) executeWidgetQuery(orgID, viewerID uuid.UUID, widget models.Widget
 				Value:    widgetGetString(filterMap, "value"),
 			})
 		}
+	}
+	if m := measureOf(widget); m != nil {
+		// "me" is resolved inside the measure, per dimension.
+		return a.measureWidgetData(orgID, viewerID, widget, m, filters, periodStart, periodEnd, previousPeriodStart, previousPeriodEnd), nil
 	}
 	filters = resolveViewerFilters(filters, viewerID)
 

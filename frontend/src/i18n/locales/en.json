@@ -1647,7 +1647,344 @@
     "shortcutsEmpty": "No shortcuts pinned yet",
     "loadFailed": "The dashboard couldn't be loaded",
     "loadFailedDesc": "Check your connection and try again.",
-    "subtitle": "How your WhatsApp business is doing"
+    "subtitle": "How your WhatsApp business is doing",
+    "notSet": "Not set",
+    "rightNow": "Right now",
+    "nothingRightNow": "Nothing right now",
+    "conversionHint": "Share of the step before",
+    "legacy": {
+      "description": "This widget was made with the older builder. Change what it counts and how it's drawn here."
+    },
+    "builder": {
+      "titleNew": "Add a widget",
+      "titleEdit": "Edit widget",
+      "subtitle": "Pick what to see and how to show it. The preview uses the dashboard's date range.",
+      "stepWhat": "What do you want to see?",
+      "searchPlaceholder": "Search — overdue, deals, calls…",
+      "areas": "Areas",
+      "allAreas": "All",
+      "rightNow": "Right now",
+      "overPeriod": "Over the date range",
+      "stepByStep": "Step by step",
+      "change": "Change",
+      "noMatch": "Nothing matches that. Try another word, or pick an area.",
+      "catalogFailed": "Couldn't load what you can add.",
+      "stepHow": "How should it look?",
+      "splitBy": "Split by",
+      "rankBy": "Rank",
+      "stepOnly": "Only include",
+      "optional": "(optional)",
+      "onlyHint": "Leave this empty to count everything.",
+      "addCondition": "Add a Condition",
+      "conditionField": "What to check",
+      "conditionOperator": "Is or is not",
+      "conditionValue": "Value",
+      "removeCondition": "Remove condition",
+      "is": "is",
+      "isNot": "is not",
+      "me": "Me (whoever is looking)",
+      "pickValue": "Choose…",
+      "noOptions": "Nothing to choose from yet",
+      "stepName": "Name",
+      "nameBy": "{measure} by {split}",
+      "nameMine": "My {measure}",
+      "share": "Show on everyone's dashboard",
+      "shareOn": "Everyone who can see the dashboard sees it. \"Me\" means each person looking.",
+      "shareOff": "Only you see it.",
+      "preview": "Preview",
+      "previewEmpty": "Pick something to see it here.",
+      "previewFailed": "The preview couldn't be loaded.",
+      "snapshotNote": "This counts what is true right now, so the date range does not change it.",
+      "rangeNote": "This follows the dashboard's date range.",
+      "back": "Back",
+      "add": "Add to Dashboard",
+      "save": "Save Changes",
+      "added": "Added “{name}” to the dashboard",
+      "linksName": "Links to pages",
+      "linksDescription": "Buttons that open the pages you use most",
+      "pickPages": "Which pages?",
+      "legacyNotice": "This widget was made with the older builder. Rebuild it here with the new choices, or keep editing it the old way.",
+      "rebuild": "Rebuild It Here",
+      "editOldWay": "Edit the Old Way"
+    },
+    "views": {
+      "number": {
+        "name": "Number",
+        "hint": "One figure"
+      },
+      "trend": {
+        "name": "Trend",
+        "hint": "A line over time"
+      },
+      "bar": {
+        "name": "Bars",
+        "hint": "Compare groups"
+      },
+      "pie": {
+        "name": "Donut",
+        "hint": "How it splits up"
+      },
+      "table": {
+        "name": "Table",
+        "hint": "Groups as rows"
+      },
+      "leaderboard": {
+        "name": "Leaderboard",
+        "hint": "Rank people"
+      },
+      "funnel": {
+        "name": "Funnel",
+        "hint": "Step by step"
+      }
+    },
+    "areas": {
+      "inbox": "Inbox",
+      "contacts": "Contacts",
+      "deals": "Deals",
+      "followups": "Follow-ups",
+      "automations": "Automations",
+      "calls": "Calls",
+      "messaging": "Messaging",
+      "chatbot": "Chatbot",
+      "links": "Links"
+    },
+    "dims": {
+      "status": "Status",
+      "assignee": "Assigned to",
+      "team": "Team",
+      "account": "WhatsApp number",
+      "reason": "Reason",
+      "resolver": "Resolved by",
+      "responder": "First reply by",
+      "source": "Source",
+      "owner": "Owner",
+      "lifecycle": "Lifecycle stage",
+      "stage": "Stage",
+      "pipeline": "Pipeline",
+      "type": "Type",
+      "priority": "Priority",
+      "automation": "Automation",
+      "direction": "Direction",
+      "agent": "Agent",
+      "sender": "Sent by",
+      "flow": "Chatbot flow"
+    },
+    "values": {
+      "status": {
+        "open": "Open",
+        "pending": "Pending",
+        "snoozed": "Snoozed",
+        "resolved": "Resolved",
+        "succeeded": "Succeeded",
+        "partially_failed": "Partly failed",
+        "failed": "Failed",
+        "skipped": "Skipped",
+        "waiting": "Waiting",
+        "cancelled": "Cancelled",
+        "completed": "Completed",
+        "missed": "Missed",
+        "rejected": "Rejected",
+        "answered": "Answered",
+        "sent": "Sent",
+        "delivered": "Delivered",
+        "read": "Read",
+        "active": "Active",
+        "timeout": "Timed out"
+      },
+      "reason": {
+        "agent": "Closed by an agent",
+        "sla_auto_close": "Closed at the reply deadline",
+        "client_inactivity": "Customer went quiet",
+        "pending_timeout": "Pending too long",
+        "merged": "Merged",
+        "bulk": "Closed in bulk",
+        "automation": "Closed by an automation",
+        "contact_deleted": "Contact deleted"
+      },
+      "priority": {
+        "high": "High",
+        "normal": "Normal",
+        "low": "Low"
+      },
+      "source": {
+        "manual": "By hand",
+        "automation": "Automation",
+        "chatbot": "Chatbot",
+        "call": "Call",
+        "api": "API",
+        "flow": "Chatbot flow",
+        "keyword": "Keyword",
+        "chatbot_disabled": "Chatbot turned off"
+      },
+      "direction": {
+        "incoming": "Incoming",
+        "outgoing": "Outgoing"
+      },
+      "type": {
+        "text": "Text",
+        "template": "Template",
+        "image": "Image",
+        "document": "Document",
+        "audio": "Audio",
+        "video": "Video",
+        "interactive": "Buttons and lists"
+      }
+    },
+    "measures": {
+      "conversations_waiting": {
+        "name": "Waiting for a reply",
+        "description": "Customers whose last message has no answer yet"
+      },
+      "conversations_unassigned": {
+        "name": "Unassigned conversations",
+        "description": "Open conversations nobody has picked up"
+      },
+      "conversations_open": {
+        "name": "Open conversations",
+        "description": "Conversations that are open or pending"
+      },
+      "conversations_started": {
+        "name": "New conversations",
+        "description": "Conversations started in the date range"
+      },
+      "conversations_resolved": {
+        "name": "Conversations resolved",
+        "description": "Conversations closed in the date range"
+      },
+      "first_reply_time": {
+        "name": "First reply time",
+        "description": "How long customers waited for the first answer"
+      },
+      "contacts_new": {
+        "name": "New contacts",
+        "description": "Contacts added in the date range"
+      },
+      "contacts_active": {
+        "name": "Customers who wrote in",
+        "description": "Contacts who sent you a message in the date range"
+      },
+      "contacts_all": {
+        "name": "All contacts",
+        "description": "Everyone in your contacts"
+      },
+      "lifecycle_funnel": {
+        "name": "Lifecycle funnel",
+        "description": "How far contacts got through your lifecycle stages"
+      },
+      "deals_open_value": {
+        "name": "Pipeline value",
+        "description": "Value of the open deals on the board"
+      },
+      "deals_open": {
+        "name": "Open deals",
+        "description": "Deals still in play"
+      },
+      "deals_won_value": {
+        "name": "Value won",
+        "description": "Value of the deals won in the date range"
+      },
+      "deals_won": {
+        "name": "Deals won",
+        "description": "Deals won in the date range"
+      },
+      "deals_lost": {
+        "name": "Deals lost",
+        "description": "Deals lost in the date range"
+      },
+      "deals_new": {
+        "name": "New deals",
+        "description": "Deals added in the date range"
+      },
+      "pipeline_funnel": {
+        "name": "Pipeline funnel",
+        "description": "How far deals got through the stages"
+      },
+      "tasks_overdue": {
+        "name": "Overdue follow-ups",
+        "description": "Open follow-ups past their due time"
+      },
+      "tasks_open": {
+        "name": "Open follow-ups",
+        "description": "Follow-ups still to do"
+      },
+      "tasks_completed": {
+        "name": "Follow-ups done",
+        "description": "Follow-ups completed in the date range"
+      },
+      "tasks_created": {
+        "name": "New follow-ups",
+        "description": "Follow-ups created in the date range"
+      },
+      "automation_runs": {
+        "name": "Automation runs",
+        "description": "Times an automation ran"
+      },
+      "automation_failures": {
+        "name": "Automations that failed",
+        "description": "Automation runs that could not finish"
+      },
+      "automation_waiting": {
+        "name": "Waiting in automations",
+        "description": "Contacts paused at a wait step"
+      },
+      "calls_total": {
+        "name": "Calls",
+        "description": "Calls made and received"
+      },
+      "calls_missed": {
+        "name": "Missed calls",
+        "description": "Incoming calls nobody answered"
+      },
+      "call_length": {
+        "name": "Average call length",
+        "description": "How long answered calls lasted"
+      },
+      "messages_received": {
+        "name": "Messages received",
+        "description": "Messages customers sent you"
+      },
+      "messages_sent": {
+        "name": "Messages sent",
+        "description": "Messages your team and automations sent"
+      },
+      "messages_failed": {
+        "name": "Messages that failed",
+        "description": "Messages WhatsApp could not deliver"
+      },
+      "chatbot_sessions": {
+        "name": "Chatbot conversations",
+        "description": "Conversations the chatbot handled"
+      },
+      "handoffs": {
+        "name": "Handed to a person",
+        "description": "Times a customer was passed from the chatbot to the team"
+      },
+      "handoffs_late": {
+        "name": "Late handovers",
+        "description": "Handovers not picked up in time"
+      }
+    },
+    "dimNouns": {
+      "status": "status",
+      "assignee": "assignee",
+      "team": "team",
+      "account": "number",
+      "reason": "reason",
+      "resolver": "person",
+      "responder": "person",
+      "source": "source",
+      "owner": "owner",
+      "lifecycle": "stage",
+      "stage": "stage",
+      "pipeline": "pipeline",
+      "type": "type",
+      "priority": "priority",
+      "automation": "automation",
+      "direction": "direction",
+      "agent": "agent",
+      "sender": "person",
+      "flow": "flow"
+    }
   },
   "flows": {
     "title": "WhatsApp Flows",

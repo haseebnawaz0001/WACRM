@@ -1464,7 +1464,8 @@ export interface WidgetData {
   change: number
   prev_value: number
   chart_data: Array<{ label: string; value: number }>
-  data_points: Array<{ label: string; value: number; color?: string }>
+  /** key is the raw value behind a label, for an enum to be put into words. */
+  data_points: Array<{ label: string; value: number; color?: string; key?: string }>
   grouped_series?: {
     labels: string[]
     datasets: Array<{ label: string; data: number[] }>
@@ -1477,6 +1478,46 @@ export interface WidgetData {
     direction?: string
     created_at: string
   }>
+  /** For a widget built on a measure: how to read the number. */
+  unit?: '' | 'money' | 'minutes' | 'seconds'
+  currency?: string
+  lower_is_better?: boolean
+  /** A count of right now, which the date range does not change. */
+  snapshot?: boolean
+}
+
+/** What a widget can be split or narrowed by. */
+export interface MeasureDim {
+  key: string
+  kind: 'user' | 'team' | 'stage' | 'pipeline' | 'task_type' | 'automation' | 'flow' | 'account' | 'field' | 'enum' | 'text'
+  values?: string[]
+  field?: string
+  split: boolean
+  filter: boolean
+  person: boolean
+  options?: Array<{ value: string; label: string }>
+}
+
+/** One thing a dashboard can show, from the widget catalog. */
+export interface WidgetMeasure {
+  key: string
+  area: 'inbox' | 'contacts' | 'deals' | 'followups' | 'automations' | 'calls' | 'messaging' | 'chatbot'
+  unit?: '' | 'money' | 'minutes' | 'seconds'
+  snapshot: boolean
+  lower_is_better: boolean
+  views: Array<'number' | 'trend' | 'bar' | 'pie' | 'table' | 'leaderboard' | 'funnel'>
+  person?: string
+  dims: MeasureDim[]
+}
+
+/** What the builder sends for a widget built on a measure. */
+export interface MeasureWidgetPayload {
+  name: string
+  description?: string
+  config: { measure: string; view: string }
+  group_by_field?: string
+  filters?: Array<{ field: string; operator: string; value: string }>
+  is_shared?: boolean
 }
 
 interface DataSourceInfo {
@@ -1537,7 +1578,11 @@ export const widgetsService = {
     operators: Array<{ value: string; label: string }>
   }>('/widgets/data-sources'),
   saveLayout: (layout: LayoutItem[]) =>
-    api.post('/widgets/layout', { layout })
+    api.post('/widgets/layout', { layout }),
+  catalog: () => api.get<{ measures: WidgetMeasure[] }>('/widgets/catalog'),
+  /** Computes a widget that has not been saved, for the builder's preview. */
+  preview: (data: MeasureWidgetPayload, params?: { from?: string; to?: string }) =>
+    api.post<WidgetData>('/widgets/preview', data, { params })
 }
 
 export const organizationService = {

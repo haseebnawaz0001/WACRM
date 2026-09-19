@@ -885,57 +885,15 @@ func SeedDefaultWidgets(db *gorm.DB) error {
 // SeedDefaultWidgetsForOrg creates default dashboard widgets for a single organization.
 // Used when a new organization is created at runtime.
 func SeedDefaultWidgetsForOrg(db *gorm.DB, orgID, userID uuid.UUID) error {
-	defaultWidgetsData := []struct {
-		Name         string
-		Description  string
-		DataSource   string
-		DisplayType  string
-		Color        string
-		Config       models.JSONB
-		DisplayOrder int
-		GridX        int
-		GridY        int
-		GridW        int
-		GridH        int
-	}{
-		{"Total Messages", "Total number of messages sent and received", "messages", "number", "blue", nil, 1, 0, 0, 3, 3},
-		{"Active Contacts", "Number of contacts with recent activity", "contacts", "number", "green", nil, 2, 3, 0, 3, 3},
-		{"Chatbot Sessions", "Active chatbot conversation sessions", "sessions", "number", "purple", nil, 3, 6, 0, 3, 3},
-		{"Total Campaigns", "Number of bulk message campaigns", "campaigns", "number", "orange", nil, 4, 9, 0, 3, 3},
-		{"Recent Messages", "Latest conversations from your contacts", "messages", "table", "", nil, 5, 0, 3, 6, 8},
-		{"Quick Actions", "Common tasks and shortcuts", "shortcuts", "shortcuts", "", models.JSONB{"shortcuts": []any{"chat", "campaigns", "templates", "chatbot"}}, 6, 6, 3, 6, 8},
-	}
-
-	for _, wd := range defaultWidgetsData {
-		displayType := wd.DisplayType
-		if displayType == "" {
-			displayType = "number"
-		}
-		widget := models.Widget{
-			BaseModel:      models.BaseModel{ID: uuid.New()},
-			OrganizationID: orgID,
-			UserID:         &userID,
-			Name:           wd.Name,
-			Description:    wd.Description,
-			DataSource:     wd.DataSource,
-			Metric:         "count",
-			DisplayType:    displayType,
-			ShowChange:     displayType == "number",
-			Color:          wd.Color,
-			Size:           "small",
-			Config:         wd.Config,
-			DisplayOrder:   wd.DisplayOrder,
-			GridX:          wd.GridX,
-			GridY:          wd.GridY,
-			GridW:          wd.GridW,
-			GridH:          wd.GridH,
-			IsShared:       true,
-			IsDefault:      true,
-		}
+	for i, spec := range models.DefaultDashboard() {
+		widget := spec.Widget()
+		widget.ID = uuid.New()
+		widget.OrganizationID = orgID
+		widget.UserID = &userID
+		widget.DisplayOrder = i + 1
 		if err := db.Create(&widget).Error; err != nil {
-			return fmt.Errorf("failed to create widget %s: %w", wd.Name, err)
+			return fmt.Errorf("failed to create widget %s: %w", spec.Name, err)
 		}
 	}
-
 	return nil
 }
